@@ -23,6 +23,7 @@ ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--no-env" ]]; then
     NO_ENV=true
+    ARGS+=("$arg")
   elif [[ "$arg" == "--dist" ]]; then
     USE_DIST=true
   else
@@ -36,6 +37,7 @@ if [[ "$NO_ENV" == "true" ]]; then
   unset ANTHROPIC_OAUTH_TOKEN
   unset OPENAI_API_KEY
   unset PRIME_API_KEY
+  unset PRIME_TEAM_ID
   unset GEMINI_API_KEY
   unset GROQ_API_KEY
   unset CEREBRAS_API_KEY

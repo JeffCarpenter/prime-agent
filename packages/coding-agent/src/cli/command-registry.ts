@@ -204,6 +204,7 @@ const TOP_LEVEL_OPTION_GROUPS: ReadonlyArray<{ heading: string; options: readonl
 			["--provider <name>", "Select a model provider"],
 			["--model <id>", "Select a model"],
 			["--api-key <key>", "Use an API key for this run"],
+			["--no-env", "Ignore environment and Prime CLI credentials"],
 			["--models <patterns>", "Set model scope for cycling and agent-driven selection"],
 			["--thinking <level>", "Set reasoning: off, minimal, low, medium, high, xhigh, max"],
 		],

@@ -70,6 +70,7 @@ export type AuthStatus = {
 export type AuthStorageOptions = {
 	primeCliConfigPath?: string;
 	usePrimeCliConfig?: boolean;
+	allowAmbientCredentials?: boolean;
 };
 
 type LockResult<T> = {
@@ -376,6 +377,9 @@ export class AuthStorage {
 	}
 
 	private getPrimeCliAuthCandidate(provider: string): AuthSourceCandidate | undefined {
+		if (!this.allowsAmbientCredentials()) {
+			return undefined;
+		}
 		const apiKey = this.getPrimeCliApiKey(provider);
 		if (!apiKey) {
 			return undefined;
@@ -421,6 +425,9 @@ export class AuthStorage {
 	}
 
 	private getEnvironmentAuthCandidate(provider: string): AuthSourceCandidate | undefined {
+		if (!this.allowsAmbientCredentials()) {
+			return undefined;
+		}
 		const envKeys = findEnvKeys(provider);
 		const envKey = envKeys?.[0];
 		const apiKey = getEnvApiKey(provider);
@@ -1118,7 +1125,10 @@ export class AuthStorage {
 		}
 
 		const teamId = this.getPrimeInferenceTeamSelection()?.teamId;
-		return teamId ? { "X-Prime-Team-ID": teamId } : undefined;
+		if (teamId) {
+			return { "X-Prime-Team-ID": teamId };
+		}
+		return this.allowsAmbientCredentials() ? undefined : { "X-Prime-Team-ID": "" };
 	}
 
 	getPrimeCliConfigPath(): string | undefined {
@@ -1126,6 +1136,10 @@ export class AuthStorage {
 			return undefined;
 		}
 		return getPrimeCliConfigPath(this.options.primeCliConfigPath);
+	}
+
+	allowsAmbientCredentials(): boolean {
+		return this.options.allowAmbientCredentials !== false;
 	}
 
 	private toPrimeTeamCredential(team: PrimeTeam): PrimeTeamCredential {
@@ -1168,6 +1182,8 @@ export class AuthStorage {
 	}
 
 	private isPrimeCliConfigEnabled(): boolean {
-		return Boolean(this.options.usePrimeCliConfig || this.options.primeCliConfigPath);
+		return (
+			this.allowsAmbientCredentials() && Boolean(this.options.usePrimeCliConfig || this.options.primeCliConfigPath)
+		);
 	}
 }

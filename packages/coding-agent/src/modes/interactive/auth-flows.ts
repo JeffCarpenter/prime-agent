@@ -486,9 +486,16 @@ export class ProviderAuthFlows {
 		return "Using personal account.";
 	}
 
+	private loadPrimeInferenceLoginConfig() {
+		const authStorage = this.host.modelRegistry.authStorage;
+		return loadPrimeCliConfig(authStorage.getPrimeCliConfigPath(), {
+			includeCredentials: authStorage.allowsAmbientCredentials(),
+		});
+	}
+
 	private async selectPrimeInferenceTeam(apiKey: string, dialog: LoginDialogComponent): Promise<string | undefined> {
 		try {
-			const config = loadPrimeCliConfig(this.host.modelRegistry.authStorage.getPrimeCliConfigPath());
+			const config = this.loadPrimeInferenceLoginConfig();
 			if (config.teamIdFromEnv) {
 				this.host.modelRegistry.authStorage.reload();
 				return "Using team from PRIME_TEAM_ID.";
@@ -610,6 +617,7 @@ export class ProviderAuthFlows {
 				},
 				{
 					configPath: this.host.modelRegistry.authStorage.getPrimeCliConfigPath(),
+					reuseExistingApiKey: this.host.modelRegistry.authStorage.allowsAmbientCredentials(),
 				},
 			);
 			// When the browser challenge cannot start or breaks down, keep the dialog
@@ -645,7 +653,7 @@ export class ProviderAuthFlows {
 			if (result.source === "manual") {
 				browserAbort.abort();
 				dialog.showProgress("Checking Prime Inference access...");
-				const config = loadPrimeCliConfig(this.host.modelRegistry.authStorage.getPrimeCliConfigPath());
+				const config = this.loadPrimeInferenceLoginConfig();
 				const access = await checkPrimeInferenceAccess(result.apiKey, config.baseUrl, { signal: dialog.signal });
 				if (dialog.signal.aborted) {
 					closeDialog();

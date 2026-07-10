@@ -208,6 +208,7 @@ cat README.md | prime-agent -p "Summarize this text"
 | `--provider <name>` | Provider, such as `anthropic`, `openai`, or `google` |
 | `--model <pattern>` | Model pattern or ID; supports `provider/id` and optional `:<thinking>` |
 | `--api-key <key>` | API key, overriding environment variables |
+| `--no-env` | Ignore environment and Prime CLI credentials; explicit and `/login` credentials still work |
 | `--thinking <level>` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 | `--models <patterns>` | Comma-separated model scope for cycling and agent-driven selection |
 

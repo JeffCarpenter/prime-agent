@@ -66,6 +66,7 @@
 - Restored bare `prime-agent --resume` opening the agents view and the `/resume [id|path]` slash command; bare commands open the agents view and an argument resumes that session in place.
 - Fixed URLs not opening on click in fullscreen mode on terminals such as Ghostty; clicking a link in the transcript, dock, or overlays now opens it in the browser.
 - Fixed ctrl+p ("Toggle agent message expansion") only toggling received agent messages; it now expands and collapses sent agent messages together with received ones.
+- Fixed `--no-env` leaking daemon and Prime CLI credentials, skipping manual Prime login, and repeatedly retrying bare authentication failures ([ENG-4528](https://linear.app/primeintellect/issue/ENG-4528/fix-no-env-prime-agent-ux-retry-loop)).
 - Added capability-aware thinking-level selection for native RLM children, reusable continual-harness subagent specs, and Markdown profiles in the optional subagent extension, including dynamic model discovery, provider mapping, an `rlmAllowedThinkingLevels` policy, and delegation guidance based on task complexity ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
 - Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 - Added an optional `modelAllowlist` setting to restrict provider and model discovery and prevent unlisted environment-backed providers from being used.
