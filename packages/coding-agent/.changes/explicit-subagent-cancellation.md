@@ -1,0 +1,1 @@
+- Fixed subagent stop controls to acknowledge cancellation immediately, close daemon-hosted child runtimes, and keep a visible terminal status instead of reporting completion races as errors.

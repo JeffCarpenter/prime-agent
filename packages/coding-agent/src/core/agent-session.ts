@@ -894,6 +894,8 @@ interface RlmChildRun {
 	sessionDir: string;
 	model: Model<Api>;
 	status: RlmChildAgentStatus;
+	startedAt: number;
+	durationMs?: number;
 	error?: string;
 	abort: () => void;
 	abortCompletion?: Promise<void>;
@@ -9489,11 +9491,15 @@ export class AgentSession {
 	}
 
 	private _cancelRlmChildRun(run: RlmChildRun, reason: string): boolean {
+		if (run.status === "cancelled") {
+			return true;
+		}
 		if (run.status !== "running" && run.status !== "queued") {
 			return false;
 		}
 		run.status = "cancelled";
 		if (this._sessionInputPumpSuspended) this._abandonRlmRunForQuiescence(run);
+		run.durationMs = Date.now() - run.startedAt;
 		run.error = reason;
 		run.publication.reject(new Error(reason));
 		run.abort();
@@ -10346,7 +10352,6 @@ export class AgentSession {
 		const parentAssistantForUsage = this._findLastAssistantMessage();
 		const label = rlmChildLabel(prompt);
 		let answerPreview: string | undefined;
-		let durationMs: number | undefined;
 		let toolUseCount = 0;
 		let runningToolCount = 0;
 		let activity: RlmChildAgentActivity | undefined;
@@ -10364,6 +10369,7 @@ export class AgentSession {
 			sessionDir: childSessionDir,
 			model: modelSelection.model,
 			status: "queued",
+			startedAt,
 			settled: false,
 			abort: resolveRunCancelled,
 			publication: createAgentMessageDeferred(),
@@ -10391,6 +10397,7 @@ export class AgentSession {
 		this._unsettledRlmChildRuns.add(run);
 		const emitChildUpdate = () => {
 			const childModel = childSession?.model ?? modelSelection.model;
+			const active = run.status === "running" || run.status === "queued";
 			this._emit({
 				type: "rlm_child_update",
 				child: {
@@ -10400,13 +10407,13 @@ export class AgentSession {
 					model: `${childModel.provider}/${childModel.id}`,
 					label,
 					status: run.status,
-					durationMs,
+					durationMs: run.durationMs,
 					answerPreview,
 					toolUseCount: toolUseCount > 0 ? toolUseCount : undefined,
 					tokenCount: childSession?._contextTokensForCurrentMessages(),
 					recap: childSession?.getCurrentRecap(),
 					sessionDir: childSessionDir,
-					activity,
+					activity: active ? activity : undefined,
 					repliedSinceTask: childSession?._repliedToParentSinceTask,
 					error: run.error,
 				},
@@ -10580,7 +10587,7 @@ export class AgentSession {
 				throwIfCancelled();
 				if (run.error) throw new Error(run.error);
 				run.status = "done";
-				durationMs = Date.now() - startedAt;
+				run.durationMs = Date.now() - run.startedAt;
 				activity = undefined;
 				emitChildUpdate();
 				if (
@@ -10612,11 +10619,11 @@ export class AgentSession {
 				run.publication.reject(runError);
 				if (run.status !== "cancelled") {
 					run.status = "error";
+					run.durationMs = Date.now() - run.startedAt;
 					run.error = runError.message;
 				} else if (run.abortCompletion) {
 					await Promise.race([run.abortCompletion, sleep(RLM_CHILD_ABORT_SETTLE_TIMEOUT_MS)]);
 				}
-				durationMs = Date.now() - startedAt;
 				activity = undefined;
 				emitChildUpdate();
 				if (!run.detachedDeletion && !run.suppressTerminalNotice) {

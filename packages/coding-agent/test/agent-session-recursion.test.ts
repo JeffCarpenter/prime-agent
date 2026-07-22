@@ -3095,10 +3095,10 @@ describe("AgentSession rlm recursion", () => {
 				return stream;
 			},
 		});
-		const childStatuses: string[] = [];
+		const childSnapshots: Array<{ status: string; durationMs?: number; activity?: unknown }> = [];
 		root.subscribe((event) => {
 			if (event.type === "rlm_child_update") {
-				childStatuses.push(event.child.status);
+				childSnapshots.push(event.child);
 			}
 		});
 
@@ -3120,10 +3120,17 @@ describe("AgentSession rlm recursion", () => {
 		expect(run?.error).toBe("Cancelled by user");
 		// The cancelled update is pushed at cancel time, before the (possibly
 		// stuck) child unwinds; viewers must not keep showing a running child.
-		expect(childStatuses[childStatuses.length - 1]).toBe("cancelled");
+		expect(childSnapshots[childSnapshots.length - 1]).toMatchObject({
+			status: "cancelled",
+			durationMs: expect.any(Number),
+		});
+		expect(childSnapshots[childSnapshots.length - 1]?.activity).toBeUndefined();
+		// Duplicate requests that race teardown acknowledge the same cancellation.
+		expect(root.cancelRlmChildRun(childId)).toBe(true);
 		releaseChild();
 		await waitFor(() => !runs.has(childId));
-		expect(childStatuses[childStatuses.length - 1]).toBe("cancelled");
+		expect(childSnapshots[childSnapshots.length - 1]?.status).toBe("cancelled");
+		expect(childSnapshots[childSnapshots.length - 1]?.activity).toBeUndefined();
 		expect(await root.listRlmSubagents()).toEqual({ subagents: [] });
 
 		// The run has finished; a second cancel finds nothing to stop.
