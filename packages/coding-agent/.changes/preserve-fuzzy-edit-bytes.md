@@ -1,0 +1,1 @@
+- Fixed fuzzy edit matching from rewriting unrelated whitespace and Unicode across the whole file or hiding those changes from the reported diff ([#657](https://github.com/PrimeIntellect-ai/prime-agent/pull/657) by [@0xqtpie](https://github.com/0xqtpie)).
