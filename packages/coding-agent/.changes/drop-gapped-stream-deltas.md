@@ -1,0 +1,1 @@
+- Fixed the interactive session exiting with `Cannot read properties of null (reading 'type')` when a streamed assistant message lost a content-start frame ([#648](https://github.com/PrimeIntellect-ai/prime-agent/issues/648)).
