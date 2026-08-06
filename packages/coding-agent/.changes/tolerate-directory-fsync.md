@@ -1,0 +1,1 @@
+- Fixed daemon command recovery compaction on platforms without directory fsync support ([#666](https://github.com/PrimeIntellect-ai/prime-agent/issues/666)).
