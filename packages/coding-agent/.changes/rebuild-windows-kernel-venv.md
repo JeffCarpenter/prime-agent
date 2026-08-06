@@ -1,0 +1,1 @@
+- Fixed the kernel venv rebuild failing on Windows when a kernel from the old venv was still running.
