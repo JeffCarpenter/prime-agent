@@ -895,6 +895,7 @@ interface RlmChildRun {
 	status: RlmChildAgentStatus;
 	error?: string;
 	abort: () => void;
+	abortCompletion?: Promise<void>;
 	publication: AgentMessageDeferred;
 	/** Resolves after terminal result publication and detached-run cleanup finish. */
 	settlement: AgentMessageDeferred;
@@ -932,6 +933,9 @@ interface RlmSubagentModelSelection {
 
 /** Cap on the post-compaction kernel namespace probe so a wedged kernel can't stall recovery. */
 const KERNEL_STATE_LISTING_TIMEOUT_MS = 5000;
+/** Delay before a stopped tool loop resumes after compaction, and the poll interval used to wait it out. */
+const POST_COMPACTION_CONTINUATION_DELAY_MS = 100;
+const RLM_CHILD_ABORT_SETTLE_TIMEOUT_MS = 1000;
 const RLM_MAX_DEPTH_STATE_CUSTOM_TYPE = "rlm_max_depth_state";
 
 function noopRlmChildAbort(): void {}
@@ -7639,7 +7643,7 @@ export class AgentSession {
 			void this._runScheduledPostCompactionContinue()
 				.catch(() => undefined)
 				.finally(() => this._settlePostCompactionContinue());
-		}, 100);
+		}, POST_COMPACTION_CONTINUATION_DELAY_MS);
 	}
 
 	private _sessionOwnsScheduledContinuations(continuationMessages: AgentMessage[]): boolean {
@@ -10319,6 +10323,10 @@ export class AgentSession {
 		let childSession: AgentSession | undefined;
 		let pendingChildUsage: Usage | undefined;
 		let pendingChildUsageOrigin: ChildUsageAttributionEntry["origin"] | undefined;
+		let resolveRunCancelled: () => void = () => {};
+		const runCancelled = new Promise<void>((resolve) => {
+			resolveRunCancelled = resolve;
+		});
 		const run: RlmChildRun = {
 			id: childNodeId,
 			prompt,
@@ -10327,7 +10335,7 @@ export class AgentSession {
 			model: modelSelection.model,
 			status: "queued",
 			settled: false,
-			abort: noopRlmChildAbort,
+			abort: resolveRunCancelled,
 			publication: createAgentMessageDeferred(),
 			settlement: createAgentMessageDeferred(),
 			deletionReservation: createAgentMessageDeferred(),
@@ -10381,7 +10389,10 @@ export class AgentSession {
 			childSession = child;
 			if (this._activeRlmChildRuns.get(run.id) !== run) return;
 			run.session = child;
-			run.abort = () => void child.abort();
+			run.abort = () => {
+				resolveRunCancelled();
+				run.abortCompletion ??= child.abort().catch(() => undefined);
+			};
 			run.publication.resolve();
 			// Cancellation may have been admitted while runtime construction was
 			// blocked and run.abort was still a no-op.
@@ -10535,7 +10546,8 @@ export class AgentSession {
 					source: "extension",
 					customMessage: spawnMessage,
 				});
-				await child.waitForRlmQuiescence();
+				await Promise.race([child.waitForRlmQuiescence(), runCancelled]);
+				throwIfCancelled();
 				if (run.error) throw new Error(run.error);
 				run.status = "done";
 				durationMs = Date.now() - startedAt;
@@ -10571,6 +10583,8 @@ export class AgentSession {
 				if (run.status !== "cancelled") {
 					run.status = "error";
 					run.error = runError.message;
+				} else if (run.abortCompletion) {
+					await Promise.race([run.abortCompletion, sleep(RLM_CHILD_ABORT_SETTLE_TIMEOUT_MS)]);
 				}
 				durationMs = Date.now() - startedAt;
 				activity = undefined;
