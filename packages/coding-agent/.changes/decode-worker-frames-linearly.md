@@ -1,0 +1,1 @@
+- Fixed large fragmented session-worker frames repeatedly copying their accumulated bytes and starving daemon commands such as session-tree requests.
