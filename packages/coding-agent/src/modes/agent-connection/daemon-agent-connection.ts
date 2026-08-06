@@ -410,6 +410,8 @@ export class DaemonAgentConnection implements AgentConnection {
 	private terminalCloseEmitted = false;
 	private updateReconnectPromise?: Promise<void>;
 	private readonly activeSideQuestionIds = new Set<string>();
+	private readonly extensionStatusKeys = new Map<string, Set<string>>();
+	private readonly extensionStatuses = new Map<string, Map<string, string>>();
 	private readonly snapshotAssemblies = new Map<string, DaemonSnapshotAssembly>();
 	private readonly completedSnapshots = new Map<string, DaemonSessionSnapshot>();
 	private readonly pendingBindingCatchupSnapshots = new Map<string, DaemonSessionSnapshot>();
@@ -1956,6 +1958,12 @@ export class DaemonAgentConnection implements AgentConnection {
 
 	private async attachLiveSession(targetActiveSessionId: string): Promise<{ cancelled: false }> {
 		await this.attachSessionBinding(targetActiveSessionId, true);
+		for (const activeSessionId of this.extensionStatusKeys.keys()) {
+			if (activeSessionId !== this.activeSessionId) this.extensionStatusKeys.delete(activeSessionId);
+		}
+		for (const activeSessionId of this.extensionStatuses.keys()) {
+			if (activeSessionId !== this.activeSessionId) this.extensionStatuses.delete(activeSessionId);
+		}
 		this.activeSideQuestionIds.clear();
 		const snapshot = await this.getInitialSnapshot();
 		await this.emit({
@@ -2101,6 +2109,8 @@ export class DaemonAgentConnection implements AgentConnection {
 			this.client.close();
 		}
 		this.rejectSnapshotAssemblies(new Error("Daemon connection disposed during snapshot transfer"));
+		this.extensionStatusKeys.clear();
+		this.extensionStatuses.clear();
 	}
 
 	async promoteToResident(): Promise<void> {
@@ -2336,6 +2346,16 @@ export class DaemonAgentConnection implements AgentConnection {
 			return;
 		}
 		if (message.type === "extension_ui_request") {
+			if (message.method === "setStatus" && typeof message.payload.statusKey === "string") {
+				const statusKey = message.payload.statusKey;
+				const keys = this.extensionStatusKeys.get(message.activeSessionId) ?? new Set<string>();
+				const statuses = this.extensionStatuses.get(message.activeSessionId) ?? new Map<string, string>();
+				keys.add(statusKey);
+				if (typeof message.payload.statusText === "string") statuses.set(statusKey, message.payload.statusText);
+				else statuses.delete(statusKey);
+				this.extensionStatusKeys.set(message.activeSessionId, keys);
+				this.extensionStatuses.set(message.activeSessionId, statuses);
+			}
 			await this.emit({
 				type: "extension_ui_request",
 				request: {
@@ -2576,6 +2596,23 @@ export class DaemonAgentConnection implements AgentConnection {
 		}
 	}
 
+	private async replayRecoveredExtensionStatuses(activeSessionId: string): Promise<void> {
+		if (this.options.supportsExtensionUi !== false) return;
+		const keys = this.extensionStatusKeys.get(activeSessionId);
+		if (!keys?.size) return;
+		const statuses = this.extensionStatuses.get(activeSessionId) ?? new Map<string, string>();
+		for (const statusKey of keys) {
+			await this.emit({
+				type: "extension_ui_request",
+				request: {
+					id: randomUUID(),
+					method: "setStatus",
+					payload: { statusKey, statusText: statuses.get(statusKey) },
+				},
+			});
+		}
+	}
+
 	private async recoverFailedSnapshot(purpose: "replacement" | "resync", snapshotError: Error): Promise<void> {
 		this.latestSnapshotIsFresh = false;
 		if (purpose === "replacement") {
@@ -2593,6 +2630,7 @@ export class DaemonAgentConnection implements AgentConnection {
 			} else {
 				await this.emit({ type: "session_resynced", snapshot });
 			}
+			await this.replayRecoveredExtensionStatuses(this.activeSessionId);
 		} catch (recoveryError) {
 			if (this.disposed) {
 				return;

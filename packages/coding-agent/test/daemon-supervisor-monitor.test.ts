@@ -3650,7 +3650,13 @@ describe("daemon worker supervisor monitoring", () => {
 		expect(requestWorker).toHaveBeenCalledWith({
 			type: "worker_subscribe",
 			activeSessionId: "active-1",
-			capabilities: ["attach_snapshot", "event_sequence", "slim_attach", "chunked_snapshot"],
+			capabilities: [
+				"attach_snapshot",
+				"event_sequence",
+				"extension_status_snapshot",
+				"slim_attach",
+				"chunked_snapshot",
+			],
 			supportsExtensionUi: false,
 		});
 	});
