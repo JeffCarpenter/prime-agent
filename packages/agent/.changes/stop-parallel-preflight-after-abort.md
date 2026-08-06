@@ -1,0 +1,1 @@
+- Fixed parallel tool batches continuing to preflight later tool calls after cancellation.
