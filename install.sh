@@ -136,7 +136,6 @@ The $prime_agent_cmd command was installed, but it is not on your PATH yet.
 Add npm's global command directory to your PATH with:
 
   export PATH="\$(npm prefix -g)/bin:\$PATH"
-
 EOF
 	fi
 }
