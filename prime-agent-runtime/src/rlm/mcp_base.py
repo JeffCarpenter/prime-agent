@@ -217,6 +217,8 @@ class McpIntegration:
         auth_header = {**extra_headers, "Authorization": f"Bearer {token}"}
 
         # SDK signatures vary: some take headers=, others only http_client=.
+        # The http_client path must use the SDK factory: a bare httpx.AsyncClient
+        # defaults to a 5s read timeout and aborts long tool calls with ReadTimeout.
         params = inspect.signature(transport).parameters
         if "headers" in params:
             cm = transport(url, headers=auth_header)
