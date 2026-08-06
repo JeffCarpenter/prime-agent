@@ -2628,6 +2628,13 @@ export class InteractiveMode {
 	private applyConnectionStateSnapshot(state: AgentConnectionState): void {
 		this.bindPromptStashSession(state.sessionId);
 		this.connectionState = state;
+		if (state.extensionStatuses !== undefined) {
+			this.footerDataProvider.clearExtensionStatuses();
+			for (const [key, text] of Object.entries(state.extensionStatuses)) {
+				this.footerDataProvider.setExtensionStatus(key, text);
+			}
+			this.footer.invalidate();
+		}
 		this.updateScopedHeartbeats();
 		// Don't touch contextUsageTokenBaseline: a mid-stream snapshot reflects only completed
 		// turns (the in-flight message isn't persisted yet), so the in-flight delta must keep
@@ -3632,7 +3639,7 @@ export class InteractiveMode {
 		this.renderWidgets();
 	}
 
-	private resetExtensionUI(): void {
+	private resetExtensionUI(options: { preserveStatuses?: boolean } = {}): void {
 		this.cancelActiveConnectionExtensionUiRequests();
 		this.closeHeartbeatManager();
 		if (this.extensionSelector) {
@@ -3649,8 +3656,10 @@ export class InteractiveMode {
 		this.setExtensionFooter(undefined);
 		this.setExtensionHeader(undefined);
 		this.clearExtensionWidgets();
-		this.footerDataProvider.clearExtensionStatuses();
-		this.footer.invalidate();
+		if (!options.preserveStatuses) {
+			this.footerDataProvider.clearExtensionStatuses();
+			this.footer.invalidate();
+		}
 		this.autocompleteProviderWrappers = [];
 		this.setCustomEditorComponent(undefined);
 		this.setupAutocompleteProvider();
@@ -5191,7 +5200,7 @@ export class InteractiveMode {
 					const run = this.sessionEventQueue.then(async () => {
 						if (generation !== this.sessionEventGeneration) return;
 						this.resetSideQuestion();
-						this.resetExtensionUI();
+						this.resetExtensionUI({ preserveStatuses: event.state.extensionStatuses !== undefined });
 						this.applyConnectionStateSnapshot(event.state);
 						this.resetCurrentSessionRenderState();
 						await this.rebindCurrentSession();
@@ -5218,16 +5227,20 @@ export class InteractiveMode {
 				} else if (event.type === "side_question_event") {
 					this.handleSideQuestionEvent(event.event);
 				} else if (event.type === "extension_ui_request") {
-					// Extension UI requests are emitted by the daemon while a session
-					// replacement is being rebound. Serialize them with session events so
-					// stale status clears cannot race a new session's status update.
-					const generation = this.sessionEventGeneration;
-					const run = this.sessionEventQueue.then(async () => {
-						if (generation !== this.sessionEventGeneration) return;
+					if (this.expectsConnectionExtensionUiResponse(event.request)) {
+						// A modal request must not block session events while it waits for input.
 						await this.handleConnectionExtensionUiRequest(event.request);
-					});
-					this.sessionEventQueue = run.then(() => undefined).catch(() => {});
-					await run;
+					} else {
+						// Serialize passive UI updates with replacement events so an old
+						// session cannot race a newer session's status or widget state.
+						const generation = this.sessionEventGeneration;
+						const run = this.sessionEventQueue.then(async () => {
+							if (generation !== this.sessionEventGeneration) return;
+							await this.handleConnectionExtensionUiRequest(event.request);
+						});
+						this.sessionEventQueue = run.then(() => undefined).catch(() => {});
+						await run;
+					}
 				} else if (event.type === "extension_shortcut_list") {
 					this.setupDaemonExtensionShortcuts(event.shortcutKeys);
 				} else if (event.type === "connection_status") {

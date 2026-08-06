@@ -70,8 +70,9 @@ export const DAEMON_COMMAND_ENVELOPE_MIN_PROTOCOL_VERSION = 7;
 // Revision 23 negotiates attach ownership through the attach_ownership capability.
 // Revision 24 adds capability-gated extension shortcut discovery and triggering.
 // Revision 25 publishes the capability-gated optional missed-fire count on cron/heartbeat job rows.
-export const DAEMON_SCHEMA_REVISION = 25;
-export const DAEMON_SCHEMA_ID = "protocol-7-schema-25-928e02f38445";
+// Revision 26 adds capability-gated extension statuses to connection state snapshots.
+export const DAEMON_SCHEMA_REVISION = 26;
+export const DAEMON_SCHEMA_ID = "protocol-7-schema-26-928e02f38445";
 
 export type DaemonProtocolName = typeof DAEMON_PROTOCOL_NAME;
 export type DaemonProtocolVersion = number;
@@ -88,6 +89,7 @@ export type DaemonClientCapability =
 	| "event_sequence"
 	| "extension_ui"
 	| "extension_shortcuts"
+	| "extension_status_snapshot"
 	| "slim_attach"
 	| "chunked_snapshot"
 	| "client_owned_sessions";
@@ -149,6 +151,7 @@ export const DAEMON_SUPPORTED_CLIENT_CAPABILITIES: readonly DaemonClientCapabili
 	"event_sequence",
 	"extension_ui",
 	"extension_shortcuts",
+	"extension_status_snapshot",
 	"slim_attach",
 	"chunked_snapshot",
 	"client_owned_sessions",

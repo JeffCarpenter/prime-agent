@@ -177,6 +177,11 @@ describe("daemon protocol helpers", () => {
 		expect(DAEMON_DEFAULT_SERVER_CAPABILITIES).toContain("queue_message_mutation");
 	});
 
+	it("capability-gates extension status snapshots", () => {
+		expect(DAEMON_SCHEMA_REVISION).toBeGreaterThanOrEqual(19);
+		expect(DAEMON_DEFAULT_SERVER_CAPABILITIES).toContain("extension_status_snapshot");
+	});
+
 	it("schema-gates the RLM max depth commands at their introducing revision", () => {
 		expect(DAEMON_COMMAND_COMPATIBILITY.get_rlm_max_depth_status).toEqual({ minProtocol: 7, minSchemaRevision: 11 });
 		expect(DAEMON_COMMAND_COMPATIBILITY.set_rlm_max_depth).toEqual({ minProtocol: 7, minSchemaRevision: 11 });

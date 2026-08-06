@@ -1,0 +1,3 @@
+- Fixed the interactive footer dropping extension status text such as Codex usage.
+- Fixed extension status updates racing session replacement redraws.
+- Fixed extension statuses disappearing until their next refresh after attaching to or replacing a session.

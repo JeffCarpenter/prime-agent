@@ -351,6 +351,8 @@ export interface AgentConnectionState {
 	contextUsage: SessionStats["contextUsage"];
 	/** One-line recent-work recap for the prompt UI. */
 	recap?: string;
+	/** Last daemon extension statuses, restored when attaching or replacing a session. */
+	extensionStatuses?: Record<string, string>;
 }
 
 export interface AgentConnectionSlashCommand {

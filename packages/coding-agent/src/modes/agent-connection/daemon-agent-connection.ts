@@ -582,7 +582,7 @@ export class DaemonAgentConnection implements AgentConnection {
 					"attach_snapshot",
 					"event_sequence",
 					"extension_shortcuts",
-					...(supportsExtensionUi ? (["extension_ui"] as const) : []),
+					...(supportsExtensionUi ? (["extension_ui", "extension_status_snapshot"] as const) : []),
 					"slim_attach",
 					"chunked_snapshot",
 					...(this.options.ownedSession ? (["client_owned_sessions"] as const) : []),

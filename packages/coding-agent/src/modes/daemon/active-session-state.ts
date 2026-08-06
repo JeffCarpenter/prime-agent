@@ -49,6 +49,8 @@ export interface ActiveSessionState {
 	pendingExtensionUiNotificationRecipient?: DaemonSocketClient;
 	/** Prevents replacement/reload binds from opening another startup capture window. */
 	hasCompletedInitialExtensionBind?: boolean;
+	/** Last passive extension statuses, replayed in attach and replacement snapshots. */
+	extensionStatuses?: Map<string, string>;
 	eventGeneration: string;
 	lastEventSequence: DaemonEventSequence;
 	unsubscribe?: () => void;
