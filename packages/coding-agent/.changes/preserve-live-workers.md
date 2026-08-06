@@ -1,0 +1,1 @@
+- Fixed supervisor recovery replacing live, load-slow session workers and interrupting their in-flight work.
