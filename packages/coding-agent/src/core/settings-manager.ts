@@ -168,7 +168,7 @@ export interface Settings {
 	enableBuiltinSkills?: boolean; // default: true - load built-in skills shipped with prime-agent
 	terminal?: TerminalSettings;
 	images?: ImageSettings;
-	enabledModels?: string[]; // Model patterns for cycling (same format as --models CLI flag)
+	enabledModels?: string[]; // Model scope for cycling and agent-driven selection
 	modelAllowlist?: string[]; // Provider/model patterns allowed for discovery and execution; unset allows all
 	treeFilterMode?: "default" | "no-tools" | "user-only" | "labeled-only" | "all"; // Default: "user-only"
 	thinkingBudgets?: ThinkingBudgetsSettings; // Custom token budgets for thinking levels

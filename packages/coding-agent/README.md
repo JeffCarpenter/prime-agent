@@ -165,7 +165,7 @@ Type `/` in the editor to trigger commands. [Extensions](#extensions) can regist
 | `/login`, `/logout` | OAuth authentication |
 | `/model` | Switch models |
 | `/effort` | Set reasoning/thinking level |
-| `/scoped-models` | Enable/disable models for Ctrl+P cycling |
+| `/scoped-models` | Set models available for cycling and agent-driven selection |
 | `/settings` | Thinking level, theme, message delivery, transport |
 | `/resume [id\|path]` | Open the agents view, or resume a session directly |
 | `/new`, `/clear` | Start a new session |
@@ -573,7 +573,7 @@ cat README.md | prime-agent -p "Summarize this text"
 | `--model <pattern>` | Model pattern or ID (supports `provider/id` and optional `:<thinking>`) |
 | `--api-key <key>` | API key (overrides env vars) |
 | `--thinking <level>` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
-| `--models <patterns>` | Comma-separated patterns for Ctrl+P cycling |
+| `--models <patterns>` | Comma-separated model scope for cycling and agent-driven selection |
 
 Use `prime-agent model list [search]` to list available models.
 

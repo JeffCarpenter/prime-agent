@@ -1,0 +1,1 @@
+- Changed agent-driven model discovery and subagent selection to honor the user's configured model scope.
