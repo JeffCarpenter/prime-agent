@@ -555,4 +555,15 @@ describe("SettingsManager", () => {
 			expect(manager.getTelemetryEnabled()).toBe(false);
 		});
 	});
+
+	describe("financial safety defaults", () => {
+		it("disables provider-layer retries by default while preserving explicit overrides", () => {
+			const defaults = SettingsManager.create(projectDir, agentDir);
+			expect(defaults.getProviderRetrySettings().maxRetries).toBe(0);
+
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ retry: { provider: { maxRetries: 2 } } }));
+			const overridden = SettingsManager.create(projectDir, agentDir);
+			expect(overridden.getProviderRetrySettings().maxRetries).toBe(2);
+		});
+	});
 });

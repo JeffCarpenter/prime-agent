@@ -1859,6 +1859,7 @@ export class AgentDaemon {
 					streamingBehavior,
 					followUpQueueKey: `heartbeat:${runnableJob.id}`,
 					source: "rpc",
+					automatic: true,
 				},
 				getRunnableJob,
 			);
@@ -1871,6 +1872,7 @@ export class AgentDaemon {
 			{
 				streamingBehavior: "followUp",
 				source: "rpc",
+				automatic: true,
 			},
 			canPrompt,
 			false,
@@ -2679,6 +2681,7 @@ export class AgentDaemon {
 					rlmSessionDir: options.sessionDir,
 					rlmParentNodeId: options.rlmParentNodeId,
 					rlmParentAgent: options.parentSession.sessionName ?? options.parentSession.sessionId,
+					rlmParentSession: options.parentSession,
 				},
 				runtimeMetadata: {
 					kind: "subagent",

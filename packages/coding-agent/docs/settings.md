@@ -176,12 +176,14 @@ Entries beyond the cap are not lost. The overview reports how many were withheld
 | `retry.maxBackoffMs` | number | `60000` | Cap on the exponential backoff delay; does not limit `Retry-After`; `0` disables |
 | `retry.maxRetryAfterMs` | number | `300000` | Longest honored server `Retry-After`; longer requests stop the retry loop; `0` disables |
 | `retry.provider.timeoutMs` | number | SDK default | Provider/SDK request timeout in milliseconds |
-| `retry.provider.maxRetries` | number | SDK default | Provider/SDK retry attempts |
+| `retry.provider.maxRetries` | number | `0` | Provider/SDK retry attempts; agent-level retry owns the default policy |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Max server-requested delay before failing (60s) |
 
 Agent-level retry delays are drawn uniformly from `[0, min(baseDelayMs * 2^(attempt-1), maxBackoffMs)]` (full jitter). `retry.maxBackoffMs` bounds only that exponential guess. A provider `Retry-After` header is the delay floor and is honored past the cap; when it exceeds `retry.maxRetryAfterMs`, the agent stops retrying with an informative error instead of waiting.
 
 When a provider requests a retry delay longer than `retry.provider.maxRetryDelayMs` (e.g., Google's "quota will reset after 5h"), the request fails immediately with an informative error instead of waiting silently. Set to `0` to disable the cap.
+
+Quota and credit exhaustion fail closed without retrying. The first such failure stops the current session and all of its subagents, blocks recurring background prompts, and remains latched until a user sends a new prompt.
 
 ```json
 {
