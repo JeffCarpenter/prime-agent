@@ -1,0 +1,1 @@
+- Fixed session recovery on Windows being permanently blocked by a stale lease, because `renameSync` reports `EPERM`/`EACCES` for an existing target there instead of `EEXIST`/`ENOTEMPTY` ([#667](https://github.com/PrimeIntellect-ai/prime-agent/issues/667)).
