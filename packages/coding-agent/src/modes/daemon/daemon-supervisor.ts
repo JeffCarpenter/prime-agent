@@ -56,7 +56,7 @@ import { getSessionArtifactPathForFile, readSessionInfo, type SessionInfo } from
 import { SettingsManager } from "../../core/settings-manager.js";
 import { isProcessAlive, processIdExists, signalProcessGroupOrProcess } from "../../utils/child-process.js";
 import type { AgentConnectionHeartbeat } from "../agent-connection/types.js";
-import { attachJsonlLineReader, serializeJsonLine } from "../rpc/jsonl.js";
+import { attachJsonlLineReader, serializeJsonLine, UNTRUSTED_JSONL_MAX_LINE_CHARS } from "../rpc/jsonl.js";
 import type { PrivateFrame } from "../session-worker/private-framing.js";
 import { createActiveSessionId, type DaemonSocketClient } from "./active-session-state.js";
 import { CommandRecoveryJournal, createCommandIdempotencyKey } from "./command-recovery-journal.js";
@@ -1097,7 +1097,13 @@ export class DaemonSupervisor {
 			() => client.socket.destroy(),
 		);
 
-		client.detachInput = attachJsonlLineReader(socket, (line) => void this.handleLine(client, line));
+		client.detachInput = attachJsonlLineReader(socket, (line) => void this.handleLine(client, line), {
+			maxLineLength: UNTRUSTED_JSONL_MAX_LINE_CHARS,
+			onLineOverflow: () =>
+				this.log(
+					`dropping oversized command from client ${client.id} (exceeded ${UNTRUSTED_JSONL_MAX_LINE_CHARS} chars)`,
+				),
+		});
 		let cleaned = false;
 		const cleanup = () => {
 			if (cleaned) {
