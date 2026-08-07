@@ -1,0 +1,1 @@
+- Changed auto-retry to survive longer provider outages: 10 attempts by default (was 3) with full-jitter exponential backoff capped by the new `retry.maxBackoffMs` setting (default 60s), honoring the provider's `Retry-After` as the delay floor.

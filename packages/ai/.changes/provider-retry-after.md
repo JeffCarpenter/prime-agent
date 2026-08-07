@@ -1,0 +1,1 @@
+- Added `retryAfterMs` to provider stream failure info, parsed from `retry-after`/`retry-after-ms` response headers so retry layers can honor server-requested delays.
