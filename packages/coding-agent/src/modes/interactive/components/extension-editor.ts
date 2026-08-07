@@ -1,7 +1,8 @@
-import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+/**
+ * Multi-line editor component for extensions.
+ * Supports Ctrl+G for external editor.
+ */
+
 import {
 	Container,
 	Editor,
@@ -13,6 +14,7 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 import type { KeybindingsManager } from "../../../core/keybindings.js";
+import { runExternalEditor } from "../external-editor.js";
 import { getEditorTheme, theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
@@ -21,6 +23,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 	private editor: Editor;
 	private onSubmitCallback: (value: string) => void;
 	private onCancelCallback: () => void;
+	private onErrorCallback: (error: unknown) => void;
 	private tui: TUI;
 	private keybindings: KeybindingsManager;
 
@@ -41,6 +44,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 		onSubmit: (value: string) => void,
 		onCancel: () => void,
 		options?: EditorOptions,
+		onError?: (error: unknown) => void,
 	) {
 		super();
 
@@ -48,6 +52,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 		this.keybindings = keybindings;
 		this.onSubmitCallback = onSubmit;
 		this.onCancelCallback = onCancel;
+		this.onErrorCallback = onError ?? (() => undefined);
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
@@ -89,45 +94,22 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 		}
 
 		if (this.keybindings.matches(keyData, "app.editor.external")) {
-			this.openExternalEditor();
+			void this.openExternalEditor().catch((error) => this.onErrorCallback(error));
 			return;
 		}
 
 		this.editor.handleInput(keyData);
 	}
 
-	private openExternalEditor(): void {
-		const editorCmd = process.env.VISUAL || process.env.EDITOR;
-		if (!editorCmd) {
+	private async openExternalEditor(): Promise<void> {
+		const command = process.env.VISUAL || process.env.EDITOR;
+		if (!command) {
 			return;
 		}
 
-		const currentText = this.editor.getText();
-		const tmpFile = path.join(os.tmpdir(), `pi-extension-editor-${Date.now()}.md`);
-
-		try {
-			fs.writeFileSync(tmpFile, currentText, "utf-8");
-			this.tui.stop();
-
-			const [editor, ...editorArgs] = editorCmd.split(" ");
-			const result = spawnSync(editor, [...editorArgs, tmpFile], {
-				stdio: "inherit",
-				shell: process.platform === "win32",
-			});
-
-			if (result.status === 0) {
-				const newContent = fs.readFileSync(tmpFile, "utf-8").replace(/\n$/, "");
-				this.editor.setText(newContent);
-			}
-		} finally {
-			try {
-				fs.unlinkSync(tmpFile);
-			} catch {
-				// Ignore cleanup errors
-			}
-			this.tui.start();
-			// Force full re-render since external editor uses alternate screen
-			this.tui.requestRender(true);
+		const content = await runExternalEditor({ tui: this.tui, command, content: this.editor.getText() });
+		if (content !== undefined) {
+			this.editor.setText(content);
 		}
 	}
 }

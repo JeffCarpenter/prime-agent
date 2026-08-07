@@ -1,0 +1,1 @@
+- Fixed external Vim sessions receiving duplicate or corrupted key presses after opening from the composer ([#878](https://github.com/PrimeIntellect-ai/prime-agent/pull/878)).

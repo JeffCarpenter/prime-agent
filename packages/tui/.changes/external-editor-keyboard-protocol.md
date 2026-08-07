@@ -1,0 +1,1 @@
+- Fixed fullscreen transitions leaving Kitty keyboard protocol state on the wrong terminal screen ([#878](https://github.com/PrimeIntellect-ai/prime-agent/pull/878)).
