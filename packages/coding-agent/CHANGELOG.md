@@ -75,6 +75,7 @@
 - Fixed bursty daemon peer updates queuing redundant all-to-all synchronization passes and resending unchanged peer catalogs ([#943](https://github.com/PrimeIntellect-ai/prime-agent/issues/943)).
 - Fixed stale session leases becoming permanent on Android/Termux when a dead worker PID is reused by a protected process ([#868](https://github.com/PrimeIntellect-ai/prime-agent/issues/868)).
 - Fixed `ctx.ui.custom()` silently no-opping under the daemon/worker architecture and over RPC instead of surfacing an error, and added `ctx.ui.supportsCustom` so extensions can detect terminal-takeover support instead of relying on `ctx.hasUI` ([#680](https://github.com/PrimeIntellect-ai/prime-agent/issues/680)).
+- Fixed a session worker that dies during startup reporting `write after end` instead of its exit status ([#813](https://github.com/PrimeIntellect-ai/prime-agent/issues/813)).
 
 ## [0.7.2] - 2026-08-11
 
