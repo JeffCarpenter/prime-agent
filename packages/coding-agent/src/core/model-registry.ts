@@ -334,7 +334,10 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 	}
 	if (override.input !== undefined) result.input = override.input as ("text" | "image")[];
 	if (override.contextWindow !== undefined) result.contextWindow = override.contextWindow;
-	if (override.maxTokens !== undefined) result.maxTokens = override.maxTokens;
+	if (override.maxTokens !== undefined) {
+		result.maxTokens = override.maxTokens;
+		result.maxTokensExplicit = true;
+	}
 
 	if (override.cost) {
 		result.cost = {
@@ -754,6 +757,7 @@ export class ModelRegistry {
 					cost: modelDef.cost ?? defaultCost,
 					contextWindow: modelDef.contextWindow ?? 128000,
 					maxTokens: modelDef.maxTokens ?? 16384,
+					maxTokensExplicit: modelDef.maxTokens !== undefined,
 					headers: undefined,
 					compat,
 				} as Model<Api>);
@@ -1576,6 +1580,7 @@ export class ModelRegistry {
 					cost: modelDef.cost,
 					contextWindow: modelDef.contextWindow,
 					maxTokens: modelDef.maxTokens,
+					maxTokensExplicit: true,
 					headers: undefined,
 					compat: modelDef.compat,
 				} as Model<Api>);
