@@ -318,6 +318,16 @@ function createKernelStartupAbortError(): Error {
 	return new Error("Kernel startup aborted");
 }
 
+/**
+ * Kernel process env. The kernel has no interactive terminal, so a git
+ * credential prompt could never be answered and would hang the cell until the
+ * user aborts — default GIT_TERMINAL_PROMPT=0 so git fails fast instead. An
+ * explicit GIT_TERMINAL_PROMPT in the host env or per-kernel overrides wins.
+ */
+function buildKernelEnv(overrides?: Record<string, string>): NodeJS.ProcessEnv {
+	return { GIT_TERMINAL_PROMPT: "0", ...process.env, ...overrides };
+}
+
 function raceStartupWithAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
 	if (!signal) {
 		return promise;
@@ -706,9 +716,11 @@ export class KernelManager {
 				const handle = await forkKernel(python, {
 					connectionPath: connection.path,
 					cwd: this.options.cwd,
-					// Applied fresh in the child (the template's env snapshot may be stale).
-					// No JPY_PARENT_PID: forked children watch the forkserver by getppid().
-					env: { ...process.env, ...this.options.env },
+					// Match the direct-spawn env exactly: merge the current host env with
+					// the per-kernel overrides, applied fresh in the child (the template's
+					// inherited env snapshot may be stale by fork time). No JPY_PARENT_PID:
+					// forked children watch the forkserver by getppid().
+					env: buildKernelEnv(this.options.env),
 				});
 				if (this.startStale(generation)) {
 					// Nobody owns this kernel; the protocol kill is id-keyed and safe.
@@ -742,7 +754,7 @@ export class KernelManager {
 			const kernel = spawn(python, ["-m", "ipykernel_launcher", "-f", connection.path], {
 				cwd: this.options.cwd,
 				// ipykernel's parent poller exits the kernel if this pid dies (covers SIGKILL of the owner).
-				env: { ...process.env, ...this.options.env, JPY_PARENT_PID: String(process.pid) },
+				env: { ...buildKernelEnv(this.options.env), JPY_PARENT_PID: String(process.pid) },
 				stdio: ["ignore", "pipe", "pipe"],
 			});
 			this.kernel = kernel;
