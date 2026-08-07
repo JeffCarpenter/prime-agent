@@ -7,6 +7,7 @@
 ## [0.7.3] - 2026-08-17
 
 - Fixed hyperlinks not being clickable in fullscreen mode on terminals that gate native link handling while mouse reporting is active (e.g. Ghostty); left-clicking a link now opens it directly.
+- Added OSC 8 hyperlink support for tmux clients that advertise the `hyperlinks` terminal feature ([#876](https://github.com/PrimeIntellect-ai/prime-agent/pull/876) by [@rbalachandar](https://github.com/rbalachandar)).
 - Added a public `TUI.copyToClipboard(text)` method that routes through the host `onCopy` hook and falls back to OSC 52.
 - Fixed the TUI Quick Start to define a self-contained editor theme that compiles from packed artifacts ([#952](https://github.com/PrimeIntellect-ai/prime-agent/issues/952)).
 - Fixed the editor crashing with a stack overflow when a single emoji or CJK character was wider than the terminal ([#982](https://github.com/PrimeIntellect-ai/prime-agent/issues/982)).
