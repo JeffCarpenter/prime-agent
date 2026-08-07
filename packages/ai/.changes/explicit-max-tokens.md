@@ -1,0 +1,1 @@
+- Added `Model.maxTokensExplicit` so an explicitly configured output cap reaches the provider instead of being clamped to the 32000 default ([#755](https://github.com/PrimeIntellect-ai/prime-agent/issues/755)).

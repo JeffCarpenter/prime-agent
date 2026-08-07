@@ -1,0 +1,1 @@
+- Fixed a `maxTokens` configured in `models.json` being silently capped at 32000 before the request reached the provider ([#755](https://github.com/PrimeIntellect-ai/prime-agent/issues/755)).
