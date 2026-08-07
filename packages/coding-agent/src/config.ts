@@ -92,6 +92,9 @@ export function detectInstallMethod(): InstallMethod {
 
 	const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/g, "/");
 
+	if (resolvedPath.includes("/cellar/")) {
+		return "homebrew";
+	}
 	if (resolvedPath.includes("/pnpm/") || resolvedPath.includes("/.pnpm/")) {
 		return "pnpm";
 	}
