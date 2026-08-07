@@ -1,0 +1,3 @@
+- Fixed a heartbeat fire declined by a busy session restarting the schedule from the skip time instead of staying on its original cadence ([#820](https://github.com/PrimeIntellect-ai/prime-agent/issues/820)).
+- Added a coalesced count of heartbeat fires skipped since the last delivery, shown in `/heartbeat status` and the daemon job listing ([#820](https://github.com/PrimeIntellect-ai/prime-agent/issues/820)).
+- Changed delivered heartbeat prompts to carry the beat number, previous delivery time, and any skipped-fire backlog ([#820](https://github.com/PrimeIntellect-ai/prime-agent/issues/820)).

@@ -69,8 +69,9 @@ export const DAEMON_COMMAND_ENVELOPE_MIN_PROTOCOL_VERSION = 7;
 // Revision 22 scopes ACP MCP replacement and cleanup to a connection owner.
 // Revision 23 negotiates attach ownership through the attach_ownership capability.
 // Revision 24 adds capability-gated extension shortcut discovery and triggering.
-export const DAEMON_SCHEMA_REVISION = 24;
-export const DAEMON_SCHEMA_ID = "protocol-7-schema-24-928e02f38445";
+// Revision 25 publishes the capability-gated optional missed-fire count on cron/heartbeat job rows.
+export const DAEMON_SCHEMA_REVISION = 25;
+export const DAEMON_SCHEMA_ID = "protocol-7-schema-25-928e02f38445";
 
 export type DaemonProtocolName = typeof DAEMON_PROTOCOL_NAME;
 export type DaemonProtocolVersion = number;
@@ -99,6 +100,7 @@ export type DaemonServerCapability =
 	| "delete_rlm_subagent"
 	| "heartbeat_catalog"
 	| "heartbeat_management"
+	| "heartbeat_missed_fire_count"
 	| "model_catalog"
 	// The daemon honors previousTurns on start_side_question (multi-turn side
 	// conversations). Clients must check before sending follow-up transcripts.
@@ -157,6 +159,7 @@ export const DAEMON_DEFAULT_SERVER_CAPABILITIES: readonly DaemonServerCapability
 	"delete_rlm_subagent",
 	"heartbeat_catalog",
 	"heartbeat_management",
+	"heartbeat_missed_fire_count",
 	"model_catalog",
 	"side_question_transcript",
 	"transient_bash",

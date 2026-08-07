@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { AgentCronJob } from "../src/core/cron-jobs.js";
 import {
 	createDaemonCommandEnvelope,
 	createDaemonEventEnvelope,
@@ -115,8 +116,31 @@ describe("daemon protocol helpers", () => {
 			capability: "heartbeat_catalog",
 		});
 		expect(DAEMON_DEFAULT_SERVER_CAPABILITIES).toEqual(
-			expect.arrayContaining(["heartbeat_catalog", "heartbeat_management"]),
+			expect.arrayContaining(["heartbeat_catalog", "heartbeat_management", "heartbeat_missed_fire_count"]),
 		);
+	});
+
+	it("keeps heartbeat missed-fire metadata compatible in both daemon directions", () => {
+		const legacyJob = {
+			id: "heartbeat-1",
+			status: "active",
+			source: "heartbeat",
+			activeSessionId: "active-1",
+			sessionId: "session-1",
+			sessionFile: "/tmp/session.jsonl",
+			cwd: "/tmp",
+			prompt: "Check status",
+			schedule: { kind: "interval", expression: "every 5m", intervalMs: 300_000 },
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+			runCount: 0,
+		} satisfies AgentCronJob;
+		expect(legacyJob).not.toHaveProperty("missedRunCount");
+
+		const currentJob: AgentCronJob = { ...legacyJob, missedRunCount: 2 };
+		const legacyView: Omit<AgentCronJob, "missedRunCount"> = currentJob;
+		expect(legacyView).toMatchObject({ id: "heartbeat-1", runCount: 0 });
+		expect(DAEMON_SCHEMA_REVISION).toBeGreaterThanOrEqual(25);
 	});
 
 	it("capability-gates explicit subagent deletion instead of schema-gating it", () => {
