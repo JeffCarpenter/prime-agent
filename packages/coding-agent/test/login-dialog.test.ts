@@ -316,4 +316,31 @@ describe("LoginDialogComponent", () => {
 		expect(output).not.toContain("─");
 		expect(output).not.toContain("> ");
 	});
+
+	it("routes a printable configured copy shortcut to the paste field while input is shown", async () => {
+		setKeybindings(new KeybindingsManager({ "app.auth.copyUrl": "c" }));
+		try {
+			const dialog = new LoginDialogComponent(createFakeTui(), "anthropic", () => {}, "Anthropic");
+			dialog.showAuth("https://example.com/oauth?client_id=test");
+			const prompt = dialog.showPrompt("Paste the authorization code:");
+
+			dialog.handleInput("c");
+			dialog.handleInput("\r");
+
+			await expect(prompt).resolves.toBe("c");
+			expect(mocks.copyToClipboard).not.toHaveBeenCalled();
+		} finally {
+			setKeybindings(new KeybindingsManager());
+		}
+	});
+
+	it("does not copy a stale URL after the screen is replaced", () => {
+		const dialog = new LoginDialogComponent(createFakeTui(), "anthropic", () => {}, "Anthropic");
+		dialog.showAuth("https://example.com/oauth?client_id=test");
+
+		dialog.showInfo(["done"]);
+		dialog.handleInput("\x1bc");
+
+		expect(mocks.copyToClipboard).not.toHaveBeenCalled();
+	});
 });
