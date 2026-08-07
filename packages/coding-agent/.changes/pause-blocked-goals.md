@@ -1,0 +1,1 @@
+- Fixed active goals repeatedly starting provider turns while waiting on external input by adding model-callable pause and resume controls.
