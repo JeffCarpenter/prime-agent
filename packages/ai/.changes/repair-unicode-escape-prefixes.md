@@ -1,0 +1,1 @@
+- Fixed malformed Unicode escape prefixes causing streamed tool-call arguments such as Windows paths to be discarded.
