@@ -1,0 +1,1 @@
+- Fixed a retried agent message delivering duplicate steering prompts when the transport failed after the supervisor had already accepted it ([#821](https://github.com/PrimeIntellect-ai/prime-agent/issues/821)).
