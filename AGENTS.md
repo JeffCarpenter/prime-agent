@@ -22,10 +22,10 @@
 
 ## Commands
 
-- After code changes (not documentation changes): `npm run check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
-- Note: `npm run check` does not run tests.
-- NEVER run: `npm run dev`, `npm run build`, `npm test`
-- Only run specific tests if user instructs: `npx tsx ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts`
+- After code changes (not documentation changes): `pnpm run check` (get full output, no tail). Fix all errors, warnings, and infos before committing.
+- Note: `pnpm run check` does not run tests.
+- NEVER run: `pnpm run dev`, `pnpm run build`, `pnpm test`
+- Only run specific tests if user instructs: `pnpm exec tsx ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts`
 - Run tests from the package root, not the repo root.
 - If you create or modify a test file, you MUST run that test file and iterate until it passes.
 - When writing tests, run them, identify issues in either the test or implementation, and iterate until fixed.
@@ -44,8 +44,8 @@
 ## Dependencies
 
 - A 7-day minimum release age applies to all dependency updates: `.npmrc` sets `min-release-age=7` and `.github/dependabot.yml` uses a matching `cooldown`. Never bypass it for routine updates.
-- Enforcement requires npm >= 11.10; older npm silently ignores the setting, so use a current npm when updating dependencies.
-- For an urgent security patch younger than 7 days, override explicitly: `npm install --min-release-age=0 <pkg>`.
+- Use a current pnpm version when updating dependencies so the minimum release age is enforced.
+- For an urgent security patch younger than 7 days, override explicitly: `pnpm --config.minimum-release-age=0 add <pkg>`.
 
 ## GitHub Workflow
 
@@ -200,8 +200,8 @@ Create provider file exporting:
 
 2. **Run release script**:
    ```bash
-   npm run release:patch    # Fixes and additions
-   npm run release:minor    # API breaking changes
+   pnpm run release:patch    # Fixes and additions
+   pnpm run release:minor    # API breaking changes
    ```
 
 The script handles: version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.
