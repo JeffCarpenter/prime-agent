@@ -162,6 +162,26 @@ describe.sequential("Anthropic OAuth", () => {
 		).rejects.toThrow("Invalid Anthropic token exchange response: missing expires_in");
 	});
 
+	it("returns a typed callback-server error when the callback port is occupied", async () => {
+		const blocker = await occupyCallbackPort(53692);
+		try {
+			const error = await loginAnthropic({ onAuth: () => {}, onPrompt: async () => "" }).then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+			expect(error).toBeInstanceOf(OAuthLoginError);
+			expect(error).toMatchObject({
+				code: "callback_server_error",
+				source: "server",
+				cause: expect.objectContaining({ code: "EADDRINUSE" }),
+			});
+			expect((error as Error).message).toMatch(/EADDRINUSE|address already in use/i);
+		} finally {
+			await closeServer(blocker);
+		}
+	});
+
 	it("omits scope from refresh token requests", async () => {
 		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");

@@ -1,7 +1,7 @@
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMcpOAuthProvider } from "../src/mcp/oauth.js";
-import type { OAuthLoginError } from "../src/utils/oauth/types.js";
+import { OAuthLoginError } from "../src/utils/oauth/types.js";
 
 const fetchFromNetwork = globalThis.fetch.bind(globalThis);
 
@@ -59,6 +59,32 @@ async function loginWithManualCode(
 		},
 	});
 	return { creds, authUrl };
+}
+
+const CALLBACK_PORT_BASE = Number(process.env.PI_MCP_OAUTH_CALLBACK_PORT || 53700);
+
+async function occupyCallbackPort(port: number): Promise<Server | undefined> {
+	const server = createServer();
+	const bound = await new Promise<boolean>((resolve) => {
+		server.once("error", () => resolve(false));
+		server.listen(port, "127.0.0.1", () => resolve(true));
+	});
+	return bound ? server : undefined;
+}
+
+async function closeServers(servers: ReadonlyArray<Server | undefined>): Promise<void> {
+	await Promise.all(
+		servers.map(
+			(server) =>
+				new Promise<void>((resolve) => {
+					if (!server) {
+						resolve();
+						return;
+					}
+					server.close(() => resolve());
+				}),
+		),
+	);
 }
 
 describe.sequential("MCP OAuth provider", () => {
@@ -400,11 +426,13 @@ describe.sequential("MCP OAuth provider", () => {
 		).rejects.toThrow("resource does not exactly match");
 	});
 
-	it("falls back to the next callback port when the base port is occupied", async () => {
+	it("falls back to the next port when the base callback port is in use", async () => {
+		// Occupy the base callback port. If something already holds it (e.g. a stray
+		// local daemon), that satisfies the precondition too — bind best-effort.
 		const blocker = createServer();
 		const blockerBound = await new Promise<boolean>((resolve) => {
 			blocker.once("error", () => resolve(false));
-			blocker.listen(53700, "127.0.0.1", () => resolve(true));
+			blocker.listen(CALLBACK_PORT_BASE, "127.0.0.1", () => resolve(true));
 		});
 		try {
 			vi.stubGlobal(
@@ -421,8 +449,9 @@ describe.sequential("MCP OAuth provider", () => {
 			);
 			const { authUrl } = await loginWithManualCode(createMcpOAuthProvider({ server: "demo", url: ORIGIN_URL }));
 			const redirect = new URL(authUrl).searchParams.get("redirect_uri") ?? "";
-			expect(redirect).not.toContain(":53700/");
-			expect(redirect).toContain(":5370");
+			const redirectPort = Number(new URL(redirect).port);
+			expect(redirectPort).toBeGreaterThan(CALLBACK_PORT_BASE);
+			expect(redirectPort).toBeLessThan(CALLBACK_PORT_BASE + 10);
 		} finally {
 			if (blockerBound) await new Promise<void>((resolve) => blocker.close(() => resolve()));
 		}
@@ -582,6 +611,43 @@ describe.sequential("MCP OAuth provider", () => {
 		await expect(loginPromise).rejects.toEqual(
 			expect.objectContaining<Partial<OAuthLoginError>>({ code: "cancelled", source: "signal" }),
 		);
+	});
+
+	it("returns a typed callback-server error when every callback port is occupied", async () => {
+		const blockers = await Promise.all(
+			Array.from({ length: 10 }, (_, index) => occupyCallbackPort(CALLBACK_PORT_BASE + index)),
+		);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: unknown): Promise<Response> => {
+				const missing = absentPrm(input);
+				if (missing) return missing;
+				const url = urlOf(input);
+				if (url.endsWith("/.well-known/oauth-authorization-server")) return jsonResponse(ORIGIN_META);
+				throw new Error(`unexpected fetch: ${url}`);
+			}),
+		);
+		try {
+			const provider = createMcpOAuthProvider({
+				server: "demo",
+				url: ORIGIN_URL,
+				clientId: "client",
+			});
+			const error = await provider.login({ onAuth: () => {}, onPrompt: async () => "" }).then(
+				() => undefined,
+				(reason: unknown) => reason,
+			);
+
+			expect(error).toBeInstanceOf(OAuthLoginError);
+			expect(error).toMatchObject({
+				code: "callback_server_error",
+				source: "server",
+				cause: expect.objectContaining({ code: "EADDRINUSE" }),
+			});
+			expect((error as Error).message).toMatch(/ports .* are all in use/i);
+		} finally {
+			await closeServers(blockers);
+		}
 	});
 
 	it("refreshes tokens, keeping the prior refresh token when omitted", async () => {
