@@ -1,0 +1,1 @@
+- Added a configurable global debug action for TUI hosts ([#915](https://github.com/PrimeIntellect-ai/prime-agent/pull/915) by [@icy000z](https://github.com/icy000z)).

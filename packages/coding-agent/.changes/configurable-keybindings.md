@@ -1,0 +1,1 @@
+- Changed interactive selectors to honor configured clear and cancel keybindings ([#915](https://github.com/PrimeIntellect-ai/prime-agent/pull/915) by [@icy000z](https://github.com/icy000z)).
