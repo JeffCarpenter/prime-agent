@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loginOpenAICodex, refreshOpenAICodexToken } from "../src/utils/oauth/openai-codex.js";
+import { loginOpenAICodex, loginOpenAICodexBrowser, refreshOpenAICodexToken } from "../src/utils/oauth/openai-codex.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
 	return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -89,6 +89,30 @@ describe("OpenAI Codex OAuth", () => {
 		await vi.advanceTimersByTimeAsync(0);
 		controller.abort();
 		await expect(loginPromise).rejects.toThrow("Login cancelled");
+	});
+
+	it("completes browser login from a pasted redirect URL", async () => {
+		const token = accessToken("account-browser");
+		const onAuth = vi.fn();
+		const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			const body = new URLSearchParams(String(init?.body));
+			expect(body.get("code")).toBe("browser-code");
+			expect(body.get("redirect_uri")).toBe("http://localhost:1455/auth/callback");
+			return jsonResponse({ access_token: token, refresh_token: "browser-refresh", expires_in: 3600 });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const result = await loginOpenAICodexBrowser({
+			onAuth,
+			onPrompt: async () => {
+				const authUrl = new URL(onAuth.mock.calls[0]?.[0].url as string);
+				return `http://localhost:1455/auth/callback?code=browser-code&state=${authUrl.searchParams.get("state")}`;
+			},
+		});
+
+		expect(result).toMatchObject({ accountId: "account-browser", refresh: "browser-refresh" });
+		expect(onAuth).toHaveBeenCalledOnce();
+		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
 	it("does not write token refresh failures to stderr", async () => {

@@ -73,6 +73,11 @@ export interface WarningSettings {
 	anthropicExtraUsage?: boolean; // default: true
 }
 
+export interface AuthSettings {
+	/** Force device login on/off. Unset selects it automatically for headless environments. */
+	deviceLogin?: boolean;
+}
+
 export type TransportSetting = Transport;
 
 /**
@@ -166,6 +171,7 @@ export interface Settings {
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
 	warnings?: WarningSettings;
+	auth?: AuthSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
 }
 
@@ -1128,6 +1134,10 @@ export class SettingsManager {
 
 	getShowImages(): boolean {
 		return this.settings.terminal?.showImages ?? true;
+	}
+
+	getDeviceLoginPreference(): boolean | undefined {
+		return this.settings.auth?.deviceLogin;
 	}
 
 	setShowImages(show: boolean): void {

@@ -41,6 +41,8 @@ export interface OAuthLoginCallbacks {
 	/** Show an interactive selector and return the selected option id, or undefined on cancel. */
 	onSelect?: (prompt: OAuthSelectPrompt) => Promise<string | undefined>;
 	signal?: AbortSignal;
+	/** Preferred browser handoff for providers that support more than one login flow. */
+	loginFlow?: "browser" | "device";
 }
 
 export interface OAuthProviderInterface {

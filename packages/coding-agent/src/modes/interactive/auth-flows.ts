@@ -7,7 +7,9 @@
  * off the small host interface instead of the flows themselves.
  */
 
+import { accessSync, constants } from "node:fs";
 import * as path from "node:path";
+import { delimiter } from "node:path";
 import { getProviders, type OAuthProviderId, type OAuthSelectPrompt } from "@earendil-works/pi-ai";
 import type { OverlayHandle, TUI } from "@earendil-works/pi-tui";
 import { getAuthPath, getDocsPath } from "../../config.js";
@@ -113,6 +115,41 @@ export interface ProviderAuthFlowsHost {
 	onAuthChanged?(): void | Promise<void>;
 	/** Invoked after a successful login (e.g. to surface billing warnings). */
 	onLoginCompleted?(): void;
+	/** Explicit device-login preference; unset enables environment detection. */
+	getDeviceLoginPreference?(): boolean | undefined;
+}
+
+const GUI_BROWSER_COMMANDS: Readonly<Partial<Record<NodeJS.Platform, readonly string[]>>> = {
+	darwin: ["open"],
+	linux: ["xdg-open", "gio", "google-chrome", "chromium", "chromium-browser", "firefox"],
+	win32: ["explorer.exe", "cmd.exe"],
+};
+
+function commandExistsOnPath(command: string, pathValue: string | undefined): boolean {
+	if (!pathValue) return false;
+	for (const directory of pathValue.split(delimiter)) {
+		if (!directory) continue;
+		try {
+			accessSync(path.join(directory, command), constants.X_OK);
+			return true;
+		} catch {
+			// Continue searching PATH.
+		}
+	}
+	return false;
+}
+
+export function shouldUseDeviceLogin(
+	options: { preference?: boolean; path?: string; platform?: NodeJS.Platform; displayAvailable?: boolean } = {},
+): boolean {
+	if (options.preference !== undefined) return options.preference;
+	const platform = options.platform ?? process.platform;
+	const displayAvailable =
+		options.displayAvailable ??
+		(platform === "darwin" || platform === "win32" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
+	if (!displayAvailable) return true;
+	const commands = GUI_BROWSER_COMMANDS[platform] ?? [];
+	return !commands.some((command) => commandExistsOnPath(command, options.path ?? process.env.PATH));
 }
 
 export interface ProviderLoginOptions {
@@ -834,6 +871,9 @@ export class ProviderAuthFlows {
 
 		const usesCallbackServer = providerInfo?.usesCallbackServer ?? false;
 		const loginFlow = providerInfo?.loginFlow;
+		const selectedLoginFlow = shouldUseDeviceLogin({ preference: this.host.getDeviceLoginPreference?.() })
+			? "device"
+			: "browser";
 
 		// Create login dialog component
 		const dialog = new LoginDialogComponent(
@@ -886,7 +926,7 @@ export class ProviderAuthFlows {
 									manualCodeReject = undefined;
 								}
 							});
-					} else if (loginFlow === "device") {
+					} else if (loginFlow === "device" && selectedLoginFlow === "device") {
 						dialog.showWaiting("Waiting for browser authentication...");
 					} else if (loginFlow === "manual-code") {
 						dialog.showProgress("Waiting for the authorization code...");
@@ -906,6 +946,7 @@ export class ProviderAuthFlows {
 				onManualCodeInput: manualCodePromise ? () => manualCodePromise : undefined,
 
 				signal: dialog.signal,
+				loginFlow: selectedLoginFlow,
 			});
 
 			// Success

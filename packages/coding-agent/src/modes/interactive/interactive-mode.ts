@@ -8308,6 +8308,7 @@ export class InteractiveMode {
 			showStatus: (message) => this.showStatus(message),
 			showError: (message) => this.showError(message),
 			getAvailableModels: () => this.getConnectionAvailableModels(),
+			getDeviceLoginPreference: () => this.settingsManager.getDeviceLoginPreference(),
 			onAuthChanged: async () => {
 				await this.refreshConnectionModelsAfterAuthChange();
 				await this.updateAvailableProviderCount();

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Component, OverlayHandle, TUI } from "@earendil-works/pi-tui";
@@ -7,7 +7,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { AuthStorage } from "../src/core/auth-storage.js";
 import type { ModelRegistry } from "../src/core/model-registry.js";
 import { PRIME_INFERENCE_PROVIDER_ID } from "../src/core/prime-inference-auth.js";
-import { ProviderAuthFlows, type ProviderAuthFlowsHost } from "../src/modes/interactive/auth-flows.js";
+import {
+	ProviderAuthFlows,
+	type ProviderAuthFlowsHost,
+	shouldUseDeviceLogin,
+} from "../src/modes/interactive/auth-flows.js";
 import { initTheme } from "../src/modes/interactive/theme/theme.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
@@ -73,6 +77,26 @@ function createHost(authStorage: AuthStorage): {
 }
 
 describe("ProviderAuthFlows", () => {
+	describe("device login selection", () => {
+		it("honors explicit configuration", () => {
+			expect(shouldUseDeviceLogin({ preference: true, path: "", displayAvailable: true })).toBe(true);
+			expect(shouldUseDeviceLogin({ preference: false, path: "", displayAvailable: false })).toBe(false);
+		});
+
+		it("requires an active graphical session as well as a browser launcher", () => {
+			expect(shouldUseDeviceLogin({ platform: "linux", path: "/usr/bin", displayAvailable: false })).toBe(true);
+		});
+
+		it("uses browser login when a launcher and graphical session are available", () => {
+			const binDir = join(tempDir, "bin");
+			mkdirSync(binDir);
+			const launcher = join(binDir, "xdg-open");
+			writeFileSync(launcher, "#!/bin/sh\n");
+			chmodSync(launcher, 0o755);
+			expect(shouldUseDeviceLogin({ platform: "linux", path: binDir, displayAvailable: true })).toBe(false);
+		});
+	});
+
 	let tempDir: string;
 	let authJsonPath: string;
 	let primeConfigPath: string;
@@ -219,5 +243,23 @@ describe("ProviderAuthFlows", () => {
 		expect(output).not.toContain("Anthropic");
 		overlays[0]?.handleInput?.("\x1b");
 		await expect(loginResult).resolves.toEqual({ status: "cancelled" });
+	});
+
+	it("passes the configured device-login choice through the interactive login path", async () => {
+		const authStorage = AuthStorage.create(authJsonPath, { usePrimeCliConfig: false });
+		const login = vi.spyOn(authStorage, "login").mockResolvedValue();
+		const { host } = createHost(authStorage);
+		host.getDeviceLoginPreference = () => false;
+
+		const result = await new ProviderAuthFlows(host).loginProvider({
+			id: "openai-codex",
+			name: "ChatGPT Plus/Pro",
+			authType: "oauth",
+			category: "provider",
+		});
+
+		expect(result.status).toBe("success");
+		expect(login).toHaveBeenCalledOnce();
+		expect(login.mock.calls[0]?.[1].loginFlow).toBe("browser");
 	});
 });
