@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Added shared runtime metadata and validation for canonical model thinking levels ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
+- Changed ChatGPT authentication to use the device login flow without requiring a localhost callback.
 
 ## [0.7.2] - 2026-08-11
 

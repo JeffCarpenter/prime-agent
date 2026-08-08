@@ -24,6 +24,8 @@
 - Changed sent agent messages in the IPython cell UI to show only the message text with a `╰─` gutter when expanded, matching received messages, and hid the raw `agent_message.send` receipt dictionary.
 - Fixed `agent_message.send` failures for already-active sessions to report an actionable message without exposing internal lease details.
 - Fixed unnamed agent-message labels preferring a runtime ID over the durable session ID returned by `agent_message.list_agents()`.
+- Fixed browser authentication links being constrained to a narrow dialog.
+- Changed ChatGPT authentication to use the device login flow without requiring a localhost callback.
 - Fixed Homebrew installs attempting to self-update their versioned Cellar keg instead of directing users to `brew upgrade prime-agent` ([#844](https://github.com/PrimeIntellect-ai/prime-agent/issues/844))
 - Fixed the agents view collapsing expanded subagent lists when returning from an opened agent ([ENG-5105](https://linear.app/primeintellect/issue/ENG-5105/keep-the-agents-view-state-persistent)).
 - Kept the subagent summary row visible and selectable while its list is expanded in the agents view, so pressing enter on it collapses the list again ([ENG-5105](https://linear.app/primeintellect/issue/ENG-5105/keep-the-agents-view-state-persistent)).

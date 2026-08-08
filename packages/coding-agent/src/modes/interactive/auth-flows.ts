@@ -539,7 +539,7 @@ export class ProviderAuthFlows {
 		);
 
 		const handle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
@@ -658,7 +658,7 @@ export class ProviderAuthFlows {
 		);
 
 		const handle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
@@ -832,8 +832,8 @@ export class ProviderAuthFlows {
 			.getOAuthProviders()
 			.find((provider) => provider.id === providerId);
 
-		// Providers that use callback servers (can paste redirect URL)
 		const usesCallbackServer = providerInfo?.usesCallbackServer ?? false;
+		const usesDeviceFlow = providerInfo?.loginFlow === "device";
 
 		// Create login dialog component
 		const dialog = new LoginDialogComponent(
@@ -846,17 +846,18 @@ export class ProviderAuthFlows {
 		);
 
 		const dialogHandle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
-		// Promise for manual code input (racing with callback server)
 		let manualCodeResolve: ((code: string) => void) | undefined;
 		let manualCodeReject: ((err: Error) => void) | undefined;
-		const manualCodePromise = new Promise<string>((resolve, reject) => {
-			manualCodeResolve = resolve;
-			manualCodeReject = reject;
-		});
+		const manualCodePromise = usesCallbackServer
+			? new Promise<string>((resolve, reject) => {
+					manualCodeResolve = resolve;
+					manualCodeReject = reject;
+				})
+			: undefined;
 
 		// Close dialog overlay helper.
 		const closeDialog = () => {
@@ -885,11 +886,9 @@ export class ProviderAuthFlows {
 									manualCodeReject = undefined;
 								}
 							});
-					} else if (providerId === "github-copilot") {
-						// GitHub Copilot polls after onAuth
+					} else if (usesDeviceFlow) {
 						dialog.showWaiting("Waiting for browser authentication...");
 					}
-					// For Anthropic: onPrompt is called immediately after
 				},
 
 				onPrompt: async (prompt: { message: string; placeholder?: string }) => {
@@ -902,7 +901,7 @@ export class ProviderAuthFlows {
 
 				onSelect: (prompt: OAuthSelectPrompt) => this.showOAuthLoginSelect(dialogHandle, prompt),
 
-				onManualCodeInput: () => manualCodePromise,
+				onManualCodeInput: manualCodePromise ? () => manualCodePromise : undefined,
 
 				signal: dialog.signal,
 			});
