@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// This is the non-publishing packer for the CI-authoritative R2 release lifecycle.
+
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {

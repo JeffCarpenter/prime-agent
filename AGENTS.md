@@ -182,24 +182,24 @@ Create provider file exporting:
 
 ## Releasing
 
-**Lockstep versioning**: All packages always share the same version number. Every release updates all packages together.
+The protected GitHub Actions workflows are the only release authority. Local release commands must never publish packages, create or move tags, push branches, upload artifacts, or promote a release channel. See [`RELEASING.md`](RELEASING.md) for the artifact lifecycle, retry, and rollback procedures.
+
+**Lockstep versioning**: the root release-control manifest and `packages/agent`, `packages/ai`, `packages/coding-agent`, and `packages/tui` share one version. Private and example workspaces are not release packages and must remain untouched.
 
 **Version semantics** (no major releases):
 
 - `patch`: Bug fixes and new features
 - `minor`: API breaking changes
 
-### Steps
+### Local preparation
 
-1. **Check fragments**: Ensure all changes since last release have fragment files in `packages/<pkg>/.changes/`
+1. Ensure every affected package has complete changelog fragments in `packages/<pkg>/.changes/`.
+2. From a clean feature branch, run `pnpm run release:prepare -- patch`, `pnpm run release:prepare -- minor`, or an explicit newer `0.x.y` version.
+3. Review the complete version, changelog, dependency-range, and lockfile diff.
+4. Build through the normal repository process, then run `pnpm run release:dry-run`, `pnpm run release:test`, and `pnpm run check`.
+5. Open a release-preparation pull request. CI publishes only after that exact version commit merges to the protected default branch.
 
-2. **Run release script**:
-   ```bash
-   pnpm run release:patch    # Fixes and additions
-   pnpm run release:minor    # API breaking changes
-   ```
-
-The script handles: version bump, folding `.changes/` fragments into the release section, commit, tag, and publish.
+The inherited `release:patch`, `release:minor`, `release:major`, `version:*`, root `publish*`, and `scripts/sync-versions.js` paths intentionally hard-fail. Never bypass them. Never dispatch a publishing or rollback workflow unless the user explicitly authorizes that external state change.
 
 ## **CRITICAL** Git Rules for Parallel Agents **CRITICAL**
 

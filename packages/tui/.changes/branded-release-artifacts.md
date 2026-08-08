@@ -1,1 +1,2 @@
 - Fixed the documented TUI installation path while preserving the self-contained packed-artifact quick start ([#1027](https://github.com/PrimeIntellect-ai/prime-agent/pull/1027) by [@fettpl](https://github.com/fettpl)).
+- Changed Prime Agent releases to use an idempotent CI/R2 lifecycle with local preparation and validation commands that cannot publish or push ([#1027](https://github.com/PrimeIntellect-ai/prime-agent/pull/1027) by [@fettpl](https://github.com/fettpl)).
