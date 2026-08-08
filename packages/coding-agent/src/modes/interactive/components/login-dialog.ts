@@ -85,6 +85,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 	private continueRejecter?: (error: Error) => void;
 	private authUrl?: string;
 	private authActions?: Text;
+	private scrollbackInputHandler?: (data: Buffer | string) => void;
 
 	// Focusable implementation - propagate to input for IME cursor positioning
 	private _focused = false;
@@ -137,6 +138,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 	}
 
 	private cancel(): void {
+		this.clearScrollbackResumeHandler();
 		this.abortController.abort();
 		if (this.inputRejecter) {
 			this.inputRejecter(new Error("Login cancelled"));
@@ -158,10 +160,21 @@ export class LoginDialogComponent extends Container implements Focusable {
 		this.startContent();
 		this.authUrl = url;
 		this.addSectionTitle("Browser sign-in");
-		this.addMutedText("The sign-in page should already be opening. If it did not open, use the link below.");
+		const remoteSession = Boolean(
+			process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.MOSH_CONNECTION,
+		);
+		if (remoteSession) {
+			this.writeAuthLinkToScrollback(url);
+		}
+		this.addMutedText(
+			remoteSession
+				? "Remote session detected. Copy the sign-in link and open it in a browser on your local machine."
+				: "The sign-in page should already be opening. You can reopen or copy the complete link below.",
+		);
 		this.contentContainer.addChild(new Spacer(1));
 		this.addLabel("Sign-in link");
-		const linkedUrl = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${url}\x1b]8;;\x07` : url;
+		const linkLabel = "Open authentication page";
+		const linkedUrl = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${linkLabel}\x1b]8;;\x07` : linkLabel;
 		this.contentContainer.addChild(new Text(theme.fg("text", linkedUrl), 0, 0));
 		this.authActions = new Text(this.getAuthActionsText(), 0, 0);
 		this.contentContainer.addChild(this.authActions);
@@ -171,19 +184,9 @@ export class LoginDialogComponent extends Container implements Focusable {
 			this.addInstructions(instructions);
 		}
 
-		// Try to open browser
-		const [command, ...args] =
-			process.platform === "darwin"
-				? ["open", url]
-				: process.platform === "win32"
-					? [
-							win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "rundll32.exe"),
-							"url.dll,FileProtocolHandler",
-							url,
-						]
-					: ["xdg-open", url];
-		execFile(command, args, () => {});
-
+		if (!remoteSession) {
+			this.openAuthUrl(false);
+		}
 		this.tui.requestRender();
 	}
 
@@ -299,6 +302,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 	}
 
 	private startContent(): void {
+		this.clearScrollbackResumeHandler();
 		this.contentContainer.clear();
 		this.authUrl = undefined;
 		this.authActions = undefined;
@@ -343,23 +347,64 @@ export class LoginDialogComponent extends Container implements Focusable {
 		this.contentContainer.addChild(new Text(theme.fg("muted", text), 0, 0));
 	}
 
-	private getAuthActionsText(status?: "copied" | "failed"): string {
+	private writeAuthLinkToScrollback(url: string): void {
+		const label = "Open authentication page";
+		const link = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${label}\x1b]8;;\x07` : url;
+		this.tui.stop();
+		this.scrollbackInputHandler = (data) => {
+			if (!data.toString().includes("\x03")) return;
+			this.resumeTuiFromScrollback();
+		};
+		process.stdin.setRawMode?.(true);
+		process.stdin.resume();
+		process.stdin.on("data", this.scrollbackInputHandler);
+		process.stdout.write(`\r\nAuthentication: ${link}\r\n\r\nPress Ctrl+C to return to Prime Agent.\r\n`);
+	}
+
+	private clearScrollbackResumeHandler(): void {
+		if (!this.scrollbackInputHandler) return;
+		process.stdin.off("data", this.scrollbackInputHandler);
+		this.scrollbackInputHandler = undefined;
+		process.stdin.pause();
+		process.stdin.setRawMode?.(false);
+	}
+
+	private resumeTuiFromScrollback(): void {
+		this.clearScrollbackResumeHandler();
+		this.tui.start();
+		this.tui.requestRender(true);
+	}
+
+	private getAuthActionsText(status?: "copied" | "copyFailed" | "opened" | "openFailed"): string {
 		const configuredCopyKeys = getKeybindings().getKeys("app.clipboard.copyLoginUrl");
 		const copyKeys = this.inputVisible
 			? configuredCopyKeys.filter((key) => !isTextEntryKeybinding(key))
 			: configuredCopyKeys.slice(0, 1);
+		const configuredOpenKeys = getKeybindings().getKeys("app.auth.openUrl");
+		const openKeys = this.inputVisible
+			? configuredOpenKeys.filter((key) => !isTextEntryKeybinding(key))
+			: configuredOpenKeys.slice(0, 1);
 		const copyHint =
 			copyKeys.length > 0
 				? theme.fg("dim", formatKeyText(copyKeys.join("/"))) +
-					theme.fg("muted", ` ${status === "failed" ? "retry" : "copy"}`)
+					theme.fg("muted", ` ${status === "copyFailed" ? "retry copy" : "copy"}`)
+				: undefined;
+		const openHint =
+			openKeys.length > 0
+				? theme.fg("dim", formatKeyText(openKeys.join("/"))) +
+					theme.fg("muted", ` ${status === "openFailed" ? "retry open" : "open"}`)
 				: undefined;
 		const statusText =
 			status === "copied"
 				? theme.fg("success", "Copied sign-in link")
-				: status === "failed"
+				: status === "copyFailed"
 					? theme.fg("error", "Failed to copy sign-in link")
-					: undefined;
-		return [statusText, copyHint, keyHint("tui.select.cancel", "cancel")]
+					: status === "opened"
+						? theme.fg("success", "Opened sign-in link")
+						: status === "openFailed"
+							? theme.fg("error", "Could not open a browser here; copy the link instead")
+							: undefined;
+		return [statusText, copyHint, openHint, keyHint("tui.select.cancel", "cancel")]
 			.filter((part): part is string => part !== undefined)
 			.join("  ");
 	}
@@ -377,10 +422,31 @@ export class LoginDialogComponent extends Container implements Focusable {
 			}
 		} catch {
 			if (this.authUrl === url && this.authActions === actions) {
-				actions.setText(this.getAuthActionsText("failed"));
+				actions.setText(this.getAuthActionsText("copyFailed"));
 				this.tui.requestRender();
 			}
 		}
+	}
+
+	private openAuthUrl(reportResult: boolean): void {
+		const url = this.authUrl;
+		const actions = this.authActions;
+		if (!url) return;
+		const [command, ...args] =
+			process.platform === "darwin"
+				? ["open", url]
+				: process.platform === "win32"
+					? [
+							win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "rundll32.exe"),
+							"url.dll,FileProtocolHandler",
+							url,
+						]
+					: ["xdg-open", url];
+		execFile(command, args, (error) => {
+			if (!reportResult || this.authUrl !== url || this.authActions !== actions || !actions) return;
+			actions.setText(this.getAuthActionsText(error ? "openFailed" : "opened"));
+			this.tui.requestRender();
+		});
 	}
 
 	handleInput(data: string): void {
@@ -392,6 +458,15 @@ export class LoginDialogComponent extends Container implements Focusable {
 			(!this.inputVisible || !isPrintableInput(data))
 		) {
 			void this.copyAuthUrl();
+			return;
+		}
+
+		if (
+			this.authUrl &&
+			kb.matches(data, "app.auth.openUrl") &&
+			(!this.inputVisible || !isPrintableInput(data))
+		) {
+			this.openAuthUrl(true);
 			return;
 		}
 

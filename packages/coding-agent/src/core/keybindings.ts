@@ -36,6 +36,7 @@ export interface AppKeybindings {
 	"app.message.moveLater": true;
 	"app.clipboard.pasteImage": true;
 	"app.clipboard.copyLoginUrl": true;
+	"app.auth.openUrl": true;
 	"app.session.new": true;
 	"app.session.tree": true;
 	"app.session.fork": true;
@@ -147,6 +148,7 @@ export const KEYBINDINGS = {
 		defaultKeys: ["c", "alt+c"],
 		description: "Copy login URL",
 	},
+	"app.auth.openUrl": { defaultKeys: "alt+o", description: "Open authentication URL" },
 	"app.session.new": { defaultKeys: [], description: "Start a new session" },
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
 	"app.session.fork": { defaultKeys: [], description: "Fork current session" },

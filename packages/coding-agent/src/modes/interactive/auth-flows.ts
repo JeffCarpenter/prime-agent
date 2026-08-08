@@ -802,7 +802,7 @@ export class ProviderAuthFlows {
 			.find((provider) => provider.id === providerId);
 
 		const usesCallbackServer = providerInfo?.usesCallbackServer ?? false;
-		const usesDeviceFlow = providerInfo?.loginFlow === "device";
+		const loginFlow = providerInfo?.loginFlow;
 
 		const dialog = new LoginDialogComponent(this.host.ui, providerId, (_success, _message) => {}, providerName);
 
@@ -845,8 +845,10 @@ export class ProviderAuthFlows {
 									manualCodeReject = undefined;
 								}
 							});
-					} else if (usesDeviceFlow) {
+					} else if (loginFlow === "device") {
 						dialog.showWaiting("Waiting for browser authentication...");
+					} else if (loginFlow === "manual-code") {
+						dialog.showProgress("Waiting for the authorization code...");
 					}
 				},
 

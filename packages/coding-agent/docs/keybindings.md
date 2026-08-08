@@ -99,6 +99,7 @@ Modifier combinations: `ctrl+shift+x`, `alt+ctrl+x`, `ctrl+shift+alt+x`, `ctrl+1
 | `app.editor.external` | `ctrl+g` | Open in external editor (`$VISUAL` or `$EDITOR`) |
 | `app.clipboard.pasteImage` | `ctrl+v` (`alt+v` on Windows) | Paste image from clipboard |
 | `app.clipboard.copyLoginUrl` | `c`, `alt+c` | Copy the sign-in URL from a login dialog |
+| `app.auth.openUrl` | `alt+o` | Open the authentication URL on this machine |
 
 ### Sessions
 
