@@ -30,6 +30,8 @@ export interface AppKeybindings {
 	"app.message.followUp": true;
 	"app.message.dequeue": true;
 	"app.clipboard.pasteImage": true;
+	"app.auth.copyUrl": true;
+	"app.auth.openUrl": true;
 	"app.session.new": true;
 	"app.session.tree": true;
 	"app.session.fork": true;
@@ -118,6 +120,8 @@ export const KEYBINDINGS = {
 		defaultKeys: process.platform === "win32" ? "alt+v" : "ctrl+v",
 		description: "Paste image from clipboard",
 	},
+	"app.auth.copyUrl": { defaultKeys: "alt+c", description: "Copy authentication URL" },
+	"app.auth.openUrl": { defaultKeys: "alt+o", description: "Open authentication URL" },
 	"app.session.new": { defaultKeys: [], description: "Start a new session" },
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
 	"app.session.fork": { defaultKeys: [], description: "Fork current session" },

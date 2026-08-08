@@ -98,6 +98,8 @@ Modifier combinations: `ctrl+shift+x`, `alt+ctrl+x`, `ctrl+shift+alt+x`, `ctrl+1
 | `app.suspend` | `ctrl+z` (none on Windows) | Suspend to background |
 | `app.editor.external` | `ctrl+g` | Open in external editor (`$VISUAL` or `$EDITOR`) |
 | `app.clipboard.pasteImage` | `ctrl+v` (`alt+v` on Windows) | Paste image from clipboard |
+| `app.auth.copyUrl` | `alt+c` | Copy the complete authentication URL |
+| `app.auth.openUrl` | `alt+o` | Open the authentication URL on this machine |
 
 ### Sessions
 

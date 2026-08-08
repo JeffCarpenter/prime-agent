@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { execFile } from "child_process";
 import { PRIME_BUTTERFLY_LOGO } from "../../../themes/prime-logo.js";
+import { copyToClipboard } from "../../../utils/clipboard.js";
 import { theme } from "../theme/theme.js";
 import { keyHint } from "./keybinding-hints.js";
 import { MenuPanel, MenuSearchInput } from "./menu-panel.js";
@@ -72,6 +73,9 @@ export class LoginDialogComponent extends Container implements Focusable {
 	private inputVisible = false;
 	private continueResolver?: () => void;
 	private continueRejecter?: (error: Error) => void;
+	private authUrl?: string;
+	private authActionStatus?: Text;
+	private scrollbackInputHandler?: (data: Buffer | string) => void;
 
 	// Focusable implementation - propagate to input for IME cursor positioning
 	private _focused = false;
@@ -124,6 +128,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 	}
 
 	private cancel(): void {
+		this.clearScrollbackResumeHandler();
 		this.abortController.abort();
 		if (this.inputRejecter) {
 			this.inputRejecter(new Error("Login cancelled"));
@@ -142,34 +147,72 @@ export class LoginDialogComponent extends Container implements Focusable {
 	 * Called by onAuth callback - show URL and optional instructions
 	 */
 	showAuth(url: string, instructions?: string): void {
+		this.authUrl = url;
 		this.startContent();
 		this.addSectionTitle("Browser sign-in");
-		this.addMutedText("The sign-in page should already be opening. If it did not open, use the link below.");
+		const remoteSession = Boolean(
+			process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.MOSH_CONNECTION,
+		);
+		if (remoteSession) this.writeAuthLinkToScrollback(url);
+		this.addMutedText(
+			remoteSession
+				? "Remote session detected. Copy the sign-in link and open it in a browser on your local machine."
+				: "The sign-in page should already be opening. You can reopen or copy the complete link below.",
+		);
 		this.contentContainer.addChild(new Spacer(1));
 		this.addLabel("Sign-in link");
-		const linkedUrl = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${url}\x1b]8;;\x07` : url;
+		const linkLabel = "Open authentication page";
+		const linkedUrl = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${linkLabel}\x1b]8;;\x07` : linkLabel;
 		this.contentContainer.addChild(new Text(theme.fg("text", linkedUrl), 0, 0));
-		this.contentContainer.addChild(new Text(theme.fg("muted", keyHint("tui.select.cancel", "cancel")), 0, 0));
+		this.contentContainer.addChild(
+			new Text(
+				theme.fg(
+					"muted",
+					`${keyHint("app.auth.copyUrl", "copy full link")}  ${keyHint("app.auth.openUrl", "open here")}  ${keyHint("tui.select.cancel", "cancel")}`,
+				),
+				0,
+				0,
+			),
+		);
+		this.authActionStatus = new Text("", 0, 0);
+		this.contentContainer.addChild(this.authActionStatus);
 
 		if (instructions) {
 			this.contentContainer.addChild(new Spacer(1));
 			this.addInstructions(instructions);
 		}
 
-		// Try to open browser
-		const [command, ...args] =
-			process.platform === "darwin"
-				? ["open", url]
-				: process.platform === "win32"
-					? [
-							win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "rundll32.exe"),
-							"url.dll,FileProtocolHandler",
-							url,
-						]
-					: ["xdg-open", url];
-		execFile(command, args, () => {});
+		if (!remoteSession) this.openAuthUrl(false);
 
 		this.tui.requestRender();
+	}
+
+	private writeAuthLinkToScrollback(url: string): void {
+		const label = "Open authentication page";
+		const link = getCapabilities().hyperlinks ? `\x1b]8;;${url}\x07${label}\x1b]8;;\x07` : url;
+		this.tui.stop();
+		this.scrollbackInputHandler = (data) => {
+			if (!data.toString().includes("\x03")) return;
+			this.resumeTuiFromScrollback();
+		};
+		process.stdin.setRawMode?.(true);
+		process.stdin.resume();
+		process.stdin.on("data", this.scrollbackInputHandler);
+		process.stdout.write(`\r\nAuthentication: ${link}\r\n\r\nPress Ctrl+C to return to Prime Agent.\r\n`);
+	}
+
+	private clearScrollbackResumeHandler(): void {
+		if (!this.scrollbackInputHandler) return;
+		process.stdin.off("data", this.scrollbackInputHandler);
+		this.scrollbackInputHandler = undefined;
+		process.stdin.pause();
+		process.stdin.setRawMode?.(false);
+	}
+
+	private resumeTuiFromScrollback(): void {
+		this.clearScrollbackResumeHandler();
+		this.tui.start();
+		this.tui.requestRender(true);
 	}
 
 	/**
@@ -324,8 +367,50 @@ export class LoginDialogComponent extends Container implements Focusable {
 		this.contentContainer.addChild(new Text(theme.fg("muted", text), 0, 0));
 	}
 
+	private openAuthUrl(reportResult: boolean): void {
+		if (!this.authUrl) return;
+		const [command, ...args] =
+			process.platform === "darwin"
+				? ["open", this.authUrl]
+				: process.platform === "win32"
+					? [
+							win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "rundll32.exe"),
+							"url.dll,FileProtocolHandler",
+							this.authUrl,
+						]
+					: ["xdg-open", this.authUrl];
+		execFile(command, args, (error) => {
+			if (!reportResult) return;
+			this.setAuthActionStatus(
+				error ? "Could not open a browser here. Copy the link instead." : "Opened sign-in link.",
+			);
+		});
+	}
+
+	private copyAuthUrl(): void {
+		if (!this.authUrl) return;
+		void copyToClipboard(this.authUrl)
+			.then(() => this.setAuthActionStatus("Copied full sign-in link to clipboard."))
+			.catch(() =>
+				this.setAuthActionStatus("Could not access the clipboard. Configure OSC 52 in your terminal or tmux."),
+			);
+	}
+
+	private setAuthActionStatus(message: string): void {
+		this.authActionStatus?.setText(theme.fg("accent", message));
+		this.tui.requestRender();
+	}
+
 	handleInput(data: string): void {
 		const kb = getKeybindings();
+		if (this.authUrl && kb.matches(data, "app.auth.copyUrl")) {
+			this.copyAuthUrl();
+			return;
+		}
+		if (this.authUrl && kb.matches(data, "app.auth.openUrl")) {
+			this.openAuthUrl(true);
+			return;
+		}
 
 		// Left arrow acts as "back" like Esc. While the editable field is actually
 		// shown, only treat it as back at the start of the text so left still moves
