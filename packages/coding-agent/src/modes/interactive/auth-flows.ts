@@ -166,7 +166,7 @@ export class ProviderAuthFlows {
 				(providerId) => this.host.modelRegistry.getProviderAuthStatus(providerId),
 				{ getRows: () => this.host.ui.terminal.rows, initialCategory },
 			);
-			handle = showFullPaneOverlay(this.host.ui, selector, 78);
+			handle = showFullPaneOverlay(this.host.ui, selector, { fullWidth: true });
 		});
 	}
 
