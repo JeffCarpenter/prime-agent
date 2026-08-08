@@ -5,9 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Full commit SHA to verify
+        required: true
+        type: string
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ inputs.source_sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -18,7 +24,7 @@ jobs:
     name: Contributor trust
     runs-on: ubuntu-latest
     outputs:
-      allowed: ${{ github.event_name == 'push' || steps.vouch.outputs.vouched == 'true' }}
+      allowed: ${{ github.event_name == 'push' || github.event_name == 'workflow_call' || steps.vouch.outputs.vouched == 'true' }}
     steps:
       - name: Check pull request author
         id: vouch
@@ -40,7 +46,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
+
+      - name: Verify source commit
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -116,7 +128,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
+
+      - name: Verify source commit
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -146,16 +164,60 @@ jobs:
         working-directory: ${{ matrix.package }}
         run: ${{ matrix.command }}
 
+  python-runtime:
+    name: Python runtime tests
+    needs: trust
+    if: needs.trust.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify source commit
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11.15'
+
+      - name: Install pinned uv
+        run: python -m pip install uv==0.11.33
+
+      - name: Install locked runtime test dependencies
+        working-directory: prime-agent-runtime
+        run: uv sync --frozen --group test
+
+      - name: Test runtime
+        working-directory: prime-agent-runtime
+        run: uv run --frozen --group test python -m unittest discover -s test -p 'test_*.py'
+
   build-check-test:
     name: build-check-test
     if: always() && needs.trust.outputs.allowed == 'true'
-    needs: [trust, build-check, test]
+    needs: [trust, build-check, test, python-runtime]
     runs-on: ubuntu-latest
     steps:
-      - name: Verify CI results
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify source commit
         env:
-          BUILD_CHECK_RESULT: ${{ needs.build-check.result }}
-          TEST_RESULT: ${{ needs.test.result }}
-        run: |
-          test "$BUILD_CHECK_RESULT" = success
-          test "$TEST_RESULT" = success
+          SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Verify CI results
+        run: >-
+          node scripts/verify-ci-results.mjs
+          build-check=${{ needs.build-check.result }}
+          test=${{ needs.test.result }}
+          python-runtime=${{ needs.python-runtime.result }}
