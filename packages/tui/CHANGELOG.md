@@ -7,6 +7,8 @@
 ## [0.7.3] - 2026-08-17
 
 - Fixed hyperlinks not being clickable in fullscreen mode on terminals that gate native link handling while mouse reporting is active (e.g. Ghostty); left-clicking a link now opens it directly.
+- Fixed the editor crashing with a stack overflow when a single emoji or CJK character was wider than the terminal ([#982](https://github.com/PrimeIntellect-ai/prime-agent/issues/982)).
+- Fixed input getting stuck forever when a bracketed paste end marker never arrived; the buffered text now flushes as normal input after a timeout ([#982](https://github.com/PrimeIntellect-ai/prime-agent/issues/982)).
 
 ## [0.7.2] - 2026-08-11
 
