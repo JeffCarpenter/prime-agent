@@ -11,6 +11,8 @@
 - Changed sent agent messages in the IPython cell UI to show only the message text with a `╰─` gutter when expanded, matching received messages, and hid the raw `agent_message.send` receipt dictionary.
 - Fixed `agent_message.send` failures for already-active sessions to report an actionable message without exposing internal lease details.
 - Fixed unnamed agent-message labels preferring a runtime ID over the durable session ID returned by `agent_message.list_agents()`.
+- Fixed browser authentication links being constrained to a narrow dialog.
+- Changed ChatGPT authentication to use the device login flow without requiring a localhost callback.
 - Fixed Homebrew installs attempting to self-update their versioned Cellar keg instead of directing users to `brew upgrade prime-agent` ([#844](https://github.com/PrimeIntellect-ai/prime-agent/issues/844))
 - Fixed active RLM subagents flooding parent transcripts with one usage-attribution entry per tool-loop message ([#1054](https://github.com/PrimeIntellect-ai/prime-agent/issues/1054)).
 - Fixed prompts to archived daemon sessions failing with unknown-session errors instead of reviving the saved session.
