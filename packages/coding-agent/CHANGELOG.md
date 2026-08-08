@@ -72,6 +72,7 @@
 - Added an optional `modelAllowlist` setting to restrict provider and model discovery and prevent unlisted environment-backed providers from being used.
 - Fixed live daemon supervisors, workers, and session leases being treated as stale when upgrading across process-start identity token formats.
 - Fixed cron schedules to use standard day-of-month/day-of-week matching, support long-horizon dates and conventional aliases, and document local-time DST behavior ([#940](https://github.com/PrimeIntellect-ai/prime-agent/issues/940)).
+- Fixed bursty daemon peer updates queuing redundant all-to-all synchronization passes and resending unchanged peer catalogs ([#943](https://github.com/PrimeIntellect-ai/prime-agent/issues/943)).
 
 ## [0.7.2] - 2026-08-11
 
