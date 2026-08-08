@@ -131,17 +131,17 @@ function isProcessAlive(pid: number): boolean {
 	}
 }
 
-type ProcessQuery = (command: string, args: string[]) => string;
+interface ProcessQueryOptions {
+	env?: NodeJS.ProcessEnv;
+}
 
-function runProcessQuery(command: string, args: string[]): string {
+type ProcessQuery = (command: string, args: string[], options?: ProcessQueryOptions) => string;
+
+function runProcessQuery(command: string, args: string[], options?: ProcessQueryOptions): string {
 	return execFileSync(command, args, {
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "ignore"],
-		// The portable start-time listing renders a local-time timestamp:
-		// without pinning the timezone and locale, the SAME process yields a
-		// different identity when the supervisor restarts under a different
-		// TZ/locale, and the mismatch is then read as PID reuse.
-		env: { ...process.env, TZ: "UTC", LC_ALL: "C" },
+		env: options?.env,
 	});
 }
 
@@ -184,6 +184,22 @@ export function compareProcessStartIds(
 	return recorded.slice(0, recordedSeparator) === observed.slice(0, observedSeparator) ? "mismatch" : "unverifiable";
 }
 
+export function getPsProcessStartId(pid: number, query: ProcessQuery = runProcessQuery): string | undefined {
+	if (!Number.isInteger(pid) || pid <= 0) {
+		return undefined;
+	}
+	try {
+		const startTime = query("ps", ["-p", String(pid), "-o", "lstart="], {
+			env: { ...process.env, TZ: "UTC", LC_ALL: "C" },
+		}).trim();
+		// ps2 distinguishes the stable rendering from legacy ps tokens so an
+		// upgrade cannot mistake a representation change for PID reuse.
+		return startTime ? `ps2:${startTime}` : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function getProcessStartId(pid: number): string | undefined {
 	if (!Number.isInteger(pid) || pid <= 0) {
 		return undefined;
@@ -202,15 +218,7 @@ export function getProcessStartId(pid: number): string | undefined {
 	} catch {
 		// Fall through to the portable process listing used on macOS and BSD.
 	}
-	try {
-		const startTime = runProcessQuery("ps", ["-p", String(pid), "-o", "lstart="]).trim();
-		// ps2: marks the timezone/locale-pinned rendering. Comparisons across
-		// formats (a legacy ps: token recorded by an older build) cannot prove
-		// PID reuse and must degrade to unverifiable instead of mismatch.
-		return startTime ? `ps2:${startTime}` : undefined;
-	} catch {
-		return undefined;
-	}
+	return getPsProcessStartId(pid);
 }
 
 let currentProcessStartId: string | undefined;

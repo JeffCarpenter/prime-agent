@@ -1,0 +1,1 @@
+- Fixed macOS timezone changes invalidating the running daemon's process identity ([#879](https://github.com/PrimeIntellect-ai/prime-agent/issues/879)).
