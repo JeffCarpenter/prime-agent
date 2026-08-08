@@ -1,6 +1,7 @@
-/** OpenAI Codex (ChatGPT OAuth) device login flow. */
+/** OpenAI Codex (ChatGPT OAuth) browser and device login flows. */
 
-import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from "./types.js";
+import { generatePKCE } from "./pkce.js";
+import type { OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, OAuthProviderInterface } from "./types.js";
 
 const AUTH_BASE_URL = "https://auth.openai.com";
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -8,6 +9,9 @@ const DEVICE_CODE_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/usercode`;
 const DEVICE_TOKEN_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/token`;
 const DEVICE_VERIFICATION_URL = `${AUTH_BASE_URL}/codex/device`;
 const DEVICE_REDIRECT_URI = `${AUTH_BASE_URL}/deviceauth/callback`;
+const BROWSER_AUTHORIZE_URL = `${AUTH_BASE_URL}/oauth/authorize`;
+const BROWSER_REDIRECT_URI = "http://localhost:1455/auth/callback";
+const BROWSER_SCOPE = "openid profile email offline_access";
 const TOKEN_URL = `${AUTH_BASE_URL}/oauth/token`;
 const DEVICE_LOGIN_TIMEOUT_MS = 15 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
@@ -95,6 +99,41 @@ function parsePollInterval(value: unknown): number {
 	const seconds = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
 	if (!Number.isFinite(seconds) || seconds <= 0) return DEFAULT_POLL_INTERVAL_SECONDS * 1000;
 	return Math.max(1000, Math.floor(seconds * 1000));
+}
+
+function createState(): string {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function parseAuthorizationInput(input: string, expectedState: string): string {
+	const value = input.trim();
+	if (!value) throw new Error("Missing authorization code");
+
+	let code: string | undefined;
+	let state: string | undefined;
+	try {
+		const url = new URL(value);
+		code = url.searchParams.get("code") ?? undefined;
+		state = url.searchParams.get("state") ?? undefined;
+	} catch {
+		const separator = value.lastIndexOf("#");
+		if (separator >= 0) {
+			code = value.slice(0, separator);
+			state = value.slice(separator + 1);
+		} else if (value.includes("code=")) {
+			const params = new URLSearchParams(value);
+			code = params.get("code") ?? undefined;
+			state = params.get("state") ?? undefined;
+		} else {
+			code = value;
+		}
+	}
+
+	if (!code) throw new Error("Missing authorization code");
+	if (state && state !== expectedState) throw new Error("OAuth state mismatch");
+	return code;
 }
 
 async function requestDeviceCode(signal?: AbortSignal): Promise<DeviceCode> {
@@ -281,6 +320,43 @@ export async function loginOpenAICodex(options: {
 	};
 }
 
+export async function loginOpenAICodexBrowser(options: {
+	onAuth: (info: { url: string; instructions?: string }) => void;
+	onPrompt: (prompt: OAuthPrompt) => Promise<string>;
+	signal?: AbortSignal;
+}): Promise<OAuthCredentials> {
+	throwIfAborted(options.signal);
+	const { verifier, challenge } = await generatePKCE();
+	const state = createState();
+	const url = new URL(BROWSER_AUTHORIZE_URL);
+	url.searchParams.set("response_type", "code");
+	url.searchParams.set("client_id", CLIENT_ID);
+	url.searchParams.set("redirect_uri", BROWSER_REDIRECT_URI);
+	url.searchParams.set("scope", BROWSER_SCOPE);
+	url.searchParams.set("code_challenge", challenge);
+	url.searchParams.set("code_challenge_method", "S256");
+	url.searchParams.set("state", state);
+	url.searchParams.set("id_token_add_organizations", "true");
+	url.searchParams.set("codex_cli_simplified_flow", "true");
+	url.searchParams.set("originator", "pi");
+
+	options.onAuth({
+		url: url.toString(),
+		instructions: "Complete sign-in, then paste the final redirect URL or authorization code.",
+	});
+	const input = await options.onPrompt({
+		message: "Paste the final redirect URL or authorization code",
+		placeholder: "http://localhost:1455/auth/callback?code=...&state=...",
+	});
+	throwIfAborted(options.signal);
+	const code = parseAuthorizationInput(input, state);
+	const tokenResult = await exchangeAuthorizationCode(code, verifier, BROWSER_REDIRECT_URI, options.signal);
+	if (tokenResult.type !== "success") throw new Error(tokenResult.message);
+	const accountId = getAccountId(tokenResult.access);
+	if (!accountId) throw new Error("Failed to extract accountId from token");
+	return { ...tokenResult, accountId };
+}
+
 export async function refreshOpenAICodexToken(refreshToken: string): Promise<OAuthCredentials> {
 	const result = await refreshAccessToken(refreshToken);
 	if (result.type !== "success") throw new Error(result.message);
@@ -295,6 +371,13 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	loginFlow: "device",
 
 	login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+		if (callbacks.loginFlow === "browser") {
+			return loginOpenAICodexBrowser({
+				onAuth: callbacks.onAuth,
+				onPrompt: callbacks.onPrompt,
+				signal: callbacks.signal,
+			});
+		}
 		return loginOpenAICodex({ onAuth: callbacks.onAuth, signal: callbacks.signal });
 	},
 

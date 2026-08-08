@@ -191,6 +191,12 @@ When a provider requests a retry delay longer than `retry.provider.maxRetryDelay
 | `images.autoResize` | boolean | `true` | Resize images to 2000x2000 max |
 | `images.blockImages` | boolean | `false` | Block all images from being sent to LLM |
 
+### Authentication
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `auth.deviceLogin` | boolean | automatic | Force device login (`true`) or browser login (`false`); when unset, device login is used if no GUI browser launcher is available on `PATH` |
+
 ### Shell
 
 | Setting | Type | Default | Description |
