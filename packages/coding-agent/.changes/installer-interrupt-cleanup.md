@@ -1,0 +1,1 @@
+- Fixed interrupting the installer from leaving its background install command running or its temporary output behind ([#1009](https://github.com/PrimeIntellect-ai/prime-agent/pull/1009) by [@Adolanium](https://github.com/Adolanium)).
