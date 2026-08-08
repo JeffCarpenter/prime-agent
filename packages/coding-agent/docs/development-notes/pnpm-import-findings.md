@@ -1,4 +1,4 @@
-# pnpm Import Findings
+# pnpm Workspace Import Findings
 
 ## Problem
 
