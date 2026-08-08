@@ -1,0 +1,1 @@
+- Fixed `/btw` and `/side` failing on Amazon Bedrock after the main conversation used tools ([#886](https://github.com/PrimeIntellect-ai/prime-agent/issues/886)).
