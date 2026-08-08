@@ -159,6 +159,8 @@ async def run(prompt: str, **kwargs: Any) -> RLMSpawnHandle:
     ``model`` selects a child with an exact ``provider/model`` selector.
     ``thinking`` selects the child's reasoning level independently; when omitted,
     the parent level is inherited and clamped to the resolved child's capabilities.
+    ``cwd`` starts the child in another working directory so that project's
+    context files load for it.
     """
     if not isinstance(prompt, str):
         raise TypeError(f"prompt must be str, got {type(prompt).__name__}")
