@@ -1,6 +1,15 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+	constants as fsConstants,
+	copyFileSync,
+	existsSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { buildReleaseSection } from "./changelog-fragments.mjs";
@@ -223,21 +232,64 @@ function listChangelogFragments(root, packageDir) {
 		.sort((left, right) => left.sortKey - right.sortKey || left.path.localeCompare(right.path));
 }
 
-function writePreparedFiles(root, files) {
+function writePreparedFiles(root, files, options = {}) {
 	const staged = [];
+	const stagedRemovals = [];
+	const replaced = [];
+	const removed = [];
+	const replaceFile = options.replaceFile ?? renameSync;
+	let preserveBackups = false;
 	try {
 		for (const [index, [relativePath, content]] of files.entries()) {
 			const path = join(root, relativePath);
 			const temporaryPath = join(dirname(path), `.${basename(path)}.release-${process.pid}-${index}.tmp`);
+			const backupPath = join(dirname(path), `.${basename(path)}.release-${process.pid}-${index}.backup`);
 			writeFileSync(temporaryPath, content, { flag: "wx" });
-			staged.push({ path, temporaryPath });
+			staged.push({ backupPath, path, temporaryPath });
+			copyFileSync(path, backupPath, fsConstants.COPYFILE_EXCL);
+		}
+		for (const [index, path] of (options.removePaths ?? []).entries()) {
+			const backupPath = join(dirname(path), `.${basename(path)}.release-${process.pid}-remove-${index}.backup`);
+			copyFileSync(path, backupPath, fsConstants.COPYFILE_EXCL);
+			stagedRemovals.push({ backupPath, path });
 		}
 		for (const file of staged) {
-			renameSync(file.temporaryPath, file.path);
+			replaceFile(file.temporaryPath, file.path);
+			replaced.push(file);
 		}
+		options.validate?.();
+		for (const file of stagedRemovals) {
+			rmSync(file.path);
+			removed.push(file);
+		}
+	} catch (error) {
+		const rollbackErrors = [];
+		for (const file of removed.reverse()) {
+			try {
+				renameSync(file.backupPath, file.path);
+			} catch (rollbackError) {
+				rollbackErrors.push(rollbackError);
+			}
+		}
+		for (const file of replaced.reverse()) {
+			try {
+				renameSync(file.backupPath, file.path);
+			} catch (rollbackError) {
+				rollbackErrors.push(rollbackError);
+			}
+		}
+		if (rollbackErrors.length > 0) {
+			preserveBackups = true;
+			throw new AggregateError([error, ...rollbackErrors], "Release preparation failed and could not be fully restored");
+		}
+		throw error;
 	} finally {
 		for (const file of staged) {
 			rmSync(file.temporaryPath, { force: true });
+			if (!preserveBackups) rmSync(file.backupPath, { force: true });
+		}
+		for (const file of stagedRemovals) {
+			if (!preserveBackups) rmSync(file.backupPath, { force: true });
 		}
 	}
 }
@@ -281,9 +333,11 @@ export function prepareRelease(root, target, options = {}) {
 	}
 	files.set("package-lock.json", formatJson(lock));
 
-	writePreparedFiles(root, [...files.entries()]);
-	validateReleaseRepository(root, { version, requireChangelogs: true });
-	for (const fragmentPath of consumedFragments) rmSync(fragmentPath);
+	writePreparedFiles(root, [...files.entries()], {
+		removePaths: consumedFragments,
+		replaceFile: options.replaceFile,
+		validate: () => validateReleaseRepository(root, { version, requireChangelogs: true }),
+	});
 	return [
 		...[...files.keys()].map((path) => relative(root, join(root, path))),
 		...consumedFragments.map((path) => relative(root, path)),
