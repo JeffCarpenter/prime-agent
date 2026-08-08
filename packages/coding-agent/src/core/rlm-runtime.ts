@@ -83,6 +83,21 @@ export function normalizeRequestedRlmSubagentSessionName(value: unknown): string
 	return name;
 }
 
+/** Validate and normalize an orchestrator-supplied subagent working directory. */
+export function normalizeRequestedRlmSubagentCwd(value: unknown): string | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (typeof value !== "string") {
+		throw new Error("rlm.run cwd must be a string");
+	}
+	const cwd = value.trim();
+	if (!cwd) {
+		throw new Error("rlm.run cwd must not be empty");
+	}
+	return cwd;
+}
+
 /** Validate and normalize an orchestrator-supplied subagent model reference. */
 export function normalizeRequestedRlmSubagentModel(value: unknown): string | undefined {
 	if (value === undefined) {
@@ -264,6 +279,8 @@ export interface CreateRlmSubagentRuntimeOptions {
 	prompt: string;
 	sessionName: string;
 	sessionDir: string;
+	/** Working directory for the child session; defaults to the parent's cwd. */
+	cwd?: string;
 	model: Model<any>;
 	thinkingLevel: ThinkingLevel;
 	serviceTier: ServiceTier;

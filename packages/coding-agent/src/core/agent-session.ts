@@ -15,7 +15,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import {
@@ -225,6 +225,7 @@ import {
 	createRlmRunHostHandler,
 	findRlmModelMatches,
 	getRlmThinkingLevels,
+	normalizeRequestedRlmSubagentCwd,
 	normalizeRequestedRlmSubagentModel,
 	normalizeRequestedRlmSubagentSessionName,
 	normalizeRequestedRlmSubagentThinkingLevel,
@@ -9022,6 +9023,7 @@ export class AgentSession {
 		sessionName: string;
 		spawnCode?: string;
 		sessionDir: string;
+		cwd?: string;
 		model: Model<any>;
 		thinkingLevel: ThinkingLevel;
 	}): CreateRlmSubagentRuntimeOptions {
@@ -9032,6 +9034,7 @@ export class AgentSession {
 			sessionName: options.sessionName,
 			spawnCode: options.spawnCode,
 			sessionDir: options.sessionDir,
+			cwd: options.cwd,
 			model: options.model,
 			thinkingLevel: options.thinkingLevel,
 			serviceTier:
@@ -9057,7 +9060,12 @@ export class AgentSession {
 	}
 
 	private _createInlineRlmSubagentRuntime(options: CreateRlmSubagentRuntimeOptions): RlmSubagentRuntime {
-		const childSessionManager = SessionManager.create(this._cwd, options.sessionDir);
+		// The inline runtime reuses the parent's resource loader, so a child with a
+		// different cwd runs there (tools, kernel, session) but inherits the
+		// parent's loaded context files. A subagent runtime host rebuilds
+		// cwd-bound services and loads the child cwd's project context.
+		const childCwd = options.cwd ?? this._cwd;
+		const childSessionManager = SessionManager.create(childCwd, options.sessionDir);
 		if (options.parentSession.sessionFile) {
 			childSessionManager.newSession({
 				parentSession: options.parentSession.sessionFile,
@@ -9095,7 +9103,7 @@ export class AgentSession {
 			agent: childAgent,
 			sessionManager: childSessionManager,
 			settingsManager: this.settingsManager,
-			cwd: this._cwd,
+			cwd: childCwd,
 			agentDir: this._agentDir,
 			scopedModels: options.scopedModels,
 			resourceLoader: this._resourceLoader,
@@ -9706,7 +9714,7 @@ export class AgentSession {
 		kwargs: Record<string, unknown> = {},
 		spawnCode?: string,
 	): Promise<RlmSpawnHandle> {
-		const { name: rawName, model: rawModel, thinking: rawThinking, ...unsupported } = kwargs;
+		const { name: rawName, model: rawModel, thinking: rawThinking, cwd: rawCwd, ...unsupported } = kwargs;
 		const unsupportedKwargs = Object.keys(unsupported);
 		if (unsupportedKwargs.length > 0) {
 			throw new Error(`Unsupported rlm.run kwargs: ${unsupportedKwargs.sort().join(", ")}`);
@@ -9714,6 +9722,14 @@ export class AgentSession {
 		const requestedSessionName = normalizeRequestedRlmSubagentSessionName(rawName);
 		const requestedModel = normalizeRequestedRlmSubagentModel(rawModel);
 		const requestedThinkingLevel = normalizeRequestedRlmSubagentThinkingLevel(rawThinking);
+		const requestedCwd = normalizeRequestedRlmSubagentCwd(rawCwd);
+		let childCwd: string | undefined;
+		if (requestedCwd !== undefined) {
+			childCwd = resolve(this._cwd, requestedCwd);
+			if (!existsSync(childCwd) || !statSync(childCwd).isDirectory()) {
+				throw new Error(`rlm.run cwd is not an existing directory: ${childCwd}`);
+			}
+		}
 		if (requestedSessionName) assertDirectAgentMessageTarget(requestedSessionName);
 		if (this._rlmDepth >= this._rlmMaxDepth) {
 			throw new Error(
@@ -9832,6 +9848,7 @@ export class AgentSession {
 				sessionName,
 				spawnCode,
 				sessionDir: childSessionDir,
+				cwd: childCwd,
 				model: modelSelection.model,
 				thinkingLevel: childThinkingLevel,
 			}),
