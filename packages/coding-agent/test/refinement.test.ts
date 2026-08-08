@@ -1,4 +1,13 @@
-import { appendFileSync, chmodSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	chmodSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -747,8 +756,8 @@ describe("harness refinement", () => {
 		});
 	});
 
-	it.each(["not json at all", "null", "[]", '"a string"', "123"])(
-		"loads empty harness state from a corrupt or non-object file (%s)",
+	it.each(["not json at all", "null", "[]", '"a string"', "123", '{"revision":"bad"}'])(
+		"loads empty harness state but refuses to overwrite an invalid file (%s)",
 		(payload) => {
 			const dir = makeTempDir();
 			writeFileSync(getHarnessStatePath(dir), payload, "utf8");
@@ -757,6 +766,8 @@ describe("harness refinement", () => {
 
 			expect(state.entries).toEqual({ prompt: {}, memory: {}, skill: {}, subagent: {} });
 			expect(state.refinements).toEqual([]);
+			// Planning can continue from an empty view, but persistence must preserve
+			// invalid evidence instead of treating it as revision zero.
 			applyRefinementProposal(
 				state,
 				proposal("Recover", [
@@ -764,8 +775,8 @@ describe("harness refinement", () => {
 				]),
 				{ id: "refine_recover" },
 			);
-			saveHarnessState(dir, state);
-			expect(loadHarnessState(dir).entries.memory.recovered.content).toBe("ok");
+			expect(() => saveHarnessState(dir, state)).toThrow(/invalid.*refusing to overwrite/);
+			expect(readFileSync(getHarnessStatePath(dir), "utf8")).toBe(payload);
 		},
 	);
 

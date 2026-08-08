@@ -1,0 +1,1 @@
+- Fixed concurrent TypeScript and Python continual-harness writes losing updates or exposing partial JSON ([#961](https://github.com/PrimeIntellect-ai/prime-agent/pull/961) by [@fettpl](https://github.com/fettpl)).
