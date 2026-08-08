@@ -1,0 +1,1 @@
+- Fixed GitHub Copilot Responses requests to omit the unsupported `service_tier` field.
