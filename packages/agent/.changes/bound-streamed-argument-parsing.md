@@ -1,0 +1,1 @@
+- Fixed proxy streams repeatedly reparsing the full accumulated tool-argument JSON for every delta ([#942](https://github.com/PrimeIntellect-ai/prime-agent/issues/942)).

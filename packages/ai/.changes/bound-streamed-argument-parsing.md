@@ -1,0 +1,1 @@
+- Fixed streamed tool arguments repeatedly reparsing their full JSON prefix while preserving raw deltas and tolerant final parsing ([#942](https://github.com/PrimeIntellect-ai/prime-agent/issues/942)).
