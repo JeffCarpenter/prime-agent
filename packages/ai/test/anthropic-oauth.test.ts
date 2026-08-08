@@ -1,80 +1,121 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loginAnthropic, refreshAnthropicToken } from "../src/utils/oauth/anthropic.js";
+import { anthropicOAuthProvider, loginAnthropic, refreshAnthropicToken } from "../src/utils/oauth/anthropic.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
 	return new Response(JSON.stringify(body), {
 		status,
-		headers: {
-			"Content-Type": "application/json",
-		},
+		headers: { "Content-Type": "application/json" },
 	});
 }
 
-function getUrl(input: unknown): string {
-	if (typeof input === "string") {
-		return input;
-	}
-	if (input instanceof URL) {
-		return input.toString();
-	}
-	if (input instanceof Request) {
-		return input.url;
-	}
-	throw new Error(`Unsupported fetch input: ${String(input)}`);
+function getUrl(input: string | URL | Request): string {
+	return input instanceof Request ? input.url : input.toString();
 }
 
 function getJsonBody(init?: RequestInit): Record<string, string> {
-	if (typeof init?.body !== "string") {
-		throw new Error(`Expected string request body, got ${typeof init?.body}`);
-	}
+	if (typeof init?.body !== "string") throw new Error(`Expected string request body, got ${typeof init?.body}`);
 	return JSON.parse(init.body) as Record<string, string>;
 }
 
 describe.sequential("Anthropic OAuth", () => {
 	afterEach(() => {
+		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
+		vi.useRealTimers();
 	});
 
-	it("keeps the localhost redirect_uri for manual callback login", async () => {
-		let authUrl = "";
-		const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+	it("uses Anthropic's hosted-code login without a localhost callback", async () => {
+		vi.setSystemTime(new Date("2026-08-08T00:00:00Z"));
+		const onAuth = vi.fn();
+		const onProgress = vi.fn();
+		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
 			expect(init?.method).toBe("POST");
 			const body = getJsonBody(init);
-			expect(body.grant_type).toBe("authorization_code");
-			expect(body.code).toBe("manual-code");
-			expect(body.redirect_uri).toBe("http://localhost:53692/callback");
-			return jsonResponse({
-				access_token: "access-token",
-				refresh_token: "refresh-token",
-				expires_in: 3600,
+			expect(body).toMatchObject({
+				grant_type: "authorization_code",
+				code: "authorization-code",
+				redirect_uri: "https://platform.claude.com/oauth/code/callback",
 			});
+			expect(body.state).toBe(body.code_verifier);
+			return jsonResponse({ access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600 });
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		const credentials = await loginAnthropic({
-			onAuth: (info) => {
-				authUrl = info.url;
-			},
-			onPrompt: async () => "",
-			onManualCodeInput: async () => {
-				const url = new URL(authUrl);
-				const state = url.searchParams.get("state");
-				const redirectUri = url.searchParams.get("redirect_uri");
-				if (!state || !redirectUri) {
-					throw new Error("Missing OAuth state or redirect_uri in auth URL");
-				}
-				return `${redirectUri}?code=manual-code&state=${state}`;
+			onAuth,
+			onProgress,
+			onPrompt: async () => {
+				const authUrl = new URL(onAuth.mock.calls[0]?.[0].url as string);
+				expect(authUrl.origin).toBe("https://claude.ai");
+				expect(authUrl.pathname).toBe("/oauth/authorize");
+				expect(authUrl.searchParams.get("redirect_uri")).toBe("https://platform.claude.com/oauth/code/callback");
+				return `authorization-code#${authUrl.searchParams.get("state")}`;
 			},
 		});
 
-		expect(credentials.access).toBe("access-token");
-		expect(credentials.refresh).toBe("refresh-token");
+		expect(anthropicOAuthProvider.loginFlow).toBe("manual-code");
+		expect(anthropicOAuthProvider.usesCallbackServer).toBeUndefined();
+		expect(onAuth).toHaveBeenCalledWith({
+			url: expect.stringContaining("https://claude.ai/oauth/authorize?"),
+			instructions: "Complete sign-in, then copy the authorization code shown by Anthropic.",
+		});
+		expect(onProgress).toHaveBeenCalledWith("Exchanging authorization code for tokens...");
+		expect(credentials).toEqual({
+			access: "access-token",
+			refresh: "refresh-token",
+			expires: Date.parse("2026-08-08T00:55:00Z"),
+		});
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
+	it("rejects an authorization result with mismatched OAuth state before exchange", async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			loginAnthropic({
+				onAuth: () => {},
+				onPrompt: async () => "authorization-code#unexpected-state",
+			}),
+		).rejects.toThrow("OAuth state mismatch");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("normalizes cancellation before token exchange", async () => {
+		const controller = new AbortController();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		const loginPromise = loginAnthropic({
+			onAuth: () => {},
+			onPrompt: async () => {
+				controller.abort();
+				return "authorization-code";
+			},
+			signal: controller.signal,
+		});
+
+		await expect(loginPromise).rejects.toThrow("Login cancelled");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("validates token exchange responses", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => jsonResponse({ access_token: "access-token" })),
+		);
+
+		await expect(
+			loginAnthropic({
+				onAuth: () => {},
+				onPrompt: async () => "authorization-code",
+			}),
+		).rejects.toThrow("Invalid Anthropic token exchange response: missing expires_in");
+	});
+
 	it("omits scope from refresh token requests", async () => {
-		const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
 			expect(init?.method).toBe("POST");
 			const body = getJsonBody(init);

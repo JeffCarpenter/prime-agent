@@ -53,8 +53,8 @@ export interface OAuthProviderInterface {
 	/** Whether login uses a local callback server and supports manual code input. */
 	usesCallbackServer?: boolean;
 
-	/** Whether login waits for the user to authorize a device code in the browser. */
-	loginFlow?: "device";
+	/** Browser handoff behavior used by interactive clients. */
+	loginFlow?: "device" | "manual-code";
 
 	/** Refresh expired credentials, return updated credentials to persist */
 	refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials>;
