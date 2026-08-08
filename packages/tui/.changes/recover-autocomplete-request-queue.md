@@ -1,0 +1,1 @@
+- Fixed autocomplete recovering after provider or extension completion failures ([#939](https://github.com/PrimeIntellect-ai/prime-agent/issues/939)).
