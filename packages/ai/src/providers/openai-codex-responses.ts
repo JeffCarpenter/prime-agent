@@ -513,32 +513,25 @@ async function* parseSSE(response: Response): AsyncGenerator<Record<string, unkn
 		while (true) {
 			const { done, value } = await reader.read();
 			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
+			buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
 
 			let idx = buffer.indexOf("\n\n");
 			while (idx !== -1) {
 				const chunk = buffer.slice(0, idx);
 				buffer = buffer.slice(idx + 2);
 
-				const dataLines = chunk
-					.split("\n")
-					.filter((l) => l.startsWith("data:"))
-					.map((l) => l.slice(5).trim());
-				if (dataLines.length > 0) {
-					const data = dataLines.join("\n").trim();
-					if (data && data !== "[DONE]") {
-						try {
-							yield JSON.parse(data) as Record<string, unknown>;
-						} catch (cause) {
-							throw new CodexProtocolError(`Invalid Codex SSE JSON: ${formatThrownValue(cause)}`, {
-								cause,
-								payload: data,
-							});
-						}
-					}
+				const parsed = parseSSEEvent(chunk);
+				if (parsed !== undefined) {
+					yield parsed;
 				}
 				idx = buffer.indexOf("\n\n");
 			}
+		}
+
+		buffer += decoder.decode().replace(/\r\n/g, "\n");
+		const parsed = parseSSEEvent(buffer);
+		if (parsed !== undefined) {
+			yield parsed;
 		}
 	} finally {
 		try {
@@ -553,6 +546,28 @@ async function* parseSSE(response: Response): AsyncGenerator<Record<string, unkn
 		}
 	}
 }
+
+function parseSSEEvent(chunk: string): Record<string, unknown> | undefined {
+	const dataLines = chunk
+		.split("\n")
+		.filter((l) => l.startsWith("data:"))
+		.map((l) => l.slice(5).trim());
+	if (dataLines.length === 0) return undefined;
+	const data = dataLines.join("\n").trim();
+	if (!data || data === "[DONE]") return undefined;
+	try {
+		return JSON.parse(data) as Record<string, unknown>;
+	} catch (cause) {
+		throw new CodexProtocolError(`Invalid Codex SSE JSON: ${formatThrownValue(cause)}`, {
+			cause,
+			payload: data,
+		});
+	}
+}
+
+// ============================================================================
+// WebSocket Parsing
+// ============================================================================
 
 const OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06";
 const SESSION_WEBSOCKET_CACHE_TTL_MS = 5 * 60 * 1000;

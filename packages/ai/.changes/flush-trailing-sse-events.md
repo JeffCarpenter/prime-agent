@@ -1,0 +1,2 @@
+- Fixed the Codex SSE parser dropping the terminal event when a stream ends without a trailing blank line, losing final usage ([#995](https://github.com/PrimeIntellect-ai/prime-agent/issues/995)).
+- Fixed Responses streams losing assistant text when a text delta arrives without a preceding content part event ([#995](https://github.com/PrimeIntellect-ai/prime-agent/issues/995)).
