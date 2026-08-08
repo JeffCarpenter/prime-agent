@@ -1,0 +1,1 @@
+- Fixed a throwing `tool_call` extension handler aborting the remaining handlers and failing the tool call; errors are now reported as extension errors and handling continues ([#985](https://github.com/PrimeIntellect-ai/prime-agent/issues/985)).
