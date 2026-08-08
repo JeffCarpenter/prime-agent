@@ -517,7 +517,7 @@ export class ProviderAuthFlows {
 		);
 
 		const handle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
@@ -634,7 +634,7 @@ export class ProviderAuthFlows {
 		);
 
 		const handle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
@@ -802,20 +802,23 @@ export class ProviderAuthFlows {
 			.find((provider) => provider.id === providerId);
 
 		const usesCallbackServer = providerInfo?.usesCallbackServer ?? false;
+		const usesDeviceFlow = providerInfo?.loginFlow === "device";
 
 		const dialog = new LoginDialogComponent(this.host.ui, providerId, (_success, _message) => {}, providerName);
 
 		const dialogHandle = showFullPaneOverlay(this.host.ui, dialog, {
-			maxContentWidth: 88,
+			fullWidth: true,
 			suspendFullscreenMouse: true,
 		});
 
 		let manualCodeResolve: ((code: string) => void) | undefined;
 		let manualCodeReject: ((err: Error) => void) | undefined;
-		const manualCodePromise = new Promise<string>((resolve, reject) => {
-			manualCodeResolve = resolve;
-			manualCodeReject = reject;
-		});
+		const manualCodePromise = usesCallbackServer
+			? new Promise<string>((resolve, reject) => {
+					manualCodeResolve = resolve;
+					manualCodeReject = reject;
+				})
+			: undefined;
 
 		const closeDialog = () => {
 			dialogHandle.hide();
@@ -842,7 +845,7 @@ export class ProviderAuthFlows {
 									manualCodeReject = undefined;
 								}
 							});
-					} else if (providerId === "github-copilot") {
+					} else if (usesDeviceFlow) {
 						dialog.showWaiting("Waiting for browser authentication...");
 					}
 				},
@@ -857,7 +860,7 @@ export class ProviderAuthFlows {
 
 				onSelect: (prompt: OAuthSelectPrompt) => this.showOAuthLoginSelect(dialogHandle, prompt),
 
-				onManualCodeInput: () => manualCodePromise,
+				onManualCodeInput: manualCodePromise ? () => manualCodePromise : undefined,
 
 				signal: dialog.signal,
 			});
