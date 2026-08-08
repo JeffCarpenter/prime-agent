@@ -1,1 +1,1 @@
-- Fixed agent messaging documentation to match the always-steering Python and RPC contracts ([#951](https://github.com/PrimeIntellect-ai/prime-agent/issues/951)).
+- Fixed agent messaging documentation to match the always-steering Python and RPC contracts ([#1007](https://github.com/PrimeIntellect-ai/prime-agent/pull/1007) by [@anusbutt](https://github.com/anusbutt)).
