@@ -1,0 +1,1 @@
+- Fixed the daemon supervisor leaving a stale snapshot cache after a worker recovery that dropped uncertain operations, which could make an attached client fail to re-sync its snapshot ([#966](https://github.com/PrimeIntellect-ai/prime-agent/pull/966) by [@avion23](https://github.com/avion23)).

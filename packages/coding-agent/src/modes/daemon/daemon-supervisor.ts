@@ -3355,6 +3355,13 @@ export class DaemonSupervisor {
 				operation: "recovery_hold",
 			});
 		}
+		for (const interrupted of interruptedSessions.values()) {
+			this.failWorkerSnapshotCache(
+				worker,
+				interrupted.activeSessionId,
+				new Error("Worker recovery dropped uncertain operations; snapshot cache invalidated"),
+			);
+		}
 		this.log(
 			`Recovered worker ${worker.descriptor.workerId} without replaying uncertain operations: ${uncertain
 				.map((record) => record.operation)
@@ -4587,7 +4594,7 @@ export class DaemonSupervisor {
 						worker,
 						activeSessionId,
 						error instanceof Error ? error : new Error(String(error)),
-						true,
+						false,
 						generation.transcript.snapshotId,
 					);
 				}
