@@ -1,0 +1,1 @@
+- Fixed retries after an aborted or errored tool call failing with provider pairing errors by dropping tool results whose parent tool call was skipped ([#984](https://github.com/PrimeIntellect-ai/prime-agent/issues/984)).
