@@ -1,0 +1,3 @@
+- Fixed source launcher failing outside the repository directory by passing the root tsconfig to tsx ([#904](https://github.com/PrimeIntellect-ai/prime-agent/issues/904)).
+- Fixed `send` command help listing removed `--steer` and `--follow-up` flags ([#901](https://github.com/PrimeIntellect-ai/prime-agent/issues/901)).
+- Fixed Python `rlm` API `RLMSpawnHandle` / `RLMSubagent` name attribute mismatches and allowed passing `RLMSpawnHandle` objects directly to `rlm.delete_subagent` ([#824](https://github.com/PrimeIntellect-ai/prime-agent/issues/824)).
