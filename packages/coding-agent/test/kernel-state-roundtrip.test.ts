@@ -3,12 +3,13 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { kernelVenvPythonPath } from "../src/core/kernel/bootstrap.js";
 import { KernelManager } from "../src/core/kernel/index.js";
 
 function resolveKernelPython(): string | null {
 	const candidates = [
 		process.env.PRIME_AGENT_KERNEL_PYTHON,
-		join(homedir(), ".prime", "agent", "kernel-venv", "bin", "python"),
+		kernelVenvPythonPath(join(homedir(), ".prime", "agent", "kernel-venv")),
 	].filter((p): p is string => Boolean(p));
 	for (const python of candidates) {
 		if (!existsSync(python)) continue;

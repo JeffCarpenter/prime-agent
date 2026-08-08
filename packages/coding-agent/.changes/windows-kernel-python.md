@@ -1,0 +1,2 @@
+- Added Windows setup documentation covering npm 12 install quirks and the `PRIME_AGENT_KERNEL_PYTHON` kernel-bootstrap workaround.
+- Fixed the IPython kernel bootstrap failing on Windows by resolving the venv interpreter at `Scripts\python.exe` instead of the POSIX `bin/python` path.
