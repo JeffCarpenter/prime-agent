@@ -1,0 +1,1 @@
+- Fixed worker teardown on Windows leaving detached descendants running. Windows has no process groups, so the kill reached only the named process; it now walks the real process tree ([#917](https://github.com/PrimeIntellect-ai/prime-agent/issues/917)).
