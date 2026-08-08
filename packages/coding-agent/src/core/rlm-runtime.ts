@@ -198,6 +198,32 @@ function normalizeModelSearchText(value: string): string {
 	return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+interface RlmModelCandidate {
+	model: Model<Api>;
+	selector: string;
+	score: number;
+}
+
+/** Round-robin unqualified results across providers while preserving provider-local order. */
+function spreadAcrossProviders(candidates: RlmModelCandidate[]): RlmModelCandidate[] {
+	const byProvider = new Map<string, RlmModelCandidate[]>();
+	for (const candidate of candidates) {
+		const bucket = byProvider.get(candidate.model.provider);
+		if (bucket) bucket.push(candidate);
+		else byProvider.set(candidate.model.provider, [candidate]);
+	}
+	const buckets = [...byProvider.values()];
+	const deepest = buckets.reduce((max, bucket) => Math.max(max, bucket.length), 0);
+	const spread: RlmModelCandidate[] = [];
+	for (let round = 0; round < deepest; round++) {
+		for (const bucket of buckets) {
+			const candidate = bucket[round];
+			if (candidate) spread.push(candidate);
+		}
+	}
+	return spread;
+}
+
 export function findRlmModelMatches(
 	query: string,
 	models: Model<Api>[],
@@ -205,7 +231,7 @@ export function findRlmModelMatches(
 	configuredThinkingLevels?: readonly ThinkingLevel[],
 ): RlmModelMatch[] {
 	const normalizedQuery = normalizeModelSearchText(query.trim());
-	return models
+	const ranked = models
 		.map((model) => {
 			const selector = `${model.provider}/${model.id}`;
 			const fields = [selector, model.id, model.name || model.id];
@@ -222,15 +248,15 @@ export function findRlmModelMatches(
 			return { model, selector, score };
 		})
 		.filter((candidate) => Number.isFinite(candidate.score))
-		.sort((a, b) => a.score - b.score || a.selector.localeCompare(b.selector))
-		.slice(0, limit)
-		.map(({ model, selector }) => ({
-			provider: model.provider,
-			id: model.id,
-			name: model.name || model.id,
-			selector,
-			thinking_levels: getRlmThinkingLevels(model, configuredThinkingLevels),
-		}));
+		.sort((a, b) => a.score - b.score || a.selector.localeCompare(b.selector));
+	const ordered = normalizedQuery ? ranked : spreadAcrossProviders(ranked);
+	return ordered.slice(0, limit).map(({ model, selector }) => ({
+		provider: model.provider,
+		id: model.id,
+		name: model.name || model.id,
+		selector,
+		thinking_levels: getRlmThinkingLevels(model, configuredThinkingLevels),
+	}));
 }
 
 /** Adapt an RlmRunHandler into the typed `rlm.run` kernel host handler. */
