@@ -16,13 +16,14 @@ concurrency:
   group: ci-${{ inputs.source_sha || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   trust:
     name: Contributor trust
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       allowed: ${{ github.event_name == 'push' || github.event_name == 'workflow_call' || steps.vouch.outputs.vouched == 'true' }}
     steps:
@@ -42,9 +43,11 @@ jobs:
     if: needs.trust.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -78,12 +81,18 @@ jobs:
       - name: Check release packages
         run: npm run check:release-packages
 
+      - name: Check workflow security contracts
+        working-directory: packages/coding-agent
+        run: node --test scripts/check-workflow-security.mjs
+
   test:
     name: Test (${{ matrix.name }})
     needs: trust
     if: needs.trust.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +135,7 @@ jobs:
             install_uv: true
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -170,9 +179,11 @@ jobs:
     if: needs.trust.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
@@ -203,9 +214,11 @@ jobs:
     if: always() && needs.trust.outputs.allowed == 'true'
     needs: [trust, build-check, test, python-runtime]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
