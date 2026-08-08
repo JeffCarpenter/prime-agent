@@ -23,6 +23,7 @@
 		"check:installer-process-cleanup": "node scripts/check-installer-process-cleanup.mjs",
 		"check:source-launcher": "node scripts/check-source-launcher.mjs",
 		"check:browser-smoke": "node scripts/check-browser-smoke.mjs",
+		"check:release-packages": "node scripts/check-release-package-contract.mjs",
 		"check:workspace-scripts": "node scripts/check-workspace-scripts.mjs",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",

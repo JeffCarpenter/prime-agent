@@ -1,0 +1,1 @@
+- Fixed the documented TUI installation path while preserving the self-contained packed-artifact quick start ([#1027](https://github.com/PrimeIntellect-ai/prime-agent/pull/1027) by [@fettpl](https://github.com/fettpl)).

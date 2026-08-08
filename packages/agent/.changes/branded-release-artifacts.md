@@ -1,0 +1,1 @@
+- Fixed the documented core installation path to use branded, immutable Prime Agent release artifacts ([#1027](https://github.com/PrimeIntellect-ai/prime-agent/pull/1027) by [@fettpl](https://github.com/fettpl)).

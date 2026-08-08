@@ -1,0 +1,1 @@
+- Fixed the documented AI installation path and added the branded `prime-agent-ai` command alias ([#1027](https://github.com/PrimeIntellect-ai/prime-agent/pull/1027) by [@fettpl](https://github.com/fettpl)).
