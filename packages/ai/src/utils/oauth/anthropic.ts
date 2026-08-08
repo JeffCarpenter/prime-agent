@@ -3,7 +3,22 @@
 import { createServer, type Server } from "node:http";
 import { oauthErrorHtml, oauthSuccessHtml } from "./oauth-page.js";
 import { generatePKCE } from "./pkce.js";
-import type { OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, OAuthProviderInterface } from "./types.js";
+import {
+	connectOAuthManualInput,
+	createOAuthTerminalWaiter,
+	type OAuthTerminalWaiter,
+	toOAuthLoginError,
+} from "./terminal-waiter.js";
+import {
+	type OAuthCredentials,
+	type OAuthLoginCallbacks,
+	OAuthLoginError,
+	type OAuthLoginErrorSource,
+	type OAuthPrompt,
+	type OAuthProviderInterface,
+} from "./types.js";
+
+type AuthorizationResult = { code: string; state: string };
 
 const decode = (value: string) => atob(value);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
@@ -234,6 +249,11 @@ async function startCallbackServer(expectedState: string, signal?: AbortSignal):
 		signal?.addEventListener("abort", onAbort, { once: true });
 		server.once("error", reject);
 		server.listen(CALLBACK_PORT, CALLBACK_HOST, () => {
+			listening = true;
+			waiter = createOAuthTerminalWaiter<AuthorizationResult>({
+				timeoutMs: options?.callbackTimeoutMs,
+				signal: options?.signal,
+			});
 			resolve({
 				server,
 				cancelWait: () => rejectAuthorization?.(loginCancelledError()),

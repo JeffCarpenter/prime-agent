@@ -1,7 +1,20 @@
 /** OpenAI Codex (ChatGPT OAuth) browser and device login flows. */
 
 import { generatePKCE } from "./pkce.js";
-import type { OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, OAuthProviderInterface } from "./types.js";
+import {
+	connectOAuthManualInput,
+	createOAuthTerminalWaiter,
+	type OAuthTerminalWaiter,
+	toOAuthLoginError,
+} from "./terminal-waiter.js";
+import {
+	type OAuthCredentials,
+	type OAuthLoginCallbacks,
+	OAuthLoginError,
+	type OAuthLoginErrorSource,
+	type OAuthPrompt,
+	type OAuthProviderInterface,
+} from "./types.js";
 
 const AUTH_BASE_URL = "https://auth.openai.com";
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
