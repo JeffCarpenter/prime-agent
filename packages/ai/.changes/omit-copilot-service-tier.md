@@ -1,1 +1,1 @@
-- Fixed GitHub Copilot Responses requests to omit the unsupported `service_tier` field.
+- Fixed GitHub Copilot Responses requests to omit the unsupported `service_tier` field ([#897](https://github.com/PrimeIntellect-ai/prime-agent/pull/897) by [@traditio](https://github.com/traditio)).
