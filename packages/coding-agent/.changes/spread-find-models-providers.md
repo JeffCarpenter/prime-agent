@@ -1,0 +1,1 @@
+- Fixed `rlm.find_models()` with no query returning an alphabetical slice from the first provider, which read as the complete set of reachable models ([#799](https://github.com/PrimeIntellect-ai/prime-agent/issues/799)).
