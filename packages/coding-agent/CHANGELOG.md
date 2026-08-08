@@ -71,6 +71,7 @@
 - Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 - Added an optional `modelAllowlist` setting to restrict provider and model discovery and prevent unlisted environment-backed providers from being used.
 - Fixed live daemon supervisors, workers, and session leases being treated as stale when upgrading across process-start identity token formats.
+- Fixed cron schedules to use standard day-of-month/day-of-week matching, support long-horizon dates and conventional aliases, and document local-time DST behavior ([#940](https://github.com/PrimeIntellect-ai/prime-agent/issues/940)).
 
 ## [0.7.2] - 2026-08-11
 
