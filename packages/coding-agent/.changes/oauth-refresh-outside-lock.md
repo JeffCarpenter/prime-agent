@@ -1,0 +1,1 @@
+- Fixed the OAuth token refresh holding the `auth.json` file lock across the network call, blocking other processes for up to 30s on a slow provider ([#999](https://github.com/PrimeIntellect-ai/prime-agent/issues/999)).
