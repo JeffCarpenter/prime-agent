@@ -67,6 +67,7 @@
 - Fixed URLs not opening on click in fullscreen mode on terminals such as Ghostty; clicking a link in the transcript, dock, or overlays now opens it in the browser.
 - Fixed ctrl+p ("Toggle agent message expansion") only toggling received agent messages; it now expands and collapses sent agent messages together with received ones.
 - Added capability-aware thinking-level selection for native RLM children, reusable continual-harness subagent specs, and Markdown profiles in the optional subagent extension, including dynamic model discovery, provider mapping, an `rlmAllowedThinkingLevels` policy, and delegation guidance based on task complexity ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
+- Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 
 ## [0.7.2] - 2026-08-11
 
