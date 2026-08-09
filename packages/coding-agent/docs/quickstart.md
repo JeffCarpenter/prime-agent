@@ -30,11 +30,13 @@ To run a source checkout instead, use Node.js 22.8.0 or newer:
 ```bash
 git clone https://github.com/PrimeIntellect-ai/prime-agent
 cd prime-agent
-npm ci
-./prime-agent.sh
+pnpm install
+./scripts/install-source.sh
 ```
 
-The source runner preserves the directory from which it is invoked, so you can also call `/path/to/prime-agent/prime-agent.sh` from another project.
+The source installer creates an idempotent `prime-agent` symlink under `~/.local/bin` and refuses to overwrite an existing command. Pass another bin directory as its only argument if needed.
+
+The symlink-safe source runner preserves the directory from which it is invoked, so run `prime-agent` from the project you want it to operate on. Updating the checkout requires `git pull` followed by `pnpm install`.
 
 ## Authenticate
 
@@ -94,7 +96,7 @@ Prime Agent loads context files at startup. Add an `AGENTS.md` file to tell it h
 ```markdown
 # Project Instructions
 
-- Run `npm run check` after code changes.
+- Run `pnpm run check` after code changes.
 - Do not run production migrations locally.
 - Keep responses concise.
 ```
@@ -124,7 +126,7 @@ Images can be pasted with Ctrl+V (Alt+V on Windows) or dragged into supported te
 In interactive mode:
 
 ```text
-!npm run lint
+!pnpm run lint
 ```
 
 The command output is sent to the model. Use `!!command` to run a command without adding its output to model context. During agent work, the model normally runs project commands from the IPython control environment with a `%%bash` cell.

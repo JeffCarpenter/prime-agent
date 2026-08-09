@@ -9,16 +9,20 @@ Prime Agent requires Node.js 22.8.0 or newer.
 ```bash
 git clone https://github.com/PrimeIntellect-ai/prime-agent
 cd prime-agent
-npm ci
+pnpm install
+./scripts/install-source.sh
 ```
 
-Run from source:
+The source installer links `prime-agent.sh` into `~/.local/bin/prime-agent` without replacing an existing command. Pass a different bin directory as its only argument when `~/.local/bin` is not appropriate.
+
+Run the source checkout from any project directory:
 
 ```bash
-/path/to/prime-agent/prime-agent.sh
+cd /path/to/project
+prime-agent
 ```
 
-The script can be called from any directory and preserves the caller's working directory. Use that behavior to run a source checkout against a separate test project.
+The launcher resolves its real path through symlinks and preserves the caller's working directory. Use that behavior to run a source checkout against a separate test project.
 
 ## Product and Source Names
 
@@ -68,7 +72,7 @@ prime-agent shutdown
 After code changes, run the repository check from the root:
 
 ```bash
-npm run check
+pnpm run check
 ```
 
 This performs formatting, linting, type checking, installer rendering checks, and the browser smoke check. It does not run the test suite.
@@ -77,7 +81,7 @@ Run focused tests from the package root. For example:
 
 ```bash
 cd packages/coding-agent
-npx tsx ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts
+pnpm exec tsx ../../node_modules/vitest/dist/cli.js --run test/specific.test.ts
 ```
 
 If you create or modify a test file, run that file and iterate until it passes. Coding-agent suite regressions belong under `test/suite/regressions/` and use the suite harness and faux provider rather than live provider credentials.
