@@ -1,0 +1,1 @@
+- Fixed explicit `/refine` commands appearing frozen by showing elapsed progress and supporting cancellation ([#1035](https://github.com/PrimeIntellect-ai/prime-agent/pull/1035) by [@junhoyeo](https://github.com/junhoyeo)).
