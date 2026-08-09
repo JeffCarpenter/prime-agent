@@ -46,6 +46,15 @@ const SNAPSHOT_MAX_OUTPUT_CHARS = 1_000_000;
 const SNAPSHOT_DISPOSE_TIMEOUT_MS = 5000;
 const SNAPSHOT_EXECUTION_TIMEOUT_MS = 5000;
 const KERNEL_ABORT_GRACE_MS = 1000;
+// An awaited dispose() must outlive the kill: the kernel is spawned with `cwd`
+// set to its temp dir, and Windows keeps that directory locked until the
+// process is really gone, so a caller deleting it after dispose() gets EPERM.
+const KERNEL_EXIT_TIMEOUT_MS = 2000;
+const KERNEL_EXIT_POLL_INTERVAL_MS = 10;
+// rmSync's own maxRetries does not cover this: the native implementation
+// surfaces the directory-level EPERM without retrying.
+const TEMP_DIR_REMOVE_ATTEMPTS = 10;
+const TEMP_DIR_REMOVE_DELAY_MS = 20;
 const KERNEL_BUSY_REUSE_WAIT_MS = 5000;
 const KERNEL_BUSY_INTERRUPT_INTERVAL_MS = 500;
 const MAX_LATE_SENT_AGENT_MESSAGE_HANDLERS = 256;
@@ -1526,7 +1535,20 @@ export class KernelManager {
 		await this.control.send(encode(msg, this.connection.key));
 	}
 
-	private cleanupResources(killSignal: NodeJS.Signals = "SIGTERM"): void {
+	/** Removes a kernel temp dir, retrying while the OS still holds a handle. */
+	private static async removeTempDirWithRetries(dir: string): Promise<void> {
+		for (let attempt = 0; attempt < TEMP_DIR_REMOVE_ATTEMPTS; attempt++) {
+			try {
+				rmSync(dir, { recursive: true, force: true });
+				return;
+			} catch {
+				await new Promise((resolve) => globalThis.setTimeout(resolve, TEMP_DIR_REMOVE_DELAY_MS));
+			}
+		}
+		// Leave the temp dir for OS tmp cleanup.
+	}
+
+	private cleanupResources(killSignal: NodeJS.Signals = "SIGTERM", options: { removeTempDir?: boolean } = {}): void {
 		this.startGeneration++; // any teardown invalidates in-flight starts
 		this.clearSnapshotTimer();
 		this.lateSentAgentMessageHandlers.clear();
@@ -1571,28 +1593,38 @@ export class KernelManager {
 		this.kernel = undefined;
 		this.forkedKernel = undefined;
 		this.connection = undefined;
-		if (this.tempDir) {
+		// dispose() defers this so it can wait for the kernel to exit first;
+		// disposeSync() has no such option and removes it best-effort here.
+		if (this.tempDir && options.removeTempDir !== false) {
 			try {
 				rmSync(this.tempDir, { recursive: true, force: true });
 			} catch {
 				// Leave temporary kernel files for OS cleanup.
 			}
 		}
-		this.tempDir = undefined;
+		if (options.removeTempDir !== false) this.tempDir = undefined;
 		this.startPromise = undefined;
 	}
 
-	private async waitForKernelExit(): Promise<void> {
+	private async waitForKernelExit(timeoutMs?: number): Promise<void> {
+		const deadline = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
 		const kernel = this.kernel;
 		if (kernel) {
 			if (kernel.exitCode !== null || kernel.signalCode !== null) return;
-			await new Promise<void>((resolve) => kernel.once("exit", () => resolve()));
+			const exited = new Promise<void>((resolve) => kernel.once("exit", () => resolve()));
+			if (timeoutMs === undefined) {
+				await exited;
+			} else {
+				await Promise.race([exited, sleep(timeoutMs, undefined, { ref: false })]);
+			}
 			return;
 		}
 		const forked = this.forkedKernel;
 		if (!forked) return;
-		while (this.forkedKernel === forked && !(await this.forkedKernelDead(forked))) {
-			await sleep(25);
+		while (deadline === undefined || Date.now() < deadline) {
+			const remaining = deadline === undefined ? undefined : Math.max(1, deadline - Date.now());
+			if (await this.forkedKernelDead(forked, remaining)) return;
+			await sleep(Math.min(KERNEL_EXIT_POLL_INTERVAL_MS, remaining ?? KERNEL_EXIT_POLL_INTERVAL_MS));
 		}
 	}
 
@@ -1838,7 +1870,16 @@ export class KernelManager {
 					await this.waitForHostRequestsToSettle(inFlightHostRequests, HOST_REQUEST_DISPOSE_TIMEOUT_MS);
 				}
 			} finally {
-				if (!this.startStale(generation)) this.cleanupResources(); // else: superseded, the newer owner already cleaned
+				if (!this.startStale(generation)) {
+					// Capture the exit waiter and temp dir before cleanup clears the
+					// process handles; Windows retains the cwd until the process exits.
+					const kernelExit = this.waitForKernelExit(KERNEL_EXIT_TIMEOUT_MS);
+					const tempDir = this.tempDir;
+					this.cleanupResources("SIGTERM", { removeTempDir: false });
+					this.tempDir = undefined;
+					await kernelExit;
+					if (tempDir) await KernelManager.removeTempDirWithRetries(tempDir);
+				}
 			}
 		})();
 	}
