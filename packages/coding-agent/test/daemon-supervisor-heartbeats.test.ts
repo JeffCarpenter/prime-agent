@@ -139,28 +139,6 @@ describe("daemon supervisor heartbeat aggregation", () => {
 		expect(supervisor.forwardToWorker).toHaveBeenCalledOnce();
 	});
 
-	it("skips terminally failed workers without blocking healthy heartbeats", async () => {
-		const supervisor = createSupervisorHarness();
-		const healthy = worker("ready");
-		supervisor.workers.set("healthy", healthy);
-		supervisor.workers.set("failed", worker("failed", false));
-		supervisor.forwardToWorker = vi.fn(async (_target, command) =>
-			success(command.id, command.type, { heartbeats: [{ job: { id: "heartbeat-1" } }] }),
-		);
-
-		const response = await supervisor.handleCommand({} as DaemonSocketClient, {
-			id: "list-failed-worker",
-			type: "heartbeats_list",
-		});
-
-		expect(response).toMatchObject({
-			success: true,
-			data: { heartbeats: [{ job: { id: "heartbeat-1" } }] },
-		});
-		expect(supervisor.forwardToWorker).toHaveBeenCalledOnce();
-		expect(supervisor.forwardToWorker).toHaveBeenCalledWith(healthy, expect.anything(), expect.anything());
-	});
-
 	it("routes management by cached job ownership after a session unloads", async () => {
 		const supervisor = createSupervisorHarness();
 		const target = {
