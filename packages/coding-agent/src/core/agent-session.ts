@@ -212,12 +212,14 @@ import { resolveConfigValue } from "./resolve-config-value.js";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.js";
 import {
 	type CreateRlmSubagentRuntimeOptions,
+	clampRlmThinkingLevel,
 	createDefaultRlmSubagentSessionName,
 	createRlmDeleteSubagentHostHandler,
 	createRlmFindModelsHostHandler,
 	createRlmListSubagentsHostHandler,
 	createRlmRunHostHandler,
 	findRlmModelMatches,
+	getRlmThinkingLevels,
 	normalizeRequestedRlmSubagentModel,
 	normalizeRequestedRlmSubagentSessionName,
 	normalizeRequestedRlmSubagentThinkingLevel,
@@ -9067,7 +9069,10 @@ export class AgentSession {
 			"model.info": async () => ({
 				id: this.model?.id ?? null,
 				provider: this.model?.provider ?? null,
+				name: this.model ? this.model.name || this.model.id : null,
+				selector: this.model ? `${this.model.provider}/${this.model.id}` : null,
 				input: this.model?.input ?? [],
+				thinking_levels: this.model ? this._getRlmThinkingLevels(this.model) : [],
 			}),
 		};
 		if (this._includeGoals) {
@@ -9309,7 +9314,7 @@ export class AgentSession {
 		spawnCode?: string;
 		sessionDir: string;
 		model: Model<any>;
-		thinkingLevel?: ThinkingLevel;
+		thinkingLevel: ThinkingLevel;
 	}): CreateRlmSubagentRuntimeOptions {
 		return {
 			parentSession: this,
@@ -9319,8 +9324,7 @@ export class AgentSession {
 			spawnCode: options.spawnCode,
 			sessionDir: options.sessionDir,
 			model: options.model,
-			thinkingLevel:
-				options.thinkingLevel ?? (clampThinkingLevel(options.model, this.thinkingLevel) as ThinkingLevel),
+			thinkingLevel: options.thinkingLevel,
 			serviceTier:
 				this.serviceTier === "priority" && !supportsFastMode(options.model) ? "default" : this.serviceTier,
 			scopedModels: [...this._scopedModels],
@@ -10162,9 +10166,18 @@ export class AgentSession {
 		});
 	}
 
+	private _getRlmThinkingLevels(model: Model<Api>): ThinkingLevel[] {
+		return getRlmThinkingLevels(model, this.settingsManager.getRlmAllowedThinkingLevels());
+	}
+
 	async findRlmModels(query: string, limit: number): Promise<RlmFindModelsResult> {
 		return {
-			models: findRlmModelMatches(query, await this._authenticatedRlmModels(), limit),
+			models: findRlmModelMatches(
+				query,
+				await this._authenticatedRlmModels(),
+				limit,
+				this.settingsManager.getRlmAllowedThinkingLevels(),
+			),
 		};
 	}
 
@@ -10236,6 +10249,20 @@ export class AgentSession {
 			}
 		}
 		if (this._disposed || this._disposing) throw new Error("Cannot spawn a subagent after its parent was disposed");
+		const availableThinkingLevels = this._getRlmThinkingLevels(modelSelection.model);
+		const modelSelector = `${modelSelection.model.provider}/${modelSelection.model.id}`;
+		if (availableThinkingLevels.length === 0) {
+			throw new Error(
+				`No thinking levels are available for subagent model "${modelSelector}" after applying model capabilities and rlmAllowedThinkingLevels`,
+			);
+		}
+		if (requestedThinkingLevel !== undefined && !availableThinkingLevels.includes(requestedThinkingLevel)) {
+			throw new Error(
+				`Requested thinking level "${requestedThinkingLevel}" is unavailable for subagent model "${modelSelector}"; available levels: ${availableThinkingLevels.join(", ")}`,
+			);
+		}
+		const childThinkingLevel =
+			requestedThinkingLevel ?? clampRlmThinkingLevel(this.thinkingLevel, availableThinkingLevels);
 
 		const childSessionDir = this._createChildRlmSessionDir();
 		const childNodeId = basename(childSessionDir);
@@ -10312,7 +10339,7 @@ export class AgentSession {
 				spawnCode,
 				sessionDir: childSessionDir,
 				model: modelSelection.model,
-				thinkingLevel: requestedThinkingLevel,
+				thinkingLevel: childThinkingLevel,
 			}),
 			onSessionPublished: publishChildSession,
 		};
