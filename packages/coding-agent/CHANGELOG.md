@@ -33,6 +33,7 @@
 - Fixed sessions becoming permanently unopenable after a stale worker registration was left behind; open/resume now self-heals by finishing the old cleanup and starting a fresh worker ([#852](https://github.com/PrimeIntellect-ai/prime-agent/pull/852)).
 - Fixed active RLM subagents flooding parent transcripts with one usage-attribution entry per tool-loop message ([#1054](https://github.com/PrimeIntellect-ai/prime-agent/issues/1054)).
 - Fixed prompts to archived daemon sessions failing with unknown-session errors instead of reviving the saved session.
+- Fixed imported JSONL transcripts retaining an existing session ID and making exact saved-session lookup ambiguous.
 
 ## [0.7.1] - 2026-08-07
 
