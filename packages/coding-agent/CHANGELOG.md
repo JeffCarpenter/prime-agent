@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Added capability-aware thinking-level selection for native RLM children, reusable continual-harness subagent specs, and Markdown profiles in the optional subagent extension, including dynamic model discovery, provider mapping, an `rlmAllowedThinkingLevels` policy, and delegation guidance based on task complexity ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
+- Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 - Fixed fullscreen wheel scrolling in Ghostty while retaining application link clicks; set `terminal.fullscreenMouse` to `false` to use native Cmd-click instead.
 - Changed the agents view to sort idle and inactive sessions by last message time, newest first, while keeping running agents in stable creation order.
 - Fixed `openai-codex` models being invisible to `rlm` subagents and `find_models` because model discovery reported Prime Agent's own version as the Codex client version ([#1375](https://github.com/PrimeIntellect-ai/prime-agent/pull/1375) by [@bilelrais](https://github.com/bilelrais)).
