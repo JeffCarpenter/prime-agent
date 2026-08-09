@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PRIME_AGENT_LAUNCHER_PATH="$SCRIPT_DIR/prime-agent.sh"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [[ -L "$SCRIPT_PATH" ]]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  if [[ "$SCRIPT_PATH" != /* ]]; then
+    SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+  fi
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "$SCRIPT_PATH")"
+export PRIME_AGENT_LAUNCHER_PATH="$SCRIPT_PATH"
 if BUILD_ID="$(git -C "$SCRIPT_DIR" describe --tags --always --dirty 2>/dev/null)"; then
   export PRIME_AGENT_BUILD_ID="$BUILD_ID"
 fi
@@ -66,7 +75,7 @@ fi
 if [[ "$USE_DIST" == "true" ]]; then
   BUNDLE="$SCRIPT_DIR/packages/coding-agent/dist/bundle/cli.js"
   if [[ ! -f "$BUNDLE" ]]; then
-    echo "Bundle not found at $BUNDLE. Run npm run build first." >&2
+    echo "Bundle not found at $BUNDLE. Run pnpm run build first." >&2
     exit 1
   fi
   exec node "$BUNDLE" ${ARGS[@]+"${ARGS[@]}"}
@@ -74,7 +83,7 @@ fi
 
 TSX_BIN="$SCRIPT_DIR/node_modules/.bin/tsx"
 if [[ ! -x "$TSX_BIN" ]]; then
-  echo "tsx not found at $TSX_BIN. Run npm install from the repo root first." >&2
+  echo "tsx not found at $TSX_BIN. Run pnpm install from the repo root first." >&2
   exit 1
 fi
 
