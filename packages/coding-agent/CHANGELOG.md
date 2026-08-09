@@ -5,6 +5,7 @@
 - Added capability-aware thinking-level selection for native RLM children, reusable continual-harness subagent specs, and Markdown profiles in the optional subagent extension, including dynamic model discovery, provider mapping, an `rlmAllowedThinkingLevels` policy, and delegation guidance based on task complexity ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
 - Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 - Added an optional `modelAllowlist` setting to restrict provider and model discovery and prevent unlisted environment-backed providers from being used.
+- Fixed live daemon supervisors, workers, and session leases being treated as stale when upgrading across process-start identity token formats.
 - Added privacy-safe pseudonymous product analytics for onboarding, command use, execution modes, run outcomes, TTFT, latency, usage, tools, retries, and compactions, with disclosure and opt-out controls ([ENG-4682](https://linear.app/primeintellect/issue/ENG-4682/add-privacy-safe-posthog-analytics-to-prime-agent)).
 - Changed sent agent messages in the IPython cell UI to show only the message text with a `╰─` gutter when expanded, matching received messages, and hid the raw `agent_message.send` receipt dictionary.
 - Fixed `agent_message.send` failures for already-active sessions to report an actionable message without exposing internal lease details.
