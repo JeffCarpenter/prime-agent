@@ -323,6 +323,21 @@ export function resolveAgentsViewOpenCwd(
 	};
 }
 
+/**
+ * The runtime config an agents-view chat uses to (re)create the session from
+ * its saved file — the same computation resumeSavedAgentsViewSession performs,
+ * shared so the connection's revival fallback recreates with the identical
+ * launch context instead of daemon defaults.
+ * @internal Exported to pin the revive-config parity without a live daemon.
+ */
+export function agentsViewSessionRuntimeConfig(
+	config: AgentSessionRuntimeConfig,
+	summary: SessionSummary,
+): AgentSessionRuntimeConfig {
+	const { overrideCwd } = resolveAgentsViewOpenCwd(summary, config.cwd);
+	return createAgentsViewResumeConfig(config, overrideCwd);
+}
+
 async function openAgentsViewSession(
 	options: AgentsViewModeOptions,
 	summary: SessionSummary,
@@ -337,6 +352,7 @@ async function openAgentsViewSession(
 				recoverDaemon: options.recoverDaemon,
 				reconnectTimeoutMs: options.reconnectTimeoutMs,
 				telemetryDisabled: options.config.telemetryDisabled,
+				reviveConfig: agentsViewSessionRuntimeConfig(options.config, summary),
 			});
 			return { connection, summary };
 		} catch (error) {
@@ -360,6 +376,7 @@ async function openAgentsViewSession(
 			recoverDaemon: options.recoverDaemon,
 			reconnectTimeoutMs: options.reconnectTimeoutMs,
 			telemetryDisabled: options.config.telemetryDisabled,
+			reviveConfig: resumed.reviveConfig,
 		});
 		return { connection, summary: resumed.summary, cwdFallbackNotice: resumed.cwdFallbackNotice };
 	} catch (error) {
@@ -377,14 +394,20 @@ async function resumeSavedAgentsViewSession(
 	client: DaemonClient,
 	config: AgentSessionRuntimeConfig,
 	summary: SessionSummary,
-): Promise<{ summary: SessionSummary; activeSessionId: string; cwdFallbackNotice?: string }> {
+): Promise<{
+	summary: SessionSummary;
+	activeSessionId: string;
+	cwdFallbackNotice?: string;
+	reviveConfig: AgentSessionRuntimeConfig;
+}> {
 	if (!summary.sessionFile) {
 		throw new Error("Cannot resume a session without a saved session file");
 	}
-	const { overrideCwd, notice } = resolveAgentsViewOpenCwd(summary, config.cwd);
+	const { notice } = resolveAgentsViewOpenCwd(summary, config.cwd);
+	const resumeConfig = agentsViewSessionRuntimeConfig(config, summary);
 	const response = await client.request({
 		type: "create",
-		config: createAgentsViewResumeConfig(config, overrideCwd),
+		config: resumeConfig,
 		sessionPath: summary.sessionFile,
 	});
 	const createdSummary = expectSessionSummary(requireDaemonData(response));
@@ -392,6 +415,9 @@ async function resumeSavedAgentsViewSession(
 		summary: createdSummary,
 		activeSessionId: getRequiredActiveSessionId(createdSummary),
 		cwdFallbackNotice: notice,
+		// The connection's revival fallback recreates with the same launch
+		// context this resume used.
+		reviveConfig: resumeConfig,
 	};
 }
 
