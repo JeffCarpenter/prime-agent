@@ -36,6 +36,7 @@ except Exception:
 
 try:
     import rlm as _prime_agent_rlm_module
+    _prime_agent_rlm_module._install_host_request_task_tracking()
     rlm = _prime_agent_rlm_module.rlm
     import rlm.mcp as mcp
     mcp.install_shutdown_hook()

@@ -1,0 +1,1 @@
+- Fixed IPython host bridge requests hanging indefinitely when a request, handler, or response is lost, with a configurable 120-second deadline and safe cleanup ([#1038](https://github.com/PrimeIntellect-ai/prime-agent/pull/1038) by [@ProDrifterDK](https://github.com/ProDrifterDK)).
