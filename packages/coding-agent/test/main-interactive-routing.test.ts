@@ -14,6 +14,7 @@ import {
 	isClientOwnedDaemonSession,
 	parseAgentsViewCommand,
 	resolveRuntimeSessionOptions,
+	resolveRuntimeSkillPaths,
 	shouldEnsureDaemonBeforeActiveSessionLookup,
 	shouldEnsureInteractiveDaemonForStartup,
 	shouldOpenAgentsViewForDaemonInteractive,
@@ -361,6 +362,39 @@ describe("agents view command parsing", () => {
 });
 
 describe("runtime session option resolution", () => {
+	test("keeps only the required bundled goal skill with --goal --no-skills", () => {
+		const paths = resolveRuntimeSkillPaths({
+			noSkills: true,
+			initialGoal: { objective: "finish the task" },
+		});
+
+		expect(paths).toHaveLength(1);
+		expect(paths?.[0]).toMatch(/[/\\]skills[/\\]goal$/);
+	});
+
+	test("does not inject the goal skill into RLM subagents", () => {
+		expect(
+			resolveRuntimeSkillPaths(
+				{
+					noSkills: true,
+					initialGoal: { objective: "finish the task" },
+				},
+				1,
+			),
+		).toBeUndefined();
+	});
+
+	test("preserves explicitly configured skills while adding the required goal skill", () => {
+		const paths = resolveRuntimeSkillPaths({
+			noSkills: true,
+			skills: ["/tmp/custom-skill"],
+			initialGoal: { objective: "finish the task" },
+		});
+
+		expect(paths?.[0]).toBe("/tmp/custom-skill");
+		expect(paths?.[1]).toMatch(/[/\\]skills[/\\]goal$/);
+	});
+
 	test("keeps verifier goals per session instead of in the daemon fallback", () => {
 		const headlessCreateConfig = {
 			cwd: "/repo",
