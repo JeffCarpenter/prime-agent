@@ -9,7 +9,7 @@
  *
  * Steps:
  * 1. Check for uncommitted changes
- * 2. Bump version via npm run version:xxx or set an explicit version
+ * 2. Bump version via pnpm run version:xxx or set an explicit version
  * 3. Update CHANGELOG.md files: aggregate .changes/*.md fragments into a
  *    [version] - date section, git rm the consumed fragments
  * 4. Commit and tag
@@ -82,7 +82,7 @@ function bumpOrSetVersion(target) {
 
 	if (BUMP_TYPES.has(target)) {
 		console.log(`Bumping version (${target})...`);
-		run(`npm run version:${target}`);
+		run(`pnpm run version:${target}`);
 		return getVersion();
 	}
 
@@ -93,7 +93,7 @@ function bumpOrSetVersion(target) {
 
 	console.log(`Setting explicit version (${target})...`);
 	run(
-		`npm version ${target} -ws --no-git-tag-version && node scripts/sync-versions.js && npx shx rm -rf node_modules packages/*/node_modules package-lock.json && npm install`,
+		`pnpm --recursive version ${target} --no-git-tag-version && node scripts/sync-versions.js && pnpm exec shx rm -rf node_modules packages/*/node_modules && pnpm install`,
 	);
 	return getVersion();
 }
@@ -215,7 +215,7 @@ run(`git tag v${version}`);
 console.log();
 
 console.log("Publishing to npm...");
-run("npm run publish");
+run("pnpm run publish");
 console.log();
 
 console.log("Pushing to remote...");

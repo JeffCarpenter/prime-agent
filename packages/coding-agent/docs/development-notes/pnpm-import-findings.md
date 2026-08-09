@@ -45,4 +45,31 @@ Dependency installation reported two deprecated transitive dependencies:
 - `node-domexception@1.0.0`
 - `prebuild-install@7.1.3`
 
-No source files were modified as part of the pnpm compatibility work. The separate `auth-flows.ts` change was committed independently. The pre-existing untracked `pnpm-workspace.example.yaml` was left untouched.
+No source files were modified as part of the initial pnpm compatibility work. The separate `auth-flows.ts` change was committed independently. Only the real `pnpm-workspace.yaml` is retained; there is no example workspace manifest.
+
+## Source PATH Installation
+
+The repository's `prime-agent.sh` launcher originally derived its repository directory directly from `BASH_SOURCE[0]`. A command symlink under a PATH directory therefore made it look for `node_modules` beside the symlink instead of in the checkout.
+
+The source workflow now consists of:
+
+```bash
+pnpm install
+./scripts/install-source.sh
+```
+
+The installer creates an idempotent `prime-agent` symlink in `~/.local/bin` by default, accepts an explicit alternative bin directory, reports missing PATH configuration, and refuses to replace an existing command. The launcher resolves absolute, relative, and chained symlinks while retaining the caller's working directory and forwarding its arguments.
+
+A focused source-launcher check covers paths and arguments containing spaces, empty arguments, caller working-directory preservation, canonical launcher metadata, idempotent installation, conflicting commands, and chained relative symlinks.
+
+## Installer and Script Corrections
+
+The published release installer remains npm-based because npm ships with Node.js and installs the verified release tarball globally. Source development does not use npm.
+
+The installer now enforces the package engine requirement of Node.js 22.8.0 or newer and uses `npm prefix -g` rather than the removed `npm bin -g` command in its PATH guidance. Direct workspace package scripts and the contributor quickstart and development guides now use pnpm. The Python `pyproject.toml` files remain managed kernel-runtime and bundled-skill metadata; they require no separate workspace installation.
+
+The infinite recursion came from root scripts such as `clean` and `test` invoking `pnpm --recursive`. pnpm includes the workspace root in that selection, so those commands selected and called the same root script again. Recursive root scripts now exclude the `prime-agent` root package explicitly, including publish commands, and a workspace-script regression check enforces both the exclusion and the absence of npm invocations in direct workspace package scripts.
+
+## Final Validation
+
+Shell syntax checks passed for `prime-agent.sh`, `install.sh`, and `scripts/install-source.sh`. The focused installer, source-launcher, and workspace-script checks passed. The full `pnpm run check` command passed with 902 files checked, no formatting changes, successful TypeScript validation, and successful browser smoke validation.

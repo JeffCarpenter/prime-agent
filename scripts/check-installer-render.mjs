@@ -102,6 +102,29 @@ Finalizing npm install."
 	done
 }
 
+assert_node_version_accepted() {
+	if ! node_version_string_is_new_enough "$1"; then
+		printf 'expected Node.js %s to be accepted\\n' "$1" >&2
+		return 1
+	fi
+}
+
+assert_node_version_rejected() {
+	if node_version_string_is_new_enough "$1"; then
+		printf 'expected Node.js %s to be rejected\\n' "$1" >&2
+		return 1
+	fi
+}
+
+version_case() {
+	assert_node_version_rejected 20.6.0
+	assert_node_version_rejected 22.7.99
+	assert_node_version_accepted 22.8.0
+	assert_node_version_accepted 22.8.1
+	assert_node_version_accepted 23.0.0
+}
+
+version_case
 render_case "$@"
 screen_case "$@"
 progress_case
