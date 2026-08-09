@@ -28,6 +28,7 @@
 - Fixed timed-out worker stops stranding dead-but-registered workers ("Session worker is not connected"); stops now finalize in the background once the process exits, and zombie processes are no longer counted as alive ([#851](https://github.com/PrimeIntellect-ai/prime-agent/pull/851)).
 - Fixed sessions becoming permanently unopenable after a stale worker registration was left behind; open/resume now self-heals by finishing the old cleanup and starting a fresh worker ([#852](https://github.com/PrimeIntellect-ai/prime-agent/pull/852)).
 - Fixed active RLM subagents flooding parent transcripts with one usage-attribution entry per tool-loop message ([#1054](https://github.com/PrimeIntellect-ai/prime-agent/issues/1054)).
+- Fixed prompts to archived daemon sessions failing with unknown-session errors instead of reviving the saved session.
 
 ## [0.7.1] - 2026-08-07
 
