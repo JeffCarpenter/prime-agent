@@ -14,6 +14,7 @@
 - Fixed active RLM subagents flooding parent transcripts with one usage-attribution entry per tool-loop message ([#1054](https://github.com/PrimeIntellect-ai/prime-agent/issues/1054)).
 - Fixed prompts to archived daemon sessions failing with unknown-session errors instead of reviving the saved session.
 - Fixed imported JSONL transcripts retaining an existing session ID and making exact saved-session lookup ambiguous.
+- Fixed imported JSONL transcripts retaining an existing session ID and making exact saved-session lookup ambiguous ([#1087](https://github.com/PrimeIntellect-ai/prime-agent/pull/1087) by [@creatifcoding](https://github.com/creatifcoding)).
 
 ## [0.7.1] - 2026-08-07
 
