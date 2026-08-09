@@ -1676,6 +1676,7 @@ describe("InteractiveMode connection events", () => {
 			seedSubagentSummary: vi.fn(),
 			setSessionHasMessages: vi.fn(),
 			applyConnectionStateSnapshot: vi.fn(),
+			syncWorkingLoader: vi.fn(),
 			renderSessionContext: renderSessionContextMock,
 			restoreStreamingMessageFromSnapshot,
 			restoreTurnStartFromMessages: vi.fn(),
@@ -1705,6 +1706,13 @@ describe("InteractiveMode connection events", () => {
 		});
 		expect(restoreStreamingMessageFromSnapshot).toHaveBeenNthCalledWith(1, undefined);
 		expect(restoreStreamingMessageFromSnapshot).toHaveBeenNthCalledWith(2, streamingMessage);
+		const applySnapshot = (fakeThis as unknown as { applyConnectionStateSnapshot: ReturnType<typeof vi.fn> })
+			.applyConnectionStateSnapshot;
+		const syncWorkingLoader = (fakeThis as unknown as { syncWorkingLoader: ReturnType<typeof vi.fn> })
+			.syncWorkingLoader;
+		expect(syncWorkingLoader).toHaveBeenCalledTimes(2);
+		expect(applySnapshot.mock.invocationCallOrder[0]).toBeLessThan(syncWorkingLoader.mock.invocationCallOrder[0]);
+		expect(applySnapshot.mock.invocationCallOrder[1]).toBeLessThan(syncWorkingLoader.mock.invocationCallOrder[1]);
 	});
 
 	test("clears extension UI when a connection-backed session is replaced", async () => {

@@ -6681,6 +6681,7 @@ export class InteractiveMode {
 		this.setSessionHasMessages(context.messages.length > 0);
 		this.applyConnectionStateSnapshot(state);
 		this.restoreTurnStartFromMessages(context.messages);
+		this.syncWorkingLoader();
 		await this.renderSessionContext(context, {
 			updateFooter: true,
 			populateHistory: true,
