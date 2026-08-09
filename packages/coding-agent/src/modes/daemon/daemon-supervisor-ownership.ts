@@ -282,7 +282,6 @@ class DaemonShutdownAdmission {
 			current.token !== this.record.token ||
 			current.pid !== this.record.pid ||
 			current.processStartId !== this.record.processStartId ||
-			Date.parse(current.expiresAt) <= Date.now() ||
 			!matchesExactProcessIdentity(this.record)
 		) {
 			throw new DaemonShutdownAdmissionError("Daemon shutdown admission was lost");
