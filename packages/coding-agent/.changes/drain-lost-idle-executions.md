@@ -1,0 +1,1 @@
+- Fixed completed IPython cells blocking the serial execution queue when Jupyter drops the matching IOPub idle event ([#1038](https://github.com/PrimeIntellect-ai/prime-agent/pull/1038) by [@ProDrifterDK](https://github.com/ProDrifterDK)).
