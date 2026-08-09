@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import {
@@ -626,6 +626,35 @@ interface PreparedPromptPreparation {
 
 class DeferredSessionInputError extends Error {}
 
+function throwIfHostRequestAborted(signal: AbortSignal | undefined): void {
+	if (!signal?.aborted) return;
+	throw signal.reason instanceof Error ? signal.reason : new Error("host request aborted");
+}
+
+function raceWithHostRequestAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+	if (!signal) return promise;
+	throwIfHostRequestAborted(signal);
+	return new Promise<T>((resolve, reject) => {
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		const onAbort = () => {
+			cleanup();
+			reject(signal.reason instanceof Error ? signal.reason : new Error("host request aborted"));
+		};
+		signal.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => {
+				cleanup();
+				resolve(value);
+			},
+			(error: unknown) => {
+				cleanup();
+				reject(error);
+			},
+		);
+	});
+}
+
+/** Wrap a preflight callback so only the first report wins. */
 function oncePreflight(
 	preflightResult: ((success: boolean, queued?: boolean) => void) | undefined,
 ): (success: boolean, queued?: boolean) => void {
@@ -9113,34 +9142,55 @@ export class AgentSession {
 
 	private _createKernelHostHandlers(): HostRequestHandlers {
 		const handlers: HostRequestHandlers = {
-			"rlm.run": createRlmRunHostHandler(async ({ prompt, kwargs, cellSourceCode }) => ({
-				...(await this.runRlmChild(prompt, kwargs, cellSourceCode)),
+			"rlm.run": createRlmRunHostHandler(async ({ prompt, kwargs, cellSourceCode }, signal) => ({
+				...(await this.runRlmChild(prompt, kwargs, cellSourceCode, signal)),
 			})),
 			"rlm.find_models": createRlmFindModelsHostHandler((query, limit) => this.findRlmModels(query, limit)),
 			"rlm.list_subagents": createRlmListSubagentsHostHandler(() => this.listRlmSubagents()),
 			"rlm.delete_subagent": createRlmDeleteSubagentHostHandler((target) => this.deleteRlmSubagent(target)),
-			"model.info": async () => ({
-				id: this.model?.id ?? null,
-				provider: this.model?.provider ?? null,
-				name: this.model ? this.model.name || this.model.id : null,
-				selector: this.model ? `${this.model.provider}/${this.model.id}` : null,
-				input: this.model?.input ?? [],
-				thinking_levels: this.model ? this._getRlmThinkingLevels(this.model) : [],
-			}),
+			"model.info": async (_payload, context) => {
+				throwIfHostRequestAborted(context?.signal);
+				return {
+					id: this.model?.id ?? null,
+					provider: this.model?.provider ?? null,
+					name: this.model ? this.model.name || this.model.id : null,
+					selector: this.model ? `${this.model.provider}/${this.model.id}` : null,
+					input: this.model?.input ?? [],
+					thinking_levels: this.model ? this._getRlmThinkingLevels(this.model) : [],
+				};
+			},
 		};
 		if (this._includeGoals) {
 			for (const type of ["goal.get", "goal.create", "goal.pause", "goal.resume", "goal.complete"]) {
-				handlers[type] = async (payload) => this.handleGoalHostRequest(type, payload);
+				handlers[type] = async (payload, context) => {
+					const signal = context?.signal;
+					throwIfHostRequestAborted(signal);
+					const result = await this.handleGoalHostRequest(type, payload);
+					throwIfHostRequestAborted(signal);
+					return result;
+				};
 			}
 		}
 		if (this._includeCompactSkill) {
 			for (const type of ["compact.run", "compact.status"]) {
-				handlers[type] = async (payload) => this.handleCompactHostRequest(type, payload);
+				handlers[type] = async (payload, context) => {
+					const signal = context?.signal;
+					throwIfHostRequestAborted(signal);
+					const result = await this.handleCompactHostRequest(type, payload);
+					throwIfHostRequestAborted(signal);
+					return result;
+				};
 			}
 		}
 		if (this._autoRefineAllowedForSession()) {
 			for (const type of ["refine.run", "refine.status"]) {
-				handlers[type] = async (payload) => this.handleRefineHostRequest(type, payload);
+				handlers[type] = async (payload, context) => {
+					const signal = context?.signal;
+					throwIfHostRequestAborted(signal);
+					const result = await this.handleRefineHostRequest(type, payload);
+					throwIfHostRequestAborted(signal);
+					return result;
+				};
 			}
 		}
 		if (this._rlmHeartbeatController) {
@@ -9150,7 +9200,13 @@ export class AgentSession {
 				"rlm_heartbeat.update",
 				"rlm_heartbeat.delete",
 			]) {
-				handlers[type] = async (payload) => this.handleRlmHeartbeatHostRequest(type, payload);
+				handlers[type] = async (payload, context) => {
+					const signal = context?.signal;
+					throwIfHostRequestAborted(signal);
+					const result = await this.handleRlmHeartbeatHostRequest(type, payload);
+					throwIfHostRequestAborted(signal);
+					return result;
+				};
 			}
 		}
 		const visibleKernelSkillNames = new Set(
@@ -9164,7 +9220,8 @@ export class AgentSession {
 				createAgentMessageHostHandlers({
 					roster: async () =>
 						(await this.handleAgentMessageHostRequest("agent_message.list_agents")) as AgentFamilyRosterResult,
-					awaitPendingChildPublication: (selector) => this._awaitPendingRlmChildPublication(selector),
+					awaitPendingChildPublication: (selector, signal) =>
+						this._awaitPendingRlmChildPublication(selector, signal),
 					sendAgentMessage: async (input) => {
 						const receipt = (await this.handleAgentMessageHostRequest("agent_message.send", {
 							target: input.target,
@@ -9523,7 +9580,7 @@ export class AgentSession {
 		}
 	}
 
-	private async _awaitPendingRlmChildPublication(selector: string): Promise<string | undefined> {
+	private async _awaitPendingRlmChildPublication(selector: string, signal?: AbortSignal): Promise<string | undefined> {
 		const run = [...this._activeRlmChildRuns.values()].find(
 			(candidate) =>
 				(candidate.status === "queued" || candidate.status === "running" || candidate.status === "done") &&
@@ -9531,7 +9588,7 @@ export class AgentSession {
 				(candidate.id === selector || candidate.sessionName === selector),
 		);
 		if (!run) return undefined;
-		await run.publication.promise;
+		await raceWithHostRequestAbort(run.publication.promise, signal);
 		return run.session?.sessionId;
 	}
 
@@ -10285,7 +10342,9 @@ export class AgentSession {
 		prompt: string,
 		kwargs: Record<string, unknown> = {},
 		spawnCode?: string,
+		signal?: AbortSignal,
 	): Promise<RlmSpawnHandle> {
+		throwIfHostRequestAborted(signal);
 		const { name: rawName, model: rawModel, thinking: rawThinking, cwd: rawCwd, ...unsupported } = kwargs;
 		const unsupportedKwargs = Object.keys(unsupported);
 		if (unsupportedKwargs.length > 0) {
@@ -10317,7 +10376,9 @@ export class AgentSession {
 		let modelSelection: RlmSubagentModelSelection;
 		try {
 			if (requestedSessionName) await this._assertRlmSubagentSessionNameAvailable(requestedSessionName, true);
+			throwIfHostRequestAborted(signal);
 			modelSelection = await this._resolveRlmSubagentModel(requestedModel);
+			throwIfHostRequestAborted(signal);
 		} finally {
 			if (requestedSessionName) this._pendingRlmSubagentSessionNames.delete(requestedSessionName);
 		}
@@ -10348,7 +10409,13 @@ export class AgentSession {
 		const childSessionDir = this._createChildRlmSessionDir();
 		const childNodeId = basename(childSessionDir);
 		const sessionName = requestedSessionName ?? createDefaultRlmSubagentSessionName(prompt, childNodeId);
-		if (!requestedSessionName) await this._assertRlmSubagentSessionNameAvailable(sessionName);
+		try {
+			if (!requestedSessionName) await this._assertRlmSubagentSessionNameAvailable(sessionName);
+			throwIfHostRequestAborted(signal);
+		} catch (error) {
+			rmSync(childSessionDir, { recursive: true, force: true });
+			throw error;
+		}
 		const startedAt = Date.now();
 		const parentAssistantForUsage = this._findLastAssistantMessage();
 		const label = rlmChildLabel(prompt);
@@ -10730,8 +10797,9 @@ export class AgentSession {
 		prompt: string,
 		kwargs: Record<string, unknown> = {},
 		spawnCode?: string,
+		signal?: AbortSignal,
 	): Promise<RlmSpawnHandle> {
-		return this._startRlmChildRun(prompt, kwargs, spawnCode);
+		return this._startRlmChildRun(prompt, kwargs, spawnCode, signal);
 	}
 
 	private _isRetryableError(message: AssistantMessage): boolean {
