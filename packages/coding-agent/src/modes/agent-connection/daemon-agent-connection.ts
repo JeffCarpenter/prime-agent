@@ -181,6 +181,13 @@ export interface DaemonAgentConnectionOptions {
 	ownedSessionRecoveryConfig?: AgentSessionRuntimeConfig;
 	/** Require the target worker to have been created with telemetry disabled. */
 	telemetryDisabled?: true;
+	/**
+	 * Runtime config to recreate the session with when a prompt revives it
+	 * from its saved session file. Without it the daemon merges against its
+	 * defaults, so the revived worker can silently run with different tools,
+	 * system prompt, or model than the invocation that owns this window.
+	 */
+	reviveConfig?: AgentSessionRuntimeConfig;
 }
 
 /**
@@ -1134,17 +1141,32 @@ export class DaemonAgentConnection implements AgentConnection {
 			if (this.activeSessionId !== sourceActiveSessionId) {
 				throw new Error(`Session revival superseded: binding moved from ${sourceActiveSessionId}`);
 			}
+			// Mirror the original create's launch context: without the runtime
+			// config the daemon merges against its defaults, and without the
+			// client environment extensions load without the invocation's pane
+			// identity - the retried prompt could silently run with different
+			// tools, system prompt, or model. The telemetry opt-out is folded in
+			// regardless: without it the worker starts under the daemon's default
+			// policy and assertTelemetryAttachAllowed rejects the attach after
+			// the worker already launched.
+			const reviveConfig = this.options.reviveConfig
+				? {
+						...this.options.reviveConfig,
+						...(this.options.telemetryDisabled ? { telemetryDisabled: true as const } : {}),
+					}
+				: this.options.telemetryDisabled
+					? { telemetryDisabled: true as const }
+					: undefined;
 			const summary = await this.requestData<unknown>(
 				{
 					type: "create",
 					sessionPath: sessionFile,
 					continueRecent: false,
-					// The revived worker must carry this invocation's telemetry
-					// opt-out: without it the worker starts under the daemon's
-					// default policy and assertTelemetryAttachAllowed rejects the
-					// attach after the worker already launched.
-					...(this.options.telemetryDisabled ? { config: { telemetryDisabled: true as const } } : {}),
-					...(this.options.ownedSession ? { lifecycle: "client_owned" as const } : {}),
+					...(reviveConfig ? { config: reviveConfig } : {}),
+					env: this.options.sendClientEnv ? collectDaemonClientEnv() : undefined,
+					...(this.options.ownedSession
+						? { lifecycle: "client_owned" as const, launchEnv: collectDaemonLaunchEnv() }
+						: {}),
 				},
 				DAEMON_LONG_RUNNING_REQUEST_TIMEOUT_MS,
 			);
