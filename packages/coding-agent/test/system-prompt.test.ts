@@ -308,6 +308,7 @@ describe("buildSystemPrompt", () => {
 						path: "review",
 						reference: {},
 						arguments: {},
+						thinking: "high",
 						metadata: {},
 						source: "refine",
 						created_at: "2026-06-08T00:00:00.000Z",
@@ -345,8 +346,8 @@ describe("buildSystemPrompt", () => {
 		expect(prompt).toContain("Call contract: read each installed Python skill's SKILL.md");
 		expect(prompt).toContain("Continual harness skill entries are Python REPL skills");
 		expect(prompt).toContain("Spawn a continual harness subagent spec by composing a concise task prompt");
-		expect(prompt).toContain("handle = await rlm('sub-task')");
-		expect(prompt).toContain("admission returns immediately");
+		expect(prompt).toContain("handle = await rlm('sub-task', thinking=...)");
+		expect(prompt).toContain("Admission returns immediately");
 		expect(prompt).toContain("never the child's answer");
 		expect(prompt).toContain("receiver_role='parent'");
 		expect(prompt).toContain("await rlm.list_subagents()");
@@ -363,7 +364,8 @@ describe("buildSystemPrompt", () => {
 		expect(prompt).toContain("[global:focused_edits] Focused edits (policy, v1)");
 		expect(prompt).toContain("[global:validation] Validation (repo/prime-agent, v2): Run `npm run check`");
 		expect(prompt).toContain("[global:review_refinement] Review refinement (quality, v1)");
-		expect(prompt).toContain("[global:refinement_reviewer] Refinement reviewer (review, v1)");
+		expect(prompt).toContain("[global:refinement_reviewer] Refinement reviewer (review, v1) thinking=high");
+		expect(prompt).toContain("A spec's optional canonical `thinking` is an exact preference");
 		expect(prompt).toContain("recent refinements: 1");
 		expect(prompt).toContain("[refine_1] Observed validation miss: create memory:validation");
 		expect(prompt.indexOf("# Continual Harness State")).toBeGreaterThan(prompt.indexOf("Conversation log:"));
