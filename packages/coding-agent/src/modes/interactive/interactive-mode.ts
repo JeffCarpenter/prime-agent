@@ -926,6 +926,7 @@ export class InteractiveMode {
 	private admitPendingStartupPrompts: (() => Promise<StartupPromptBarrierOutcome>) | undefined;
 	private agentsViewRequest: InteractiveModeRunResult["type"] | undefined;
 	private loadingAnimation: Loader | undefined = undefined;
+	private workingLoaderKind: "streaming" | "refine" | undefined = undefined;
 	private workingMessage: string | undefined = undefined;
 	private workingVisible = true;
 	private workingIndicatorOptions: LoaderIndicatorOptions | undefined = undefined;
@@ -3192,6 +3193,11 @@ export class InteractiveMode {
 		const status = this.activityTracker.getStatus();
 		// The subagent count/recaps live in the tree above the loader, so the loader
 		// message itself no longer repeats "N subagents running".
+		if (this.hasActiveRefineCommand()) {
+			const progress = elapsed === undefined ? "Refining" : `Refining · ${elapsed}`;
+			const cancelKey = keyText("app.clear");
+			return cancelKey ? `${progress} (${cancelKey} to cancel)` : progress;
+		}
 		if (!this.isAgentStreaming()) {
 			return "";
 		}
@@ -3271,7 +3277,8 @@ export class InteractiveMode {
 
 	private startWorkingLoader(): void {
 		this.stopWorkingLoader();
-		this.workingStartedAt = this.turnStartedAt ?? Date.now();
+		this.workingLoaderKind = this.getWorkingLoaderKind();
+		this.workingStartedAt = this.workingLoaderKind === "streaming" ? (this.turnStartedAt ?? Date.now()) : Date.now();
 		this.loadingAnimation = this.createWorkingLoader();
 		this.statusContainer.addChild(this.loadingAnimation);
 		this.startWorkingTimer();
@@ -3285,6 +3292,7 @@ export class InteractiveMode {
 			this.workingTimer = undefined;
 		}
 		this.workingStartedAt = undefined;
+		this.workingLoaderKind = undefined;
 		if (this.loadingAnimation) {
 			this.loadingAnimation.stop();
 			this.loadingAnimation = undefined;
@@ -3423,11 +3431,22 @@ export class InteractiveMode {
 		}
 	}
 
+	private hasActiveRefineCommand(): boolean {
+		const active = this.connectionState?.sessionActions.active;
+		return active?.kind === "session_command" && /^\/refine(?:\s|$)/.test(active.label ?? "");
+	}
+
+	private getWorkingLoaderKind(): "streaming" | "refine" | undefined {
+		if (this.hasActiveRefineCommand()) return "refine";
+		if (this.isAgentStreaming()) return "streaming";
+		return undefined;
+	}
+
 	private shouldShowWorkingLoader(): boolean {
 		// Background subagents (agent turn done, asyncio tasks still running) would
 		// otherwise show a textless spinner; the subagent tree above the loader carries
-		// that state, so the loader only shows while the main agent is itself streaming.
-		return this.workingVisible && this.isAgentStreaming();
+		// that state, so the loader only shows while the main agent is streaming or /refine is active.
+		return this.workingVisible && this.getWorkingLoaderKind() !== undefined;
 	}
 
 	// Reconcile the loader with current state for transitions that fire no live
@@ -3512,8 +3531,14 @@ export class InteractiveMode {
 		if (this.shouldShowWorkingLoader()) {
 			// A bare `loadingAnimation != null` check isn't proof it's on screen:
 			// other paths clear statusContainer without nulling it, orphaning the
-			// loader. Re-attach unless it is actually mounted.
-			if (!this.loadingAnimation || !this.statusContainer.children.includes(this.loadingAnimation)) {
+			// loader. Re-attach unless it is actually mounted, and restart the timer
+			// when ownership changes between a model turn and /refine.
+			const desiredKind = this.getWorkingLoaderKind();
+			if (
+				!this.loadingAnimation ||
+				!this.statusContainer.children.includes(this.loadingAnimation) ||
+				this.workingLoaderKind !== desiredKind
+			) {
 				this.startWorkingLoader();
 			}
 		} else if (this.loadingAnimation) {
@@ -5440,6 +5465,7 @@ export class InteractiveMode {
 					steering: [...event.actions.steering],
 					followUp: [...event.actions.followUps],
 				});
+				this.syncWorkingLoader();
 				this.ui.requestRender();
 				break;
 			}
@@ -6793,7 +6819,7 @@ export class InteractiveMode {
 		if (this.isBashRunning()) {
 			void this.agentConnection.abortBash();
 		}
-		if (this.isAgentStreaming()) {
+		if (this.isAgentStreaming() || this.hasActiveRefineCommand()) {
 			// The queue is preserved server-side; draining resumes on the next
 			// submit or queued-message edit.
 			void this.agentConnection.abort().catch((error) => {

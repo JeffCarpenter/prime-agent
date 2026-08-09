@@ -24,7 +24,12 @@ type FakeInteractiveMode = {
 		isCompacting: boolean;
 		isBashRunning: boolean;
 		retryAttempt: number;
-		sessionActions: { queuedCount: number; steering: readonly string[]; followUps: readonly string[] };
+		sessionActions: {
+			queuedCount: number;
+			steering: readonly string[];
+			followUps: readonly string[];
+			active?: { kind: "turn" | "session_command"; phase: "preparing" | "committing" | "running"; label?: string };
+		};
 	};
 	connectionQueue: { steering: string[]; followUp: string[] };
 	agentConnection: {
@@ -153,6 +158,51 @@ describe("InteractiveMode interrupt shortcuts", () => {
 		expect(mode.agentConnection.abortBash).toHaveBeenCalledTimes(1);
 		expect(mode.agentConnection.abort).toHaveBeenCalledTimes(1);
 		expect(mode.shutdown).not.toHaveBeenCalled();
+	});
+
+	it("cancels an active /refine command without clearing queued prompts or the draft", () => {
+		const mode = createInteractiveFake({ editorText: "draft" });
+		mode.connectionQueue = { steering: [], followUp: ["queued prompt"] };
+		mode.connectionState.sessionActions = {
+			queuedCount: 1,
+			steering: [],
+			followUps: ["queued prompt"],
+			active: { kind: "session_command", phase: "running", label: "/refine --global" },
+		};
+
+		Reflect.get(InteractiveMode.prototype, "handleCtrlC").call(mode);
+
+		expect(mode.agentConnection.abort).toHaveBeenCalledOnce();
+		expect(mode.agentConnection.abortAndClearQueue).not.toHaveBeenCalled();
+		expect(mode.agentConnection.clearQueue).not.toHaveBeenCalled();
+		expect(mode.editor.getText()).toBe("draft");
+		expect(mode.connectionQueue).toEqual({ steering: [], followUp: ["queued prompt"] });
+	});
+
+	it("aborts only once when streaming overlaps an active /refine command", () => {
+		const mode = createInteractiveFake({ streaming: true });
+		mode.connectionState.sessionActions.active = {
+			kind: "session_command",
+			phase: "running",
+			label: "/refine",
+		};
+
+		Reflect.get(InteractiveMode.prototype, "handleCtrlC").call(mode);
+
+		expect(mode.agentConnection.abort).toHaveBeenCalledOnce();
+	});
+
+	it("does not use the full-session abort for other active commands", () => {
+		const mode = createInteractiveFake({});
+		mode.connectionState.sessionActions.active = {
+			kind: "session_command",
+			phase: "running",
+			label: "/goal ship it",
+		};
+
+		Reflect.get(InteractiveMode.prototype, "handleCtrlC").call(mode);
+
+		expect(mode.agentConnection.abort).not.toHaveBeenCalled();
 	});
 
 	it.each([
