@@ -4966,7 +4966,15 @@ export class DaemonSupervisor {
 		if (observed === undefined) {
 			return "unknown";
 		}
-		return observed === processStartId ? "current" : "replaced";
+		if (observed === processStartId) {
+			return "current";
+		}
+		// Tokens from different renderings are not comparable. A legacy ps:
+		// token and a timezone/locale-pinned ps2: token identify the same process
+		// differently, so only a same-format inequality proves PID reuse.
+		const observedFormat = observed.slice(0, observed.indexOf(":"));
+		const recordedFormat = processStartId.slice(0, processStartId.indexOf(":"));
+		return observedFormat === recordedFormat ? "replaced" : "unknown";
 	}
 
 	/**
