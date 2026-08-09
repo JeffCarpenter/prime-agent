@@ -46,7 +46,12 @@ import {
 	type IdleEvictionMinutes,
 	type WorkerEvictionSnapshot,
 } from "../../core/session-action-store.js";
-import { canonicalSessionPath, getProcessStartId, SessionAlreadyActiveError } from "../../core/session-lease.js";
+import {
+	canonicalSessionPath,
+	compareProcessStartIds,
+	getProcessStartId,
+	SessionAlreadyActiveError,
+} from "../../core/session-lease.js";
 import { getSessionArtifactPathForFile, readSessionInfo, type SessionInfo } from "../../core/session-manager.js";
 import { SettingsManager } from "../../core/settings-manager.js";
 import { isProcessAlive, processIdExists, signalProcessGroupOrProcess } from "../../utils/child-process.js";
@@ -548,6 +553,7 @@ function workerSocketPath(supervisorSocketPath: string, workerId: string): strin
 function looksLikeSessionPath(selector: string): boolean {
 	return isAbsolute(selector) || selector.endsWith(".jsonl") || selector.includes("/") || selector.includes("\\");
 }
+
 
 function isFinalizedTranscriptEvent(eventType: string | undefined): boolean {
 	return (
@@ -3066,9 +3072,12 @@ export class DaemonSupervisor {
 					await this.assertRecoveryAllowed();
 					const processAlive = isProcessAlive(worker.descriptor.pid);
 					const observedProcessStartId = processAlive ? getProcessStartId(worker.descriptor.pid) : undefined;
+					const processIdentityComparison = compareProcessStartIds(
+						worker.descriptor.processStartId,
+						observedProcessStartId,
+					);
 					const processIdentityMatches =
-						worker.descriptor.processStartId === undefined ||
-						observedProcessStartId === worker.descriptor.processStartId;
+						worker.descriptor.processStartId === undefined || processIdentityComparison === "match";
 					if (processAlive && processIdentityMatches) {
 						try {
 							await this.connectWorker(worker, 1500);
@@ -3103,7 +3112,7 @@ export class DaemonSupervisor {
 					}
 					if (
 						processAlive &&
-						(worker.descriptor.processStartId === undefined || observedProcessStartId === undefined)
+						(worker.descriptor.processStartId === undefined || processIdentityComparison === "unverifiable")
 					) {
 						throw new Error(
 							`Cannot safely replace live session worker ${worker.descriptor.workerId} without a verified process identity`,
@@ -4962,19 +4971,11 @@ export class DaemonSupervisor {
 		if (processStartId === undefined) {
 			return "unknown";
 		}
-		const observed = getProcessStartId(pid);
-		if (observed === undefined) {
-			return "unknown";
-		}
-		if (observed === processStartId) {
+		const comparison = compareProcessStartIds(processStartId, getProcessStartId(pid));
+		if (comparison === "match") {
 			return "current";
 		}
-		// Tokens from different renderings are not comparable. A legacy ps:
-		// token and a timezone/locale-pinned ps2: token identify the same process
-		// differently, so only a same-format inequality proves PID reuse.
-		const observedFormat = observed.slice(0, observed.indexOf(":"));
-		const recordedFormat = processStartId.slice(0, processStartId.indexOf(":"));
-		return observedFormat === recordedFormat ? "replaced" : "unknown";
+		return comparison === "mismatch" ? "replaced" : "unknown";
 	}
 
 	/**
