@@ -1072,6 +1072,14 @@ export class DaemonAgentConnection implements AgentConnection {
 		});
 	}
 
+	async triggerExtensionShortcut(key: string): Promise<void> {
+		await this.requestOk({
+			type: "extension_shortcut_trigger",
+			activeSessionId: this.activeSessionId,
+			key,
+		});
+	}
+
 	async prompt(message: string, options?: AgentConnectionPromptOptions): Promise<void> {
 		await this.promptWithSessionRevival("prompt", message, options);
 	}
@@ -2187,6 +2195,13 @@ export class DaemonAgentConnection implements AgentConnection {
 				extensionPath: message.extensionPath,
 				event: message.event,
 				error: message.error,
+			});
+			return;
+		}
+		if (message.type === "extension_shortcut_list") {
+			await this.emit({
+				type: "extension_shortcut_list",
+				shortcutKeys: message.shortcutKeys,
 			});
 			return;
 		}
