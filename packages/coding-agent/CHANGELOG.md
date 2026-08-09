@@ -6,6 +6,7 @@
 - Fixed long or concurrent daemon shutdown checks aborting cleanup when their lease refresh was delayed or self-contended.
 - Added an optional `modelAllowlist` setting to restrict provider and model discovery and prevent unlisted environment-backed providers from being used.
 - Fixed live daemon supervisors, workers, and session leases being treated as stale when upgrading across process-start identity token formats.
+- Fixed OpenAI Codex model discovery using the Prime Agent version as `client_version`, which returned empty catalogs; now uses the installed Codex CLI version when available ([#639](https://github.com/PrimeIntellect-ai/prime-agent/issues/639)).
 - Added privacy-safe pseudonymous product analytics for onboarding, command use, execution modes, run outcomes, TTFT, latency, usage, tools, retries, and compactions, with disclosure and opt-out controls ([ENG-4682](https://linear.app/primeintellect/issue/ENG-4682/add-privacy-safe-posthog-analytics-to-prime-agent)).
 - Changed sent agent messages in the IPython cell UI to show only the message text with a `╰─` gutter when expanded, matching received messages, and hid the raw `agent_message.send` receipt dictionary.
 - Fixed `agent_message.send` failures for already-active sessions to report an actionable message without exposing internal lease details.
