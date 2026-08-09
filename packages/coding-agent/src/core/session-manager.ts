@@ -1980,7 +1980,23 @@ export class SessionManager {
 		const dir = sessionDir ?? resolve(path, "..");
 		return new SessionManager(cwd ?? process.cwd(), dir, path, true);
 	}
+	/** Open a copied transcript as a new saved session with its own identity. */
+	static openImportedCopy(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
+		const manager = SessionManager.open(path, sessionDir, cwdOverride);
+		const header = manager.getHeader();
+		manager.sessionId = createSessionId();
+		if (header) {
+			header.id = manager.sessionId;
+			manager._rewriteFile();
+		}
+		return manager;
+	}
 
+	/**
+	 * Non-blocking open() for the daemon: parses off the event loop so a large load
+	 * doesn't freeze other sessions. Falls back to open() for any non-happy path so
+	 * behavior is identical to it.
+	 */
 	static async openAsync(path: string, sessionDir?: string, cwdOverride?: string): Promise<SessionManager> {
 		if (!existsSync(path)) {
 			return SessionManager.open(path, sessionDir, cwdOverride);
