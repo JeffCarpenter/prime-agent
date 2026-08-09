@@ -8,6 +8,8 @@
 
 ## [0.7.4] - 2026-08-19
 
+- Added shared runtime metadata and validation for canonical model thinking levels ([#1059](https://github.com/PrimeIntellect-ai/prime-agent/pull/1059) by [@BestSithInEU](https://github.com/BestSithInEU)).
+
 ## [0.7.3] - 2026-08-17
 
 - Added provider-derived reasoning levels for OpenRouter and Prime Inference models, including sparse, mandatory, toggle-only, and explicit-off capabilities.
