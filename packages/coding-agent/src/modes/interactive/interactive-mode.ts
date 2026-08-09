@@ -2804,6 +2804,9 @@ export class InteractiveMode {
 			await this.refreshConnectionCatalog();
 			this.setupAutocompleteProvider();
 			this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
+			// Clear any stale shortcut proxy from a previous session; the daemon
+			// will emit extension_shortcut_list after bindExtensions completes.
+			this.defaultEditor.onExtensionShortcut = undefined;
 		}
 		this.subscribeToAgent();
 		await Promise.all([this.refreshConnectionQueue(), this.refreshHeartbeatCatalog().catch(() => undefined)]);
@@ -3122,7 +3125,28 @@ export class InteractiveMode {
 			return false;
 		};
 	}
+	/**
+	 * In daemon-backed mode, set up a proxy onExtensionShortcut handler that
+	 * forwards matching key presses to the daemon via extension_shortcut_trigger.
+	 */
+	private setupDaemonExtensionShortcuts(shortcutKeys: string[]): void {
+		if (shortcutKeys.length === 0) {
+			this.defaultEditor.onExtensionShortcut = undefined;
+			return;
+		}
+		const keys = new Set(shortcutKeys.map((k) => k.toLowerCase()));
+		this.defaultEditor.onExtensionShortcut = (data: string) => {
+			if (!keys.has(data.toLowerCase())) return false;
+			void this.agentConnection.triggerExtensionShortcut(data.toLowerCase()).catch((err: unknown) => {
+				this.showError(`Shortcut handler error: ${err instanceof Error ? err.message : String(err)}`);
+			});
+			return true;
+		};
+	}
 
+	/**
+	 * Set extension status text in the footer.
+	 */
 	private setExtensionStatus(key: string, text: string | undefined): void {
 		this.footerDataProvider.setExtensionStatus(key, text);
 		this.ui.requestRender();
@@ -5123,6 +5147,8 @@ export class InteractiveMode {
 					this.handleSideQuestionEvent(event.event);
 				} else if (event.type === "extension_ui_request") {
 					await this.handleConnectionExtensionUiRequest(event.request);
+				} else if (event.type === "extension_shortcut_list") {
+					this.setupDaemonExtensionShortcuts(event.shortcutKeys);
 				} else if (event.type === "connection_status") {
 					this.showStatus(
 						event.status === "connected" ? "Daemon reconnected" : "Daemon connection lost; reconnecting…",

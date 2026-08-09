@@ -68,8 +68,9 @@ export const DAEMON_COMMAND_ENVELOPE_MIN_PROTOCOL_VERSION = 7;
 // Revision 21 adds capability-gated, session-scoped ACP MCP server replacement.
 // Revision 22 scopes ACP MCP replacement and cleanup to a connection owner.
 // Revision 23 negotiates attach ownership through the attach_ownership capability.
-export const DAEMON_SCHEMA_REVISION = 23;
-export const DAEMON_SCHEMA_ID = "protocol-7-schema-23-4d515169dc6b";
+// Revision 24 adds capability-gated extension shortcut discovery and triggering.
+export const DAEMON_SCHEMA_REVISION = 24;
+export const DAEMON_SCHEMA_ID = "protocol-7-schema-24-928e02f38445";
 
 export type DaemonProtocolName = typeof DAEMON_PROTOCOL_NAME;
 export type DaemonProtocolVersion = number;
@@ -85,6 +86,7 @@ export type DaemonClientCapability =
 	| "attach_snapshot"
 	| "event_sequence"
 	| "extension_ui"
+	| "extension_shortcuts"
 	| "slim_attach"
 	| "chunked_snapshot"
 	| "client_owned_sessions";
@@ -144,6 +146,7 @@ export const DAEMON_SUPPORTED_CLIENT_CAPABILITIES: readonly DaemonClientCapabili
 	"attach_snapshot",
 	"event_sequence",
 	"extension_ui",
+	"extension_shortcuts",
 	"slim_attach",
 	"chunked_snapshot",
 	"client_owned_sessions",
@@ -668,6 +671,14 @@ export type DaemonCommand =
 			requestId: string;
 			response: DaemonExtensionUIResponse;
 	  }
+	| {
+			id?: string;
+			/** Client-side shortcut key press forwarded to the daemon for handler invocation. */
+			type: "extension_shortcut_trigger";
+			activeSessionId: string;
+			/** The raw key identifier that was pressed, e.g. "ctrl+k". */
+			key: string;
+	  }
 	| { id?: string; type: "ack_result"; commandId: string }
 	| { id?: string; type: "prepare_update_restart" }
 	| { id?: string; type: "retry_worker"; activeSessionId: string }
@@ -728,6 +739,11 @@ const SESSION_INPUT_PAUSE_COMMAND = {
 	minProtocol: 7,
 	minSchemaRevision: 19,
 	capability: "session_input_pause",
+} as const;
+const EXTENSION_SHORTCUTS_COMMAND = {
+	minProtocol: 7,
+	minSchemaRevision: 24,
+	capability: "extension_shortcuts",
 } as const;
 
 export const DAEMON_COMMAND_COMPATIBILITY = {
@@ -829,6 +845,7 @@ export const DAEMON_COMMAND_COMPATIBILITY = {
 	get_tool_definition: LEGACY_DAEMON_COMMAND,
 	set_session_entry_label: LEGACY_DAEMON_COMMAND,
 	extension_ui_response: LEGACY_DAEMON_COMMAND,
+	extension_shortcut_trigger: EXTENSION_SHORTCUTS_COMMAND,
 	prepare_update_restart: LEGACY_DAEMON_COMMAND,
 	retry_worker: LEGACY_DAEMON_COMMAND,
 	restart: LEGACY_DAEMON_COMMAND,
@@ -1036,6 +1053,14 @@ export type DaemonOutbound =
 			event: string;
 			error: string;
 			meta?: DaemonEventMeta;
+	  }
+	| {
+			/** Sent after extensions bind so clients can proxy keyboard shortcuts to the daemon. */
+			type: "extension_shortcut_list";
+			activeSessionId: string;
+			/** Registered shortcut key identifiers, e.g. ["ctrl+k", "ctrl+shift+p"]. */
+			shortcutKeys: string[];
+			meta?: DaemonEventMeta;
 	  };
 
 export const DAEMON_OUTBOUND_COMPATIBILITY = {
@@ -1059,6 +1084,7 @@ export const DAEMON_OUTBOUND_COMPATIBILITY = {
 	session_closed: LEGACY_DAEMON_COMMAND,
 	extension_ui_request: LEGACY_DAEMON_COMMAND,
 	extension_error: LEGACY_DAEMON_COMMAND,
+	extension_shortcut_list: EXTENSION_SHORTCUTS_COMMAND,
 } as const satisfies Record<DaemonOutbound["type"], DaemonCommandCompatibility>;
 
 export function createDaemonCommandEnvelope<TCommand extends DaemonCommand>(

@@ -5005,6 +5005,23 @@ export class AgentDaemon {
 				return success(command.id, "extension_ui_response");
 			}
 
+			case "extension_shortcut_trigger": {
+				const state = this.getSessionState(command.activeSessionId);
+				const shortcuts = state.runtime.session.extensionRunner.getShortcuts({});
+				// KeyId is a branded string — cast is safe since the key was originally
+				// registered and broadcast as a KeyId by the extension runner.
+				const shortcut = shortcuts.get(command.key as Parameters<typeof shortcuts.get>[0]);
+				if (shortcut) {
+					const ctx = state.runtime.session.extensionRunner.createContext();
+					Promise.resolve(shortcut.handler(ctx)).catch((err: unknown) => {
+						this.log(
+							`extension_shortcut_trigger handler error for key "${command.key}": ${err instanceof Error ? err.message : String(err)}`,
+						);
+					});
+				}
+				return success(command.id, "extension_shortcut_trigger");
+			}
+
 			case "prepare_update_restart":
 				this.log(
 					`prepare_update_restart command received over socket; ${this.sessions.size} active session(s) will be closed`,
@@ -7281,6 +7298,9 @@ function isSequencedSessionOutbound(message: DaemonOutbound): message is Sequenc
 }
 
 export function shouldSendDaemonOutboundToClient(client: DaemonSocketClient, message: DaemonOutbound): boolean {
+	if (message.type === "extension_shortcut_list") {
+		return daemonClientCapabilitiesForSession(client, message.activeSessionId).has("extension_shortcuts");
+	}
 	return (
 		message.type !== "extension_ui_request" ||
 		!isDaemonDialogExtensionUiRequest(message.method) ||

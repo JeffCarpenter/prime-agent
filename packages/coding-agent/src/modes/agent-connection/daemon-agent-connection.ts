@@ -581,6 +581,7 @@ export class DaemonAgentConnection implements AgentConnection {
 				capabilities: [
 					"attach_snapshot",
 					"event_sequence",
+					"extension_shortcuts",
 					...(supportsExtensionUi ? (["extension_ui"] as const) : []),
 					"slim_attach",
 					"chunked_snapshot",
@@ -1207,6 +1208,17 @@ export class DaemonAgentConnection implements AgentConnection {
 			activeSessionId: this.activeSessionId,
 			requestId,
 			response,
+		});
+	}
+
+	async triggerExtensionShortcut(key: string): Promise<void> {
+		if (!this.client.supportsServerCapability("extension_shortcuts")) {
+			throw new DaemonCapabilityUnavailableError("extension_shortcut_trigger", "extension_shortcuts");
+		}
+		await this.requestOk({
+			type: "extension_shortcut_trigger",
+			activeSessionId: this.activeSessionId,
+			key,
 		});
 	}
 
@@ -2340,6 +2352,13 @@ export class DaemonAgentConnection implements AgentConnection {
 				extensionPath: message.extensionPath,
 				event: message.event,
 				error: message.error,
+			});
+			return;
+		}
+		if (message.type === "extension_shortcut_list") {
+			await this.emit({
+				type: "extension_shortcut_list",
+				shortcutKeys: message.shortcutKeys,
 			});
 			return;
 		}
