@@ -1,0 +1,1 @@
+- Fixed the installer to isolate tarball installs from the user's global npm tree without overwriting unrelated commands ([#1129](https://github.com/PrimeIntellect-ai/prime-agent/pull/1129) by [@ayushcodes13](https://github.com/ayushcodes13)).
