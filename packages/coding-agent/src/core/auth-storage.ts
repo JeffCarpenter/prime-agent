@@ -19,6 +19,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "f
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../config.js";
+import { ensurePrivateFile, readPrivateFile, writePrivateFileAtomic } from "../utils/private-files.js";
 import {
 	clearPrimeCliCredentials,
 	getPrimeCliConfigPath,
@@ -109,18 +110,8 @@ export interface AuthStorageBackend {
 export class FileAuthStorageBackend implements AuthStorageBackend {
 	constructor(private authPath: string = join(getAgentDir(), "auth.json")) {}
 
-	private ensureParentDir(): void {
-		const dir = dirname(this.authPath);
-		if (!existsSync(dir)) {
-			mkdirSync(dir, { recursive: true, mode: 0o700 });
-		}
-	}
-
 	private ensureFileExists(): void {
-		if (!existsSync(this.authPath)) {
-			writeFileSync(this.authPath, "{}", "utf-8");
-			chmodSync(this.authPath, 0o600);
-		}
+		ensurePrivateFile(this.authPath, "{}");
 	}
 
 	private acquireLockSyncWithRetry(path: string): () => void {
@@ -151,17 +142,15 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 	}
 
 	withLock<T>(fn: (current: string | undefined) => LockResult<T>): T {
-		this.ensureParentDir();
 		this.ensureFileExists();
 
 		let release: (() => void) | undefined;
 		try {
 			release = this.acquireLockSyncWithRetry(this.authPath);
-			const current = existsSync(this.authPath) ? readFileSync(this.authPath, "utf-8") : undefined;
+			const current = readPrivateFile(this.authPath, "utf-8");
 			const { result, next } = fn(current);
 			if (next !== undefined) {
-				writeFileSync(this.authPath, next, "utf-8");
-				chmodSync(this.authPath, 0o600);
+				writePrivateFileAtomic(this.authPath, next);
 			}
 			return result;
 		} finally {
@@ -172,7 +161,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 	}
 
 	async withLockAsync<T>(fn: (current: string | undefined) => Promise<LockResult<T>>): Promise<T> {
-		this.ensureParentDir();
 		this.ensureFileExists();
 
 		let release: (() => Promise<void>) | undefined;
@@ -201,12 +189,11 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 			});
 
 			throwIfCompromised();
-			const current = existsSync(this.authPath) ? readFileSync(this.authPath, "utf-8") : undefined;
+			const current = readPrivateFile(this.authPath, "utf-8");
 			const { result, next } = await fn(current);
 			throwIfCompromised();
 			if (next !== undefined) {
-				writeFileSync(this.authPath, next, "utf-8");
-				chmodSync(this.authPath, 0o600);
+				writePrivateFileAtomic(this.authPath, next);
 			}
 			throwIfCompromised();
 			return result;
