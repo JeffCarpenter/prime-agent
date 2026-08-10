@@ -4564,6 +4564,8 @@ export class AgentSession {
 						this._settleAgentMessage(agentMessageId, "completion", error);
 					}
 				};
+				// Register before re-checking aborted: an abort between the check
+				// and registration would otherwise never invoke the listener.
 				signal.addEventListener("abort", cancelQueuedPrompt, { once: true });
 				if (signal.aborted) cancelQueuedPrompt();
 			}
