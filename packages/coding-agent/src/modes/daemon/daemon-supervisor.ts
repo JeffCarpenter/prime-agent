@@ -5849,11 +5849,7 @@ export class DaemonSupervisor {
 			await this.finalizeArchivedWorkerStop(worker);
 			assertStopStillApplies();
 		}
-		// Leave an immutable marker for any route that captured this worker before
-		// descriptor deletion. A later create/retry must resolve a fresh route.
-		worker.stopFinalized = true;
 		this.invalidateWorkerSessionInputPauses(worker, "Session worker stopped while input was paused");
-		this.workers.delete(worker.descriptor.workerId);
 		if (removeDescriptor) {
 			for (const summary of worker.summaries.values()) {
 				this.clearStartupNotificationState(summary.activeSessionId ?? summary.id);
