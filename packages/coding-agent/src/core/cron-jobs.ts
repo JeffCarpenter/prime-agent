@@ -252,7 +252,10 @@ export class AgentCronJobStore {
 			return true;
 		}
 		const file = parsed as CronJobsFile;
-		if ((file.jobs !== undefined && !Array.isArray(file.jobs)) || (file.dispatches !== undefined && !Array.isArray(file.dispatches))) {
+		if (
+			(file.jobs !== undefined && !Array.isArray(file.jobs)) ||
+			(file.dispatches !== undefined && !Array.isArray(file.dispatches))
+		) {
 			return true;
 		}
 		if ((file.jobs ?? []).some((job) => !isAgentCronJob(job))) {
@@ -261,7 +264,7 @@ export class AgentCronJobStore {
 		if ((file.dispatches ?? []).some((dispatch) => !isAgentCronDispatchRecord(dispatch))) {
 			return true;
 		}
-		return (file.jobs as AgentCronJob[] | undefined ?? []).some(
+		return ((file.jobs as AgentCronJob[] | undefined) ?? []).some(
 			(job) => job.status === "active" || (isHeartbeatCronJob(job) && job.status === "paused"),
 		);
 	}
