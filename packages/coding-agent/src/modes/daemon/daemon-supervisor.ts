@@ -464,6 +464,24 @@ function withoutSupervisorCreateFields(command: DaemonCreateCommand): DaemonCrea
 	return workerCommand;
 }
 
+function prepareWorkerLaunch(
+	defaultSessionConfig: AgentSessionRuntimeConfig,
+	command: DaemonCreateCommand,
+): { createCommand: DaemonCreateCommand; processCwd: string | undefined } {
+	const config = mergeAgentSessionRuntimeConfig(defaultSessionConfig, command.config);
+	const processCwd = config.cwd;
+	if (command.sessionPath && command.config?.cwd === undefined) {
+		delete config.cwd;
+	}
+	return {
+		createCommand: {
+			...withoutSupervisorCreateFields(command),
+			config,
+		},
+		processCwd,
+	};
+}
+
 function responseWithId(response: DaemonResponse, id: string | undefined): DaemonResponse {
 	return { ...response, id };
 }
@@ -2466,10 +2484,7 @@ export class DaemonSupervisor {
 		}
 		const recoveryStopRevision = existing?.stopRevision;
 		const launchEnv = command.launchEnv ?? existing?.launchEnv;
-		const createCommand: DaemonCreateCommand = {
-			...withoutSupervisorCreateFields(command),
-			config: mergeAgentSessionRuntimeConfig(this.defaultSessionConfig, command.config),
-		};
+		const { createCommand, processCwd } = prepareWorkerLaunch(this.defaultSessionConfig, command);
 		const workerId = existing?.descriptor.workerId ?? createActiveSessionId();
 		const rootActiveSessionId = existing?.descriptor.rootActiveSessionId ?? createActiveSessionId();
 		const socketPath = existing?.descriptor.socketPath ?? workerSocketPath(this.socketPath, workerId);
@@ -2497,7 +2512,7 @@ export class DaemonSupervisor {
 		delete workerEnvironment.RLM_DEPTH;
 		await this.assertRecoveryAllowed();
 		const child: ChildProcess = spawn(launch.command, launch.args, {
-			cwd: createCommand.config?.cwd ?? process.cwd(),
+			cwd: processCwd ?? process.cwd(),
 			detached: true,
 			env: workerEnvironment,
 			stdio: ["ignore", "ignore", "pipe", "pipe"],

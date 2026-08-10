@@ -1,0 +1,1 @@
+- Fixed resumed sessions using the daemon launch directory instead of their recorded working directory ([#1128](https://github.com/PrimeIntellect-ai/prime-agent/pull/1128) by [@aoright](https://github.com/aoright)).
