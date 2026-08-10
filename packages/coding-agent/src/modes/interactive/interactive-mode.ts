@@ -140,6 +140,7 @@ import { readClipboardImage } from "../../utils/clipboard-image.js";
 import { parseGitUrl } from "../../utils/git.js";
 import { resizeImage } from "../../utils/image-resize.js";
 import { getCwdRelativePath } from "../../utils/paths.js";
+import { createPrivateTempFile, readPrivateFile, writePrivateFileAtomic } from "../../utils/private-files.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool, ensureToolWithStatus, formatMissingRipgrepMessage } from "../../utils/tools-manager.js";
 import { checkForNewPiVersion } from "../../utils/version-check.js";
@@ -9111,11 +9112,13 @@ export class InteractiveMode {
 			return;
 		}
 
-		// Export to a temp file
-		const tmpFile = path.join(os.tmpdir(), "session.html");
+		// Export to a private, unpredictable temp file.
+		const temp = createPrivateTempFile("prime-agent-share-", ".html");
+		const tmpFile = temp.path;
 		try {
 			await this.agentConnection.exportToHtml(tmpFile);
 		} catch (error: unknown) {
+			fs.rmSync(temp.directory, { recursive: true, force: true });
 			this.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
 			return;
 		}
@@ -9132,11 +9135,7 @@ export class InteractiveMode {
 			this.editorContainer.clear();
 			this.editorContainer.addChild(this.editor);
 			this.ui.setFocus(this.editor);
-			try {
-				fs.unlinkSync(tmpFile);
-			} catch {
-				// Ignore cleanup errors
-			}
+			fs.rmSync(temp.directory, { recursive: true, force: true });
 		};
 
 		// Create a secret gist asynchronously
@@ -10064,8 +10063,7 @@ ${interrupt ? `| \`${interrupt}\` | Interrupt current operation |\n` : ""}${shor
 				"",
 			].join("\n");
 
-			fs.mkdirSync(path.dirname(debugLogPath), { recursive: true });
-			fs.writeFileSync(debugLogPath, debugData);
+			writePrivateFileAtomic(debugLogPath, debugData);
 
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(

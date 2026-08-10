@@ -21,6 +21,7 @@ import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core"
 import type { Model } from "@earendil-works/pi-ai";
 import { completeSimple } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../../config.js";
+import { appendPrivateFile, readPrivateFile, writePrivateFileAtomic } from "../../utils/private-files.js";
 import { serializeConversation } from "../compaction/utils.js";
 import { convertToLlm } from "../messages.js";
 import { RLM_THINKING_LEVELS } from "../rlm-runtime.js";
@@ -374,7 +375,7 @@ export function loadHarnessState(
 	}
 	let parsed: Partial<HarnessState>;
 	try {
-		const raw = JSON.parse(readFileSync(statePath, "utf8"));
+		const raw = JSON.parse(readPrivateFile(statePath, "utf8"));
 		// loadHarnessState runs on every system-prompt build and before each /refine, so
 		// a corrupt or unreadable (or non-object) state file degrades to an empty read
 		// view. saveHarnessState validates strictly and refuses to overwrite that evidence.
@@ -836,8 +837,7 @@ function isRefinementResult(data: unknown): data is RefinementResult {
  */
 export function appendGlobalRefinement(harnessStateDir: string, result: RefinementResult): string {
 	const historyPath = getRefinementHistoryPath(harnessStateDir);
-	mkdirSync(harnessStateDir, { recursive: true });
-	appendFileSync(historyPath, `${JSON.stringify(result)}\n`, "utf8");
+	appendPrivateFile(historyPath, `${JSON.stringify(result)}\n`);
 	return historyPath;
 }
 
@@ -847,7 +847,7 @@ export function loadGlobalRefinementHistory(harnessStateDir: string = getGlobalH
 		return [];
 	}
 	const results: RefinementResult[] = [];
-	for (const line of readFileSync(historyPath, "utf8").split("\n")) {
+	for (const line of readPrivateFile(historyPath, "utf8").split("\n")) {
 		const trimmed = line.trim();
 		if (!trimmed) continue;
 		try {
