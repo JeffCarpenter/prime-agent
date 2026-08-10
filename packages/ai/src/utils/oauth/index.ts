@@ -7,7 +7,14 @@
  * - GitHub Copilot
  */
 
-export { anthropicOAuthProvider, loginAnthropic, refreshAnthropicToken } from "./anthropic.js";
+// Anthropic
+export {
+	anthropicOAuthProvider,
+	loginAnthropic,
+	loginAnthropicBrowser,
+	refreshAnthropicToken,
+} from "./anthropic.js";
+// GitHub Copilot
 export {
 	getGitHubCopilotBaseUrl,
 	githubCopilotOAuthProvider,

@@ -195,7 +195,7 @@ When a provider requests a retry delay longer than `retry.provider.maxRetryDelay
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `auth.deviceLogin` | boolean | automatic | Force device login (`true`) or browser login (`false`); when unset, device login is used if no GUI browser launcher is available on `PATH` |
+| `auth.deviceLogin` | boolean | automatic | Force the provider's headless login (`true`) or browser login (`false`); when unset, Linux browser login requires both a supported launcher on `PATH` and an active `DISPLAY` or `WAYLAND_DISPLAY` session |
 
 ### Shell
 

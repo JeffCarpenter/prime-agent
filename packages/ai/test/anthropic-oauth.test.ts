@@ -1,3 +1,4 @@
+import { get } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { anthropicOAuthProvider, loginAnthropic, refreshAnthropicToken } from "../src/utils/oauth/anthropic.js";
 
@@ -15,6 +16,16 @@ function getUrl(input: string | URL | Request): string {
 function getJsonBody(init?: RequestInit): Record<string, string> {
 	if (typeof init?.body !== "string") throw new Error(`Expected string request body, got ${typeof init?.body}`);
 	return JSON.parse(init.body) as Record<string, string>;
+}
+
+function requestCallback(url: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const request = get(url, (response) => {
+			response.resume();
+			response.once("end", () => resolve());
+		});
+		request.once("error", reject);
+	});
 }
 
 describe.sequential("Anthropic OAuth", () => {
@@ -42,7 +53,8 @@ describe.sequential("Anthropic OAuth", () => {
 		});
 		vi.stubGlobal("fetch", fetchMock);
 
-		const credentials = await loginAnthropic({
+		const credentials = await anthropicOAuthProvider.login({
+			loginFlow: "headless",
 			onAuth,
 			onProgress,
 			onPrompt: async () => {
@@ -55,7 +67,7 @@ describe.sequential("Anthropic OAuth", () => {
 		});
 
 		expect(anthropicOAuthProvider.loginFlow).toBe("manual-code");
-		expect(anthropicOAuthProvider.usesCallbackServer).toBeUndefined();
+		expect(anthropicOAuthProvider.browserLoginFlow).toBe("callback");
 		expect(onAuth).toHaveBeenCalledWith({
 			url: expect.stringContaining("https://claude.ai/oauth/authorize?"),
 			instructions: "Complete sign-in, then copy the authorization code shown by Anthropic.",
@@ -66,6 +78,42 @@ describe.sequential("Anthropic OAuth", () => {
 			refresh: "refresh-token",
 			expires: Date.parse("2026-08-08T00:55:00Z"),
 		});
+		expect(fetchMock).toHaveBeenCalledOnce();
+	});
+
+	it("uses Anthropic's localhost callback when browser login is selected", async () => {
+		const onAuth = vi.fn();
+		let callbackPromise: Promise<void> | undefined;
+		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
+			const body = getJsonBody(init);
+			expect(body).toMatchObject({
+				grant_type: "authorization_code",
+				code: "callback-code",
+				redirect_uri: "http://localhost:53692/callback",
+			});
+			return jsonResponse({ access_token: "browser-access", refresh_token: "browser-refresh", expires_in: 3600 });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const credentials = await anthropicOAuthProvider.login({
+			loginFlow: "browser",
+			onAuth: (info) => {
+				onAuth(info);
+				const authUrl = new URL(info.url);
+				expect(authUrl.searchParams.get("redirect_uri")).toBe("http://localhost:53692/callback");
+				callbackPromise = requestCallback(
+					`http://127.0.0.1:53692/callback?code=callback-code&state=${authUrl.searchParams.get("state")}`,
+				);
+			},
+			onPrompt: async () => {
+				throw new Error("Browser callback login should not prompt for a hosted code");
+			},
+		});
+
+		await callbackPromise;
+		expect(credentials).toMatchObject({ access: "browser-access", refresh: "browser-refresh" });
+		expect(onAuth).toHaveBeenCalledOnce();
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 

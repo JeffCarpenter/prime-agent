@@ -369,6 +369,7 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	id: "openai-codex",
 	name: "ChatGPT Plus/Pro (Codex Subscription)",
 	loginFlow: "device",
+	browserLoginFlow: "manual-code",
 
 	login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
 		if (callbacks.loginFlow === "browser") {
