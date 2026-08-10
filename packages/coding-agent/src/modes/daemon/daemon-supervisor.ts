@@ -529,15 +529,16 @@ function isDaemonWorkerDescriptor(value: unknown, socketPath: string): value is 
 		Number.isInteger(descriptor.pid) &&
 		(descriptor.pid ?? 0) > 0 &&
 		(descriptor.processStartId === undefined || typeof descriptor.processStartId === "string");
+	const knownLifecycle = isDaemonWorkerLifecycle(descriptor.lifecycle);
 	return (
 		(descriptor.version === 1 || descriptor.version === 2) &&
 		typeof descriptor.supervisorSocketPath === "string" &&
 		normalizeSocketPath(descriptor.supervisorSocketPath) === socketPath &&
 		typeof descriptor.workerId === "string" &&
-		isDaemonWorkerLifecycle(descriptor.lifecycle) &&
-		// A passivated v1 record may retain a legacy PID on disk. It is accepted
-		// solely so load can remove it; it is never an authority to probe/signal.
-		(descriptor.lifecycle === "passivated" || validLegacyProcess) &&
+		// Early v1 descriptors predate lifecycle. Accept those only when their
+		// process identity is valid, so the loader can recover them safely below.
+		// A missing/corrupt identity remains fail-closed and is ignored.
+		(knownLifecycle ? descriptor.lifecycle === "passivated" || validLegacyProcess : validLegacyProcess) &&
 		(descriptor.ownerClientId === undefined || typeof descriptor.ownerClientId === "string") &&
 		typeof descriptor.socketPath === "string" &&
 		typeof descriptor.authenticationToken === "string" &&
@@ -1073,10 +1074,18 @@ export class DaemonSupervisor {
 			const path = join(this.descriptorDir, name);
 			try {
 				const descriptor: unknown = JSON.parse(readFileSync(path, "utf8"));
-				if (!isDaemonWorkerDescriptor(descriptor, this.socketPath)) {
-					continue;
-				}
+				if (!isDaemonWorkerDescriptor(descriptor, this.socketPath)) continue;
 				descriptor.supervisorSocketPath = normalizeSocketPath(descriptor.supervisorSocketPath);
+				const malformedLifecycle = !isDaemonWorkerLifecycle(descriptor.lifecycle);
+				if (malformedLifecycle) {
+					// A legacy v1 descriptor can omit lifecycle (or contain a value from a
+					// newer writer). It is not evidence that the root is idle or stopped.
+					// Discard even a syntactically valid legacy PID before recovery: do not
+					// adopt, passivate, or signal a process based on malformed lifecycle.
+					descriptor.lifecycle = "recovering";
+					delete descriptor.pid;
+					delete descriptor.processStartId;
+				}
 				descriptor.recoveryJournalPath ??= join(this.descriptorDir, `${descriptor.workerId}.recovery.jsonl`);
 				descriptor.orphanProcessJournalPath ??= join(this.descriptorDir, `${descriptor.workerId}.orphans.jsonl`);
 				const durableDescriptor = durableDaemonWorkerDescriptor(descriptor);
@@ -1091,6 +1100,13 @@ export class DaemonSupervisor {
 					intentionalStop: durableDescriptor.stopRequestedAt !== undefined,
 					stopRevision: 0,
 				};
+				if (malformedLifecycle) {
+					// The descriptor remains visible to startup recovery, but malformed
+					// lifecycle is never allowed to reach passivation classification.
+					this.persistWorker(worker);
+					this.workers.set(durableDescriptor.workerId, worker);
+					continue;
+				}
 				// Never passivate a live process: adoption is the only safe way to
 				// reconnect work that may still be running. A legacy passivated v1
 				// descriptor is deliberately migrated by discarding its stale identity.
@@ -2090,6 +2106,11 @@ export class DaemonSupervisor {
 							}
 							if (worker.heartbeatSnapshot !== undefined && worker.heartbeatSnapshotStale !== true) {
 								return { heartbeats: worker.heartbeatSnapshot };
+							}
+							// Passivation is allowed only after active and paused heartbeats
+							// have been excluded. Snapshotless passivated roots are empty.
+							if (worker.descriptor.lifecycle === "passivated") {
+								return { heartbeats: [] };
 							}
 							const state =
 								worker.descriptor.lifecycle === "ready" ? "disconnected" : worker.descriptor.lifecycle;
