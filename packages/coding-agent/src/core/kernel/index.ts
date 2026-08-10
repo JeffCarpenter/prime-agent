@@ -50,6 +50,12 @@ const KERNEL_ABORT_GRACE_MS = 1000;
 // set to its temp dir, and Windows keeps that directory locked until the
 // process is really gone, so a caller deleting it after dispose() gets EPERM.
 const KERNEL_EXIT_TIMEOUT_MS = 2000;
+// After SIGTERM expires the kernel is killed outright. Without this the wait is
+// best-effort in exactly the case the timeout exists for -- a kernel blocked in
+// a long-running native call, or a forked one where signal delivery is less
+// certain, is still alive when dispose() resolves, and the temp-dir removal
+// below then exhausts its retries against a directory the OS still holds.
+const KERNEL_SIGKILL_TIMEOUT_MS = 1000;
 const KERNEL_EXIT_POLL_INTERVAL_MS = 10;
 // rmSync's own maxRetries does not cover this: the native implementation
 // surfaces the directory-level EPERM without retrying.
@@ -1535,17 +1541,23 @@ export class KernelManager {
 		await this.control.send(encode(msg, this.connection.key));
 	}
 
-	/** Removes a kernel temp dir, retrying while the OS still holds a handle. */
-	private static async removeTempDirWithRetries(dir: string): Promise<void> {
+	/**
+	 * Removes a kernel temp dir, retrying while the OS still holds a handle.
+	 * Returns the last error if every attempt failed, so a genuine EACCES or a
+	 * bad path is visible rather than silently leaving the directory behind.
+	 */
+	private static async removeTempDirWithRetries(dir: string): Promise<unknown> {
+		let lastError: unknown;
 		for (let attempt = 0; attempt < TEMP_DIR_REMOVE_ATTEMPTS; attempt++) {
 			try {
 				rmSync(dir, { recursive: true, force: true });
-				return;
-			} catch {
+				return undefined;
+			} catch (error) {
+				lastError = error;
 				await new Promise((resolve) => globalThis.setTimeout(resolve, TEMP_DIR_REMOVE_DELAY_MS));
 			}
 		}
-		// Leave the temp dir for OS tmp cleanup.
+		return lastError;
 	}
 
 	private cleanupResources(killSignal: NodeJS.Signals = "SIGTERM", options: { removeTempDir?: boolean } = {}): void {
@@ -1606,26 +1618,52 @@ export class KernelManager {
 		this.startPromise = undefined;
 	}
 
-	private async waitForKernelExit(timeoutMs?: number): Promise<void> {
+	private async waitForKernelExit(
+		timeoutMs?: number,
+		kernel: ChildProcess | undefined = this.kernel,
+		forked: ForkedKernelHandle | undefined = this.forkedKernel,
+	): Promise<boolean> {
 		const deadline = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
-		const kernel = this.kernel;
 		if (kernel) {
-			if (kernel.exitCode !== null || kernel.signalCode !== null) return;
-			const exited = new Promise<void>((resolve) => kernel.once("exit", () => resolve()));
+			if (kernel.exitCode !== null || kernel.signalCode !== null) return true;
+			const exited = new Promise<boolean>((resolve) => kernel.once("exit", () => resolve(true)));
 			if (timeoutMs === undefined) {
-				await exited;
-			} else {
-				await Promise.race([exited, sleep(timeoutMs, undefined, { ref: false })]);
+				return await exited;
 			}
-			return;
+			return await Promise.race([exited, sleep(timeoutMs, false, { ref: false })]);
 		}
-		const forked = this.forkedKernel;
-		if (!forked) return;
+		if (!forked) return true;
 		while (deadline === undefined || Date.now() < deadline) {
 			const remaining = deadline === undefined ? undefined : Math.max(1, deadline - Date.now());
-			if (await this.forkedKernelDead(forked, remaining)) return;
+			if (await this.forkedKernelDead(forked, remaining)) return true;
 			await sleep(Math.min(KERNEL_EXIT_POLL_INTERVAL_MS, remaining ?? KERNEL_EXIT_POLL_INTERVAL_MS));
 		}
+		return await this.forkedKernelDead(forked, 1);
+	}
+
+	/** Escalates a kernel that ignores SIGTERM without signaling a raw forked pid. */
+	private async ensureKernelExited(
+		kernel: ChildProcess | undefined,
+		forked: ForkedKernelHandle | undefined,
+	): Promise<boolean> {
+		if (await this.waitForKernelExit(KERNEL_EXIT_TIMEOUT_MS, kernel, forked)) return true;
+
+		try {
+			if (kernel) {
+				kernel.kill("SIGKILL");
+			} else if (forked) {
+				const kill = forked.kill("KILL");
+				kill.catch(() => {});
+				const outcome = await Promise.race([
+					kill,
+					sleep(KERNEL_SIGKILL_TIMEOUT_MS, undefined, { ref: false }),
+				]);
+				if (outcome === "signaled") recordOrphanProcessState(forked.pid, false);
+			}
+		} catch {
+			// Raced with the kernel exiting or the forkserver becoming unavailable.
+		}
+		return await this.waitForKernelExit(KERNEL_SIGKILL_TIMEOUT_MS, kernel, forked);
 	}
 
 	private async waitForHostRequestsToSettle(tasks: Promise<void>[], timeoutMs: number): Promise<void> {
@@ -1871,14 +1909,25 @@ export class KernelManager {
 				}
 			} finally {
 				if (!this.startStale(generation)) {
-					// Capture the exit waiter and temp dir before cleanup clears the
-					// process handles; Windows retains the cwd until the process exits.
-					const kernelExit = this.waitForKernelExit(KERNEL_EXIT_TIMEOUT_MS);
+					// Capture process handles and the temp dir before cleanup clears
+					// them; Windows retains the cwd until the process exits.
+					const kernel = this.kernel;
+					const forked = this.forkedKernel;
 					const tempDir = this.tempDir;
 					this.cleanupResources("SIGTERM", { removeTempDir: false });
 					this.tempDir = undefined;
-					await kernelExit;
-					if (tempDir) await KernelManager.removeTempDirWithRetries(tempDir);
+					const exited = await this.ensureKernelExited(kernel, forked);
+					if (!exited) {
+						this.appendKernelDiagnostic("kernel did not exit after SIGTERM and SIGKILL during dispose");
+					}
+					if (tempDir) {
+						const removalError = await KernelManager.removeTempDirWithRetries(tempDir);
+						if (removalError) {
+							this.appendKernelDiagnostic(
+								`failed to remove kernel temp dir ${tempDir}: ${errorMessage(removalError)}`,
+							);
+						}
+					}
 				}
 			}
 		})();
