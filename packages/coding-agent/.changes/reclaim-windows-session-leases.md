@@ -1,1 +1,2 @@
 - Fixed session recovery on Windows being permanently blocked by a stale lease, because `renameSync` reports `EPERM`/`EACCES` for an existing target there instead of `EEXIST`/`ENOTEMPTY` ([#667](https://github.com/PrimeIntellect-ai/prime-agent/issues/667)).
+- Fixed a live session lease being reclaimed when its `owner.json` was momentarily unreadable (e.g. a briefly held handle from antivirus or the search indexer on Windows); an unreadable owner is now treated as active instead of stale ([#667](https://github.com/PrimeIntellect-ai/prime-agent/issues/667)).
