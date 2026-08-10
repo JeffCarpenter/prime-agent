@@ -1288,6 +1288,7 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 			// session-list metadata we need, and parsing them during every refresh
 			// can exhaust the daemon heap.
 			if (line.length > SESSION_LIST_PARSE_MAX_LINE_CHARS) {
+				if (!looksLikeMessageEntry(line)) hasInvalidDurableState = true;
 				if (looksLikeMessageEntry(line)) {
 					messageCount++;
 					const summary = extractOversizedMessageSummary(line);
@@ -1306,6 +1307,9 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 			try {
 				parsed = JSON.parse(trimmed);
 			} catch {
+				// A malformed row may supersede an earlier terminal record, so keep
+				// this session recoverable rather than passivating it.
+				hasInvalidDurableState = true;
 				continue;
 			}
 			if (!isSessionHeader(parsed) && !isScannableSessionEntry(parsed, header?.version ?? 1)) {
