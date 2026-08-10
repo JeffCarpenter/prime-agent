@@ -1,5 +1,7 @@
 /** Anthropic OAuth flow for Claude Pro/Max subscriptions. */
 
+import { createServer, type Server } from "node:http";
+import { oauthErrorHtml, oauthSuccessHtml } from "./oauth-page.js";
 import { generatePKCE } from "./pkce.js";
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, OAuthProviderInterface } from "./types.js";
 
@@ -7,7 +9,11 @@ const decode = (value: string) => atob(value);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
-const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
+const HOSTED_CODE_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
+const CALLBACK_HOST = process.env.PI_OAUTH_CALLBACK_HOST || "127.0.0.1";
+const CALLBACK_PORT = 53692;
+const CALLBACK_PATH = "/callback";
+const BROWSER_REDIRECT_URI = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
 const SCOPES =
 	"org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -16,6 +22,12 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 type AuthorizationResult = {
 	code: string;
 	state: string;
+};
+
+type CallbackServer = {
+	server: Server;
+	cancelWait: () => void;
+	waitForAuthorization: () => Promise<AuthorizationResult>;
 };
 
 function loginCancelledError(): Error {
@@ -136,6 +148,7 @@ function credentialsFromTokenResponse(data: Record<string, unknown>, context: st
 async function exchangeAuthorizationCode(
 	authorization: AuthorizationResult,
 	verifier: string,
+	redirectUri: string,
 	signal?: AbortSignal,
 ): Promise<OAuthCredentials> {
 	const data = await postJson(
@@ -145,7 +158,7 @@ async function exchangeAuthorizationCode(
 			client_id: CLIENT_ID,
 			code: authorization.code,
 			state: authorization.state,
-			redirect_uri: REDIRECT_URI,
+			redirect_uri: redirectUri,
 			code_verifier: verifier,
 		},
 		"token exchange",
@@ -154,10 +167,87 @@ async function exchangeAuthorizationCode(
 	return credentialsFromTokenResponse(data, "token exchange");
 }
 
+function createAuthorizationUrl(challenge: string, state: string, redirectUri: string): string {
+	const authParams = new URLSearchParams({
+		code: "true",
+		client_id: CLIENT_ID,
+		response_type: "code",
+		redirect_uri: redirectUri,
+		scope: SCOPES,
+		code_challenge: challenge,
+		code_challenge_method: "S256",
+		state,
+	});
+	return `${AUTHORIZE_URL}?${authParams.toString()}`;
+}
+
+async function startCallbackServer(expectedState: string, signal?: AbortSignal): Promise<CallbackServer> {
+	throwIfAborted(signal);
+	return new Promise((resolve, reject) => {
+		let settleAuthorization: ((authorization: AuthorizationResult) => void) | undefined;
+		let rejectAuthorization: ((error: Error) => void) | undefined;
+		const authorizationPromise = new Promise<AuthorizationResult>((resolveAuthorization, rejectWait) => {
+			settleAuthorization = resolveAuthorization;
+			rejectAuthorization = rejectWait;
+		});
+		const server = createServer((request, response) => {
+			try {
+				const url = new URL(request.url || "", "http://localhost");
+				if (url.pathname !== CALLBACK_PATH) {
+					response.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+					response.end(oauthErrorHtml("Callback route not found."));
+					return;
+				}
+
+				const error = url.searchParams.get("error");
+				if (error) {
+					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+					response.end(oauthErrorHtml("Anthropic authentication did not complete.", `Error: ${error}`));
+					rejectAuthorization?.(new Error(`Anthropic authentication failed: ${error}`));
+					return;
+				}
+
+				const code = url.searchParams.get("code");
+				const state = url.searchParams.get("state");
+				if (!code || !state) {
+					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+					response.end(oauthErrorHtml("Missing code or state parameter."));
+					return;
+				}
+				if (state !== expectedState) {
+					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+					response.end(oauthErrorHtml("State mismatch."));
+					return;
+				}
+
+				response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+				response.end(oauthSuccessHtml("Anthropic authentication completed. You can close this window."));
+				settleAuthorization?.({ code, state });
+			} catch (error) {
+				response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+				response.end("Internal error");
+				rejectAuthorization?.(error instanceof Error ? error : new Error(String(error)));
+			}
+		});
+
+		const onAbort = () => rejectAuthorization?.(loginCancelledError());
+		signal?.addEventListener("abort", onAbort, { once: true });
+		server.once("error", reject);
+		server.listen(CALLBACK_PORT, CALLBACK_HOST, () => {
+			resolve({
+				server,
+				cancelWait: () => rejectAuthorization?.(loginCancelledError()),
+				waitForAuthorization: () =>
+					authorizationPromise.finally(() => signal?.removeEventListener("abort", onAbort)),
+			});
+		});
+	});
+}
+
 /**
  * Completes Anthropic's CLI-compatible hosted-code login.
  *
- * Anthropic does not expose RFC 8628 device authorization through its SDK.
+ * Anthropic does not expose an RFC 8628 device authorization endpoint.
  * Its browser handoff uses authorization code + PKCE and displays a code that
  * the user returns to the CLI after the hosted callback completes.
  */
@@ -171,19 +261,8 @@ export async function loginAnthropic(options: {
 	const { verifier, challenge } = await generatePKCE();
 	throwIfAborted(options.signal);
 
-	const authParams = new URLSearchParams({
-		code: "true",
-		client_id: CLIENT_ID,
-		response_type: "code",
-		redirect_uri: REDIRECT_URI,
-		scope: SCOPES,
-		code_challenge: challenge,
-		code_challenge_method: "S256",
-		state: verifier,
-	});
-
 	options.onAuth({
-		url: `${AUTHORIZE_URL}?${authParams.toString()}`,
+		url: createAuthorizationUrl(challenge, verifier, HOSTED_CODE_REDIRECT_URI),
 		instructions: "Complete sign-in, then copy the authorization code shown by Anthropic.",
 	});
 	const input = await options.onPrompt({
@@ -194,7 +273,41 @@ export async function loginAnthropic(options: {
 	const authorization = parseAuthorizationInput(input, verifier);
 
 	options.onProgress?.("Exchanging authorization code for tokens...");
-	return exchangeAuthorizationCode(authorization, verifier, options.signal);
+	return exchangeAuthorizationCode(authorization, verifier, HOSTED_CODE_REDIRECT_URI, options.signal);
+}
+
+/** Completes Anthropic authorization code + PKCE through a localhost callback. */
+export async function loginAnthropicBrowser(options: {
+	onAuth: (info: { url: string; instructions?: string }) => void;
+	onManualCodeInput?: () => Promise<string>;
+	onProgress?: (message: string) => void;
+	signal?: AbortSignal;
+}): Promise<OAuthCredentials> {
+	throwIfAborted(options.signal);
+	const { verifier, challenge } = await generatePKCE();
+	const callbackServer = await startCallbackServer(verifier, options.signal);
+
+	try {
+		options.onAuth({
+			url: createAuthorizationUrl(challenge, verifier, BROWSER_REDIRECT_URI),
+			instructions: "Complete sign-in in your browser. The local callback will finish authentication automatically.",
+		});
+		const callbackAuthorization = callbackServer.waitForAuthorization();
+		const manualAuthorization = options
+			.onManualCodeInput?.()
+			.then((input) => parseAuthorizationInput(input, verifier));
+		callbackAuthorization.catch(() => {});
+		manualAuthorization?.catch(() => {});
+		const authorization = manualAuthorization
+			? await Promise.race([callbackAuthorization, manualAuthorization])
+			: await callbackAuthorization;
+		throwIfAborted(options.signal);
+		options.onProgress?.("Exchanging authorization code for tokens...");
+		return await exchangeAuthorizationCode(authorization, verifier, BROWSER_REDIRECT_URI, options.signal);
+	} finally {
+		callbackServer.cancelWait();
+		await new Promise<void>((resolve) => callbackServer.server.close(() => resolve()));
+	}
 }
 
 export async function refreshAnthropicToken(refreshToken: string): Promise<OAuthCredentials> {
@@ -214,8 +327,18 @@ export const anthropicOAuthProvider: OAuthProviderInterface = {
 	id: "anthropic",
 	name: "Anthropic (Claude Pro/Max)",
 	loginFlow: "manual-code",
+	browserLoginFlow: "callback",
+	usesCallbackServer: true,
 
 	login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+		if (callbacks.loginFlow === "browser") {
+			return loginAnthropicBrowser({
+				onAuth: callbacks.onAuth,
+				onManualCodeInput: callbacks.onManualCodeInput,
+				onProgress: callbacks.onProgress,
+				signal: callbacks.signal,
+			});
+		}
 		return loginAnthropic({
 			onAuth: callbacks.onAuth,
 			onPrompt: callbacks.onPrompt,

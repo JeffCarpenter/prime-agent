@@ -41,6 +41,8 @@ export interface OAuthLoginCallbacks {
 	/** Show an interactive selector and return the selected option id, or undefined on cancel. */
 	onSelect?: (prompt: OAuthSelectPrompt) => Promise<string | undefined>;
 	signal?: AbortSignal;
+	/** Preferred environment-specific path for providers that support both. */
+	loginFlow?: "browser" | "headless";
 }
 
 export interface OAuthProviderInterface {
@@ -53,8 +55,11 @@ export interface OAuthProviderInterface {
 	/** Whether login uses a local callback server and supports manual code input. */
 	usesCallbackServer?: boolean;
 
-	/** Browser handoff behavior used by interactive clients. */
+	/** Login behavior used when browser login is not selected or supported. */
 	loginFlow?: "device" | "manual-code";
+
+	/** Optional browser-oriented alternative to loginFlow. */
+	browserLoginFlow?: "callback" | "manual-code";
 
 	/** Refresh expired credentials, return updated credentials to persist */
 	refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials>;

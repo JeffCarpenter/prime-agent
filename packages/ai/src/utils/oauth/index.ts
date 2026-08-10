@@ -8,7 +8,12 @@
  */
 
 // Anthropic
-export { anthropicOAuthProvider, loginAnthropic, refreshAnthropicToken } from "./anthropic.js";
+export {
+	anthropicOAuthProvider,
+	loginAnthropic,
+	loginAnthropicBrowser,
+	refreshAnthropicToken,
+} from "./anthropic.js";
 // GitHub Copilot
 export {
 	getGitHubCopilotBaseUrl,

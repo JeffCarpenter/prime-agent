@@ -17,7 +17,7 @@ Edit directly or use `/settings` for common options.
 |---------|------|---------|-------------|
 | `defaultProvider` | string | - | Default provider (e.g., `"anthropic"`, `"openai"`) |
 | `defaultModel` | string | - | Default model ID |
-| `defaultThinkingLevel` | string | `"xhigh"` | `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"` |
+| `defaultThinkingLevel` | string | `"xhigh"` | `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"` |
 | `rlmAllowedThinkingLevels` | string[] | model-supported levels | Cross-model allowlist for child-agent thinking levels |
 | `hideThinkingBlock` | boolean | `false` | Hide thinking blocks in output |
 | `thinkingBudgets` | object | - | Custom token budgets per thinking level |
@@ -190,6 +190,12 @@ When a provider requests a retry delay longer than `retry.provider.maxRetryDelay
 | `terminal.clearOnShrink` | boolean | `false` | Clear empty rows when content shrinks (can cause flicker) |
 | `images.autoResize` | boolean | `true` | Resize images to 2000x2000 max |
 | `images.blockImages` | boolean | `false` | Block all images from being sent to LLM |
+
+### Authentication
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `auth.deviceLogin` | boolean | automatic | Force the provider's headless login (`true`) or browser login (`false`); when unset, Linux browser login requires both a supported launcher on `PATH` and an active `DISPLAY` or `WAYLAND_DISPLAY` session |
 
 ### Shell
 

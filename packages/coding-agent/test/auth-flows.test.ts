@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { get } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Component, OverlayHandle, TUI } from "@earendil-works/pi-tui";
@@ -7,7 +8,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { AuthStorage } from "../src/core/auth-storage.js";
 import type { ModelRegistry } from "../src/core/model-registry.js";
 import { PRIME_INFERENCE_PROVIDER_ID } from "../src/core/prime-inference-auth.js";
-import { ProviderAuthFlows, type ProviderAuthFlowsHost } from "../src/modes/interactive/auth-flows.js";
+import {
+	ProviderAuthFlows,
+	type ProviderAuthFlowsHost,
+	shouldUseHeadlessLogin,
+} from "../src/modes/interactive/auth-flows.js";
+import { LoginDialogComponent } from "../src/modes/interactive/components/login-dialog.js";
 import { initTheme } from "../src/modes/interactive/theme/theme.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
@@ -72,7 +78,38 @@ function createHost(authStorage: AuthStorage): {
 	};
 }
 
-describe("ProviderAuthFlows", () => {
+function requestCallback(url: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const request = get(url, (response) => {
+			response.resume();
+			response.once("end", () => resolve());
+		});
+		request.once("error", reject);
+	});
+}
+
+describe.sequential("ProviderAuthFlows", () => {
+	describe("headless login selection", () => {
+		it("honors explicit configuration", () => {
+			expect(shouldUseHeadlessLogin({ preference: true, path: "", displayAvailable: true })).toBe(true);
+			expect(shouldUseHeadlessLogin({ preference: false, path: "", displayAvailable: false })).toBe(false);
+		});
+
+		it("requires an active graphical session as well as a browser launcher", () => {
+			expect(shouldUseHeadlessLogin({ platform: "linux", path: "/usr/bin", displayAvailable: false })).toBe(true);
+			expect(shouldUseHeadlessLogin({ platform: "linux", path: "", displayAvailable: true })).toBe(true);
+		});
+
+		it("uses browser login when a launcher and graphical session are available", () => {
+			const binDir = join(tempDir, "bin");
+			mkdirSync(binDir);
+			const launcher = join(binDir, "xdg-open");
+			writeFileSync(launcher, "#!/bin/sh\n");
+			chmodSync(launcher, 0o755);
+			expect(shouldUseHeadlessLogin({ platform: "linux", path: binDir, displayAvailable: true })).toBe(false);
+		});
+	});
+
 	let tempDir: string;
 	let authJsonPath: string;
 	let primeConfigPath: string;
@@ -219,5 +256,74 @@ describe("ProviderAuthFlows", () => {
 		expect(output).not.toContain("Anthropic");
 		overlays[0]?.handleInput?.("\x1b");
 		await expect(loginResult).resolves.toEqual({ status: "cancelled" });
+	});
+
+	it("runs Anthropic hosted-code login through the interactive provider path", async () => {
+		const authStorage = AuthStorage.create(authJsonPath, { usePrimeCliConfig: false });
+		const { host } = createHost(authStorage);
+		host.getDeviceLoginPreference = () => true;
+		let authUrl: string | undefined;
+		vi.spyOn(LoginDialogComponent.prototype, "showAuth").mockImplementation((url) => {
+			authUrl = url;
+		});
+		vi.spyOn(LoginDialogComponent.prototype, "showPrompt").mockImplementation(async () => {
+			const state = new URL(authUrl ?? "").searchParams.get("state");
+			return `hosted-code#${state}`;
+		});
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+			const body = JSON.parse(String(init?.body)) as Record<string, string>;
+			expect(body.redirect_uri).toBe("https://platform.claude.com/oauth/code/callback");
+			return jsonResponse({ access_token: "hosted-access", refresh_token: "hosted-refresh", expires_in: 3600 });
+		});
+
+		const result = await new ProviderAuthFlows(host).loginProvider({
+			id: "anthropic",
+			name: "Claude Pro/Max",
+			authType: "oauth",
+			category: "provider",
+		});
+
+		expect(result.status).toBe("success");
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(authStorage.get("anthropic")).toMatchObject({
+			type: "oauth",
+			access: "hosted-access",
+			refresh: "hosted-refresh",
+		});
+	});
+
+	it("runs Anthropic browser callback login through the interactive provider path", async () => {
+		const authStorage = AuthStorage.create(authJsonPath, { usePrimeCliConfig: false });
+		const { host } = createHost(authStorage);
+		host.getDeviceLoginPreference = () => false;
+		let callbackPromise: Promise<void> | undefined;
+		vi.spyOn(LoginDialogComponent.prototype, "showAuth").mockImplementation((url) => {
+			const state = new URL(url).searchParams.get("state");
+			callbackPromise = requestCallback(`http://127.0.0.1:53692/callback?code=browser-code&state=${state}`);
+		});
+		vi.spyOn(LoginDialogComponent.prototype, "showManualInput").mockImplementation(
+			() => new Promise<string>(() => {}),
+		);
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+			const body = JSON.parse(String(init?.body)) as Record<string, string>;
+			expect(body.redirect_uri).toBe("http://localhost:53692/callback");
+			return jsonResponse({ access_token: "browser-access", refresh_token: "browser-refresh", expires_in: 3600 });
+		});
+
+		const result = await new ProviderAuthFlows(host).loginProvider({
+			id: "anthropic",
+			name: "Claude Pro/Max",
+			authType: "oauth",
+			category: "provider",
+		});
+
+		await callbackPromise;
+		expect(result.status).toBe("success");
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(authStorage.get("anthropic")).toMatchObject({
+			type: "oauth",
+			access: "browser-access",
+			refresh: "browser-refresh",
+		});
 	});
 });
