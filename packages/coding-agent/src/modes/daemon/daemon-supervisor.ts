@@ -293,10 +293,14 @@ interface ResidentWorker {
 	recovery?: Promise<void>;
 	/** Coalesces concurrent explicit requests to revive a metadata-only root. */
 	wake?: Promise<void>;
-	/** A stop owns its tombstone, archive, and descriptor deletion until it settles. */
-	stop?: Promise<void>;
-	/** Prevents a stale routing reference from reviving a worker after deletion. */
+	/** Every active stop finalization. This is only a wake fence: each caller still executes its own stop request. */
+	stopFinalizations?: Set<Promise<void>>;
+	/** The one archival side effect may be shared, without sharing the callers' stop results. */
+	archiveFinalization?: Promise<void>;
+	/** Prevents a stale routing reference from reviving a worker after a completed stop. */
 	stopFinalized?: boolean;
+	/** A partial stop is a durable tombstone until an explicit retry clears it safely. */
+	stopFailure?: Error;
 	deferredRecovery?: Promise<void>;
 	intentionalStop: boolean;
 	stopRevision: number;
@@ -2488,14 +2492,21 @@ export class DaemonSupervisor {
 		}
 	}
 
-	/** Return the in-flight stop that owns this descriptor, or fail a stale route. */
+	/** Wait for active stop finalizations without inheriting any caller's result. */
+	private waitForStopFinalizations(worker: ResidentWorker): Promise<void> | undefined {
+		const finalizations = [...(worker.stopFinalizations ?? [])];
+		return finalizations.length > 0 ? Promise.allSettled(finalizations).then(() => undefined) : undefined;
+	}
+
+	/** Return the wake fence for a stop, or fail a stale/failed route. */
 	private stopFenceForWake(worker: ResidentWorker): Promise<void> | undefined {
-		if (worker.stop) {
-			return worker.stop.then(() => {
+		const finalizations = this.waitForStopFinalizations(worker);
+		if (finalizations) {
+			return finalizations.then(() => {
 				throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
 			});
 		}
-		if (worker.stopFinalized) {
+		if (worker.stopFinalized || worker.stopFailure || worker.descriptor.stopRequestedAt !== undefined) {
 			throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
 		}
 		return undefined;
@@ -5668,25 +5679,6 @@ export class DaemonSupervisor {
 		};
 	}
 
-	/**
-	 * Keep an exact stop's registration and descriptor authoritative while any
-	 * part of its cleanup is in flight. Root kills acquire this before forwarding
-	 * because a synchronous shutdown event may arrive before the worker replies.
-	 */
-	private acquireWorkerStopOwnership(worker: ResidentWorker): () => void {
-		if (!this.workerStopCounts) this.workerStopCounts = new Map();
-		const stopCounts = this.workerStopCounts;
-		stopCounts.set(worker, (stopCounts.get(worker) ?? 0) + 1);
-		let released = false;
-		return () => {
-			if (released) return;
-			released = true;
-			const remaining = (stopCounts.get(worker) ?? 1) - 1;
-			if (remaining === 0) stopCounts.delete(worker);
-			else stopCounts.set(worker, remaining);
-		};
-	}
-
 	private async stopWorker(
 		worker: ResidentWorker,
 		removeDescriptor: boolean,
@@ -5847,6 +5839,10 @@ export class DaemonSupervisor {
 			assertStopStillApplies();
 		}
 		this.invalidateWorkerSessionInputPauses(worker, "Session worker stopped while input was paused");
+		// A stopped resident is never routable again. Keep its descriptor only for a
+		// replacement supervisor/update hand-off, not as a stale in-memory route.
+		worker.stopFinalized = true;
+		this.workers.delete(worker.descriptor.workerId);
 		if (removeDescriptor) {
 			for (const summary of worker.summaries.values()) {
 				this.clearStartupNotificationState(summary.activeSessionId ?? summary.id);
