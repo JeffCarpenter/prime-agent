@@ -2483,6 +2483,9 @@ export class DaemonSupervisor {
 			detached: true,
 			env: workerEnvironment,
 			stdio: ["ignore", "ignore", "pipe", "pipe"],
+			// detached on Windows gives the worker its own visible console window
+			// (the ipython kernel then attaches to it, titled as python) — hide it.
+			windowsHide: true,
 		});
 		const detachWorkerStderr = child.stderr
 			? attachJsonlLineReader(child.stderr, (line) => this.log(`Session worker ${workerId} stderr: ${line}`), {
@@ -5726,6 +5729,7 @@ export class DaemonSupervisor {
 				detached: true,
 				env: environment,
 				stdio: "ignore",
+				windowsHide: true,
 			});
 			replacement.unref();
 		}
