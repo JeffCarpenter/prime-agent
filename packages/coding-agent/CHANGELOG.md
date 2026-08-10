@@ -13,7 +13,7 @@
 - Fixed unnamed agent-message labels preferring a runtime ID over the durable session ID returned by `agent_message.list_agents()`.
 - Fixed browser authentication links being constrained to a narrow dialog.
 - Fixed browser authentication links being constrained to a narrow dialog by printing remote links to terminal scrollback, returning to the TUI with `Ctrl+C`, and adding actions to copy or reopen the complete URL.
-- Changed Anthropic subscription authentication to prompt for the hosted authorization code instead of requiring a localhost callback.
+- Changed Anthropic subscription authentication to use hosted authorization codes when configured or headless and localhost callbacks when browser login is available.
 - Changed ChatGPT authentication to use device login when configured or when no GUI browser and active graphical session are available.
 - Fixed Homebrew installs attempting to self-update their versioned Cellar keg instead of directing users to `brew upgrade prime-agent` ([#844](https://github.com/PrimeIntellect-ai/prime-agent/issues/844))
 - Fixed active RLM subagents flooding parent transcripts with one usage-attribution entry per tool-loop message ([#1054](https://github.com/PrimeIntellect-ai/prime-agent/issues/1054)).

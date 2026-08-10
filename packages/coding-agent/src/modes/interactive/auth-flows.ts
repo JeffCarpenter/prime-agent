@@ -115,14 +115,14 @@ export interface ProviderAuthFlowsHost {
 	onAuthChanged?(): void | Promise<void>;
 	/** Invoked after a successful login (e.g. to surface billing warnings). */
 	onLoginCompleted?(): void;
-	/** Explicit device-login preference; unset enables environment detection. */
+	/** Explicit headless-login preference; unset enables environment detection. */
 	getDeviceLoginPreference?(): boolean | undefined;
 }
 
 const GUI_BROWSER_COMMANDS: Readonly<Partial<Record<NodeJS.Platform, readonly string[]>>> = {
 	darwin: ["open"],
-	linux: ["xdg-open", "gio", "google-chrome", "chromium", "chromium-browser", "firefox"],
-	win32: ["explorer.exe", "cmd.exe"],
+	linux: ["xdg-open"],
+	win32: ["rundll32.exe", "explorer.exe"],
 };
 
 function commandExistsOnPath(command: string, pathValue: string | undefined): boolean {
@@ -139,7 +139,7 @@ function commandExistsOnPath(command: string, pathValue: string | undefined): bo
 	return false;
 }
 
-export function shouldUseDeviceLogin(
+export function shouldUseHeadlessLogin(
 	options: { preference?: boolean; path?: string; platform?: NodeJS.Platform; displayAvailable?: boolean } = {},
 ): boolean {
 	if (options.preference !== undefined) return options.preference;
@@ -869,11 +869,16 @@ export class ProviderAuthFlows {
 			.getOAuthProviders()
 			.find((provider) => provider.id === providerId);
 
-		const usesCallbackServer = providerInfo?.usesCallbackServer ?? false;
-		const loginFlow = providerInfo?.loginFlow;
-		const selectedLoginFlow = shouldUseDeviceLogin({ preference: this.host.getDeviceLoginPreference?.() })
-			? "device"
-			: "browser";
+		const headlessLoginFlow = providerInfo?.loginFlow;
+		const browserLoginFlow = providerInfo?.browserLoginFlow;
+		const selectedLoginFlow = browserLoginFlow
+			? shouldUseHeadlessLogin({ preference: this.host.getDeviceLoginPreference?.() })
+				? "headless"
+				: "browser"
+			: "headless";
+		const activeLoginFlow = selectedLoginFlow === "browser" ? browserLoginFlow : headlessLoginFlow;
+		const usesCallbackServer =
+			activeLoginFlow === "callback" || (!headlessLoginFlow && providerInfo?.usesCallbackServer === true);
 
 		// Create login dialog component
 		const dialog = new LoginDialogComponent(
@@ -926,9 +931,9 @@ export class ProviderAuthFlows {
 									manualCodeReject = undefined;
 								}
 							});
-					} else if (loginFlow === "device" && selectedLoginFlow === "device") {
+					} else if (activeLoginFlow === "device") {
 						dialog.showWaiting("Waiting for browser authentication...");
-					} else if (loginFlow === "manual-code") {
+					} else if (activeLoginFlow === "manual-code") {
 						dialog.showProgress("Waiting for the authorization code...");
 					}
 				},
