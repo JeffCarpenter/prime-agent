@@ -2464,7 +2464,12 @@ export class DaemonSupervisor {
 				activeMatches.length === 1 &&
 				!(await this.reclaimStaleWorkerRegistration(activeMatches[0]!.worker, command.launchEnv !== undefined))
 			) {
-				return this.reuseWorkerForCreate(activeMatches[0]!.worker, ownerClientId, command.sessionPath);
+				return this.reuseWorkerForCreate(
+					activeMatches[0]!.worker,
+					ownerClientId,
+					command.sessionPath,
+					command.launchEnv,
+				);
 			}
 			if (activeMatches.length > 1) {
 				throw new Error(`Ambiguous active session "${command.sessionPath}"`);
@@ -2476,7 +2481,7 @@ export class DaemonSupervisor {
 			createCommand = { ...createCommand, sessionPath };
 			const existing = this.findWorkerBySessionFile(sessionPath);
 			if (existing && !(await this.reclaimStaleWorkerRegistration(existing, command.launchEnv !== undefined))) {
-				return this.reuseWorkerForCreate(existing, ownerClientId, sessionPath);
+				return this.reuseWorkerForCreate(existing, ownerClientId, sessionPath, command.launchEnv);
 			}
 		}
 		const key = createCommand.sessionPath
@@ -2576,16 +2581,22 @@ export class DaemonSupervisor {
 		worker: ResidentWorker,
 		ownerClientId: string | undefined,
 		sessionPath: string,
+		launchEnv: Record<string, string> | undefined,
 	): ResidentWorker {
 		if (worker.descriptor.lifecycle === "failed") {
 			throw new Error(
 				`Session "${sessionPath}" is registered to a failed worker that could not be safely reclaimed`,
 			);
 		}
-		if (worker.descriptor.ownerClientId === ownerClientId) {
-			return worker;
+		if (worker.descriptor.ownerClientId !== ownerClientId) {
+			throw new SessionAlreadyActiveError(sessionPath, worker.descriptor.rootActiveSessionId);
 		}
-		throw new SessionAlreadyActiveError(sessionPath, worker.descriptor.rootActiveSessionId);
+		// Only an authorized owner may supply the process environment used to wake
+		// its passive worker. Keep a previously authorized environment when absent.
+		if (ownerClientId !== undefined) {
+			worker.launchEnv = launchEnv ?? worker.launchEnv;
+		}
+		return worker;
 	}
 
 	/**
