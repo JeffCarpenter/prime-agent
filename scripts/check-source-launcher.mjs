@@ -1,5 +1,16 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	readlinkSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,12 +31,19 @@ try {
 	const launcherPath = join(sourceRoot, "prime-agent.sh");
 	const installerPath = join(scriptsDir, "install-source.sh");
 	const tsxPath = join(tsxDir, "tsx");
+	const tsconfigPath = join(sourceRoot, "tsconfig.json");
+	const smokeLogPath = join(tempDir, "smoke.log");
 	copyFileSync(join(root, "prime-agent.sh"), launcherPath);
 	copyFileSync(join(root, "scripts", "install-source.sh"), installerPath);
+	writeFileSync(tsconfigPath, "{}\n");
 	writeFileSync(
 		tsxPath,
 		[
 			"#!/bin/sh",
+			'if [ "$PWD" = / ]; then',
+			'  printf "%s\\n" "$@" > "$PRIME_AGENT_SMOKE_LOG"',
+			'  if [ "${PRIME_AGENT_FAIL_SMOKE:-}" = 1 ]; then exit 23; fi',
+			"fi",
 			"printf '__CWD__%s\\n' \"$PWD\"",
 			"printf '__LAUNCHER__%s\\n' \"$PRIME_AGENT_LAUNCHER_PATH\"",
 			'for arg in "$@"; do',
@@ -42,9 +60,17 @@ try {
 		...process.env,
 		PATH: binDir + ":" + (process.env.PATH ?? ""),
 		PRIME_AGENT_BIN_DIR: binDir,
+		PRIME_AGENT_SMOKE_LOG: smokeLogPath,
 	};
 	const firstInstall = spawnSync(installerPath, [], { encoding: "utf8", env: installEnv });
 	assertSuccess(firstInstall, "source installer");
+	assert(
+		readFileSync(smokeLogPath, "utf8") ===
+			["--tsconfig", tsconfigPath, join(sourceRoot, "packages", "coding-agent", "src", "cli.ts"), "--version", ""].join(
+				"\n",
+			),
+		"source installer did not validate the installed command from outside the checkout",
+	);
 
 	const commandPath = join(binDir, "prime-agent");
 	assert(readlinkSync(commandPath) === launcherPath, "source installer created the wrong symlink target");
@@ -59,6 +85,8 @@ try {
 	const expectedLines = [
 		"__CWD__" + callerDir,
 		"__LAUNCHER__" + launcherPath,
+		"__ARG__--tsconfig",
+		"__ARG__" + tsconfigPath,
 		"__ARG__" + join(sourceRoot, "packages", "coding-agent", "src", "cli.ts"),
 		...args.map((arg) => "__ARG__" + arg),
 		"",
@@ -71,6 +99,17 @@ try {
 	writeFileSync(conflictingTarget, "preserve me\n");
 	const conflict = spawnSync(installerPath, [conflictingBinDir], { encoding: "utf8", env: process.env });
 	assert(conflict.status !== 0, "source installer replaced a conflicting command");
+
+	const failedSmokeBinDir = join(tempDir, "failed smoke bin");
+	const failedSmoke = spawnSync(installerPath, [failedSmokeBinDir], {
+		encoding: "utf8",
+		env: { ...installEnv, PRIME_AGENT_FAIL_SMOKE: "1" },
+	});
+	assert(failedSmoke.status !== 0, "source installer accepted a failing installed command");
+	assert(
+		!existsSync(join(failedSmokeBinDir, "prime-agent")),
+		"source installer left behind a newly created command after validation failed",
+	);
 
 	const chainedBinDir = join(tempDir, "chained bin");
 	mkdirSync(chainedBinDir, { recursive: true });
@@ -87,6 +126,18 @@ try {
 	assert(
 		chainedInvocation.stdout.includes("__LAUNCHER__" + launcherPath + "\n"),
 		"launcher did not resolve a chained relative symlink",
+	);
+
+	chmodSync(tsxPath, 0o644);
+	const missingDependenciesBinDir = join(tempDir, "missing dependencies bin");
+	const missingDependencies = spawnSync(installerPath, [missingDependenciesBinDir], {
+		encoding: "utf8",
+		env: process.env,
+	});
+	assert(missingDependencies.status !== 0, "source installer accepted a checkout without executable tsx");
+	assert(
+		missingDependencies.stderr.includes("pnpm install"),
+		"source installer did not explain how to install missing dependencies",
 	);
 } finally {
 	rmSync(tempDir, { recursive: true, force: true });

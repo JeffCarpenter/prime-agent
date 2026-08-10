@@ -5,6 +5,13 @@ set -eu
 script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
 repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
 source_launcher="$repo_root/prime-agent.sh"
+source_tsconfig="$repo_root/tsconfig.json"
+source_tsx="$repo_root/node_modules/.bin/tsx"
+
+fail() {
+	printf 'error: %s\n' "$1" >&2
+	exit 1
+}
 
 if [ "$#" -gt 1 ]; then
 	printf 'usage: %s [bin-directory]\n' "$0" >&2
@@ -23,23 +30,42 @@ else
 fi
 
 if [ ! -x "$source_launcher" ]; then
-	printf 'error: source launcher is not executable: %s\n' "$source_launcher" >&2
-	exit 1
+	fail "source launcher is not executable: $source_launcher"
+fi
+
+if [ ! -f "$source_tsconfig" ]; then
+	fail "source TypeScript configuration is missing: $source_tsconfig"
+fi
+
+if [ ! -x "$source_tsx" ]; then
+	fail "source dependencies are not installed; run pnpm install in $repo_root"
 fi
 
 mkdir -p "$bin_dir"
+case "$bin_dir" in
+	/*) ;;
+	*) bin_dir=$(CDPATH='' cd "$bin_dir" && pwd) ;;
+esac
 target="$bin_dir/prime-agent"
+created=false
 
 if [ -e "$target" ] || [ -L "$target" ]; then
 	if [ -L "$target" ] && [ "$(readlink "$target")" = "$source_launcher" ]; then
 		printf 'Prime Agent source command is already linked at %s\n' "$target"
 	else
-		printf 'error: refusing to replace existing path: %s\n' "$target" >&2
-		exit 1
+		fail "refusing to replace existing path: $target"
 	fi
 else
 	ln -s "$source_launcher" "$target"
+	created=true
 	printf 'Linked Prime Agent source command at %s\n' "$target"
+fi
+
+if ! (CDPATH='' cd / && "$target" --version >/dev/null 2>&1); then
+	if [ "$created" = true ]; then
+		rm "$target"
+	fi
+	fail "source command validation failed: $target"
 fi
 
 case ":${PATH:-}:" in
