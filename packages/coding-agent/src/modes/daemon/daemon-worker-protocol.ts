@@ -100,7 +100,12 @@ export type DaemonWorkerCommandBody = DaemonWorkerCommand extends infer TCommand
 export interface DaemonWorkerDescriptor {
 	version: 1 | 2;
 	workerId: string;
-	pid: number;
+	/**
+	 * Process identity for resident workers. Both fields are deliberately absent
+	 * for passivated descriptors. Legacy fields are accepted only while reading
+	 * a non-passivated v1 descriptor; writers never retain them on a passivation.
+	 */
+	pid?: number;
 	processStartId?: string;
 	socketPath: string;
 	recoveryJournalPath: string;

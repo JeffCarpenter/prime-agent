@@ -509,14 +509,19 @@ function isDaemonWorkerDescriptor(value: unknown, socketPath: string): value is 
 		return false;
 	}
 	const descriptor = value as Partial<DaemonWorkerDescriptor>;
+	const validLegacyProcess =
+		Number.isInteger(descriptor.pid) &&
+		(descriptor.pid ?? 0) > 0 &&
+		(descriptor.processStartId === undefined || typeof descriptor.processStartId === "string");
 	return (
 		(descriptor.version === 1 || descriptor.version === 2) &&
 		typeof descriptor.supervisorSocketPath === "string" &&
 		normalizeSocketPath(descriptor.supervisorSocketPath) === socketPath &&
 		typeof descriptor.workerId === "string" &&
-		Number.isInteger(descriptor.pid) &&
-		(descriptor.pid ?? 0) > 0 &&
-		(descriptor.processStartId === undefined || typeof descriptor.processStartId === "string") &&
+		isDaemonWorkerLifecycle(descriptor.lifecycle) &&
+		// A passivated v1 record may retain a legacy PID on disk. It is accepted
+		// solely so load can remove it; it is never an authority to probe/signal.
+		(descriptor.lifecycle === "passivated" || validLegacyProcess) &&
 		(descriptor.ownerClientId === undefined || typeof descriptor.ownerClientId === "string") &&
 		typeof descriptor.socketPath === "string" &&
 		typeof descriptor.authenticationToken === "string" &&
@@ -1070,14 +1075,28 @@ export class DaemonSupervisor {
 					intentionalStop: durableDescriptor.stopRequestedAt !== undefined,
 					stopRevision: 0,
 				};
-				// Never passivate a live process: adoption performs generation fencing
-				// and is the only safe way to reconnect work that may still be running.
+				// Never passivate a live process: adoption is the only safe way to
+				// reconnect work that may still be running. A legacy passivated v1
+				// descriptor is deliberately migrated by discarding its stale identity.
+				const alreadyPassivated = durableDescriptor.lifecycle === "passivated";
+				// Old C00 records could claim to be passivated while retaining a PID.
+				// Discard it before *any* recovery classification, including malformed
+				// JSONL that must recover, so no later consumer can act on it.
+				if (alreadyPassivated) {
+					delete durableDescriptor.pid;
+					delete durableDescriptor.processStartId;
+				}
 				const passive =
-					!durableDescriptor.stopRequestedAt && !isProcessAlive(durableDescriptor.pid)
+					!durableDescriptor.stopRequestedAt &&
+					(alreadyPassivated ||
+						durableDescriptor.pid === undefined ||
+						!isProcessAlive(durableDescriptor.pid))
 						? await this.passivatedSummaryForDescriptor(durableDescriptor)
 						: undefined;
 				if (passive) {
 					durableDescriptor.lifecycle = "passivated";
+					delete durableDescriptor.pid;
+					delete durableDescriptor.processStartId;
 					worker.summaries.set(durableDescriptor.rootActiveSessionId, passive);
 				} else {
 					durableDescriptor.lifecycle = "recovering";
@@ -1095,9 +1114,12 @@ export class DaemonSupervisor {
 	): Promise<SessionSummary | undefined> {
 		if (!descriptor.sessionFile) return undefined;
 		const info = await readSessionInfo(descriptor.sessionFile);
-		if (!info || this.descriptorHasRecoverableWork(descriptor, info)) return undefined;
+		if (!info || info.hasInvalidDurableState || this.descriptorHasRecoverableWork(descriptor, info)) return undefined;
+		const taskState = info.agentStatus?.taskState;
 		const currentVerdict =
-			info.agentStatus?.taskState !== undefined && info.agentStatus.basedOnMessageCount === info.messageCount;
+			isAgentTaskState(taskState) &&
+			Number.isSafeInteger(info.agentStatus?.basedOnMessageCount) &&
+			info.agentStatus?.basedOnMessageCount === info.messageCount;
 		// Archived sessions are explicitly inactive. Active JSONLs require a current
 		// terminal/needs-input verdict; stale metadata must not suppress recovery.
 		if (info.state?.status !== "archived" && info.state?.status !== "crash" && !currentVerdict) return undefined;
@@ -2918,6 +2940,17 @@ export class DaemonSupervisor {
 
 	private async adoptOrRecoverWorker(worker: ResidentWorker): Promise<void> {
 		await this.assertRecoveryAllowed();
+		// A processless passivated descriptor (or a corrupt record that was
+		// conservatively moved to recovery) has no PID authority. Never feed an
+		// absent or stale identity into adoption/cleanup; recovery launches anew.
+		if (worker.descriptor.pid === undefined) {
+			if (worker.descriptor.stopRequestedAt) {
+				await this.stopWorker(worker, true, true, worker.descriptor.archiveOnStop === true);
+			} else {
+				await this.recoverWorker(worker);
+			}
+			return;
+		}
 		if (worker.descriptor.stopRequestedAt) {
 			try {
 				// A descriptor persisted before identity tracking has no
@@ -2951,10 +2984,10 @@ export class DaemonSupervisor {
 			return;
 		}
 		try {
-			if (!isProcessAlive(worker.descriptor.pid)) {
+			if (!isProcessAlive(worker.descriptor.pid!)) {
 				throw new Error("Session worker process is no longer running");
 			}
-			const observedProcessStartId = getProcessStartId(worker.descriptor.pid);
+			const observedProcessStartId = getProcessStartId(worker.descriptor.pid!);
 			await this.connectWorker(worker, 2000);
 			await this.subscribeWorker(worker, worker.descriptor.rootActiveSessionId);
 			await this.refreshWorkerSummaries(worker, true);
@@ -3290,7 +3323,12 @@ export class DaemonSupervisor {
 		if (this.isWorkerRecoveryCancelled(worker)) {
 			return;
 		}
-		if (worker.descriptor.ownerClientId && !worker.launchEnv && !isProcessAlive(worker.descriptor.pid)) {
+		if (
+			worker.descriptor.ownerClientId &&
+			!worker.launchEnv &&
+			worker.descriptor.pid !== undefined &&
+			!isProcessAlive(worker.descriptor.pid)
+		) {
 			worker.descriptor.lifecycle = "failed";
 			worker.descriptor.lastError = "Waiting for the owning client to reconnect";
 			this.persistWorker(worker);
@@ -3436,9 +3474,12 @@ export class DaemonSupervisor {
 			signalProcessGroupOrProcess(worker.descriptor.pid, "SIGKILL");
 		}
 		const orphanProcessJournalPath = worker.descriptor.orphanProcessJournalPath;
-		if (orphanProcessJournalPath) {
+		const pid = worker.descriptor.pid;
+		// A processless passive record intentionally has no parent identity. Do
+		// not use a legacy/stale parent PID to reap anything while waking it.
+		if (orphanProcessJournalPath && pid !== undefined) {
 			try {
-				for (const orphan of readActiveOrphanProcesses(orphanProcessJournalPath, worker.descriptor.pid)) {
+				for (const orphan of readActiveOrphanProcesses(orphanProcessJournalPath, pid)) {
 					if (!isOrphanProcessIdentityCurrent(orphan)) {
 						continue;
 					}

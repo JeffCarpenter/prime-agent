@@ -169,7 +169,14 @@ export interface SessionInfoEntry extends SessionEntryBase {
 	name?: string;
 }
 
-export type SessionStateStatus = "active" | "archived" | "crash";
+// On-disk lifecycle. "archived" replaces legacy "sleep" (normalized on read).
+// "crash" is read-only back-compat; no longer written.
+export const SESSION_STATE_STATUSES = ["active", "archived", "crash"] as const;
+export type SessionStateStatus = (typeof SESSION_STATE_STATUSES)[number];
+
+export function isSessionStateStatus(value: unknown): value is SessionStateStatus {
+	return typeof value === "string" && (SESSION_STATE_STATUSES as readonly string[]).includes(value);
+}
 
 export interface SessionState {
 	status: SessionStateStatus;
@@ -180,7 +187,14 @@ export interface SessionStateEntry extends SessionEntryBase {
 	state: SessionState;
 }
 
-export type AgentTaskState = "needs_input" | "completed";
+/** Whether an idle agent's turn left the task complete or awaiting more input. */
+export const AGENT_TASK_STATES = ["needs_input", "completed"] as const;
+export type AgentTaskState = (typeof AGENT_TASK_STATES)[number];
+
+/** Agent-status verdicts are durable input and must never be widened to string. */
+export function isAgentTaskState(value: unknown): value is AgentTaskState {
+	return typeof value === "string" && (AGENT_TASK_STATES as readonly string[]).includes(value);
+}
 
 export interface AgentStatus {
 	summary: string;
@@ -255,6 +269,8 @@ export interface SessionInfo {
 	firstMessage: string;
 	allMessagesText: string;
 	agentStatus?: AgentStatus;
+	/** A malformed lifecycle/verdict was seen while scanning durable JSONL. */
+	hasInvalidDurableState?: boolean;
 }
 
 export type ReadonlySessionManager = Pick<
@@ -1095,7 +1111,7 @@ function extractTextContent(message: Message): string {
 }
 
 function normalizeSessionStateStatus(value: unknown): SessionStateStatus | undefined {
-	if (value === "active" || value === "archived" || value === "crash") {
+	if (isSessionStateStatus(value)) {
 		return value;
 	}
 	if (value === "hidden" || value === "sleep") {
@@ -1261,6 +1277,7 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 		let name: string | undefined;
 		let state: SessionState | undefined;
 		let agentStatus: AgentStatus | undefined;
+		let hasInvalidDurableState = false;
 		let lastActivityTime: number | undefined;
 
 		for await (const lineBuffer of readLinesAsBuffers(filePath)) {
@@ -1303,14 +1320,25 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 			if (entry.type === "session_state") {
 				const stateEntry = entry as SessionStateEntry;
 				const status = normalizeSessionStateStatus(stateEntry.state?.status);
-				if (status) {
-					state = { status };
-				}
+				// A later corrupt lifecycle supersedes an earlier entry. Do not let an
+				// old archived state authorize passivation of an untrusted session.
+				state = status ? { status } : undefined;
+				if (!status) hasInvalidDurableState = true;
 			}
 			// Keep the latest recap/verdict so off-daemon sessions don't all show as
 			// unjudged in the agents view. Append-only, so last seen wins.
 			if (entry.type === "agent_status") {
-				agentStatus = (entry as AgentStatusEntry).status;
+				const status = (entry as AgentStatusEntry).status;
+				// Keep presentation-only statuses, but only a closed, well-formed
+				// verdict can ever be used by restart passivation.
+				const validStatus =
+					status &&
+					typeof status.summary === "string" &&
+					Number.isSafeInteger(status.basedOnMessageCount) &&
+					status.basedOnMessageCount >= 0 &&
+					(status.taskState === undefined || isAgentTaskState(status.taskState));
+				agentStatus = validStatus ? status : undefined;
+				if (!validStatus) hasInvalidDurableState = true;
 			}
 
 			if (!header) {
@@ -1358,6 +1386,7 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 			firstMessage: firstMessage || "(no messages)",
 			allMessagesText,
 			agentStatus,
+			...(hasInvalidDurableState ? { hasInvalidDurableState: true } : {}),
 		};
 	} catch {
 		return null;
