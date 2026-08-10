@@ -9797,7 +9797,9 @@ export class AgentSession {
 		// parent's loaded context files. A subagent runtime host rebuilds
 		// cwd-bound services and loads the child cwd's project context.
 		const childCwd = options.cwd ?? this._cwd;
-		const childSessionManager = SessionManager.create(childCwd, options.sessionDir);
+		const childSessionManager = options.parentSession.sessionManager.isPersisted()
+			? SessionManager.create(childCwd, options.sessionDir)
+			: SessionManager.inMemory(childCwd, options.sessionDir);
 		if (options.parentSession.sessionFile) {
 			childSessionManager.newSession({
 				parentSession: options.parentSession.sessionFile,
