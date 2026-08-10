@@ -58,7 +58,9 @@ pnpm install
 ./scripts/install-source.sh
 ```
 
-The installer creates an idempotent `prime-agent` symlink in `~/.local/bin` by default, accepts an explicit alternative bin directory, reports missing PATH configuration, and refuses to replace an existing command. The launcher resolves absolute, relative, and chained symlinks while retaining the caller's working directory and forwarding its arguments.
+The installer creates an idempotent `prime-agent` symlink in `~/.local/bin` by default, accepts an explicit alternative bin directory, reports missing PATH configuration, and refuses to replace an existing command. It rejects incomplete source installations and smoke-tests the installed command from outside the checkout. The launcher resolves absolute, relative, and chained symlinks while retaining the caller's working directory and forwarding its arguments.
+
+The source launcher also passes the checkout's root `tsconfig.json` to `tsx` explicitly. Without that option, `tsx` selected configuration relative to the caller's working directory; invoking `prime-agent` from another directory skipped the monorepo path mappings and loaded stale workspace `dist` files, causing missing-export failures such as `MODEL_THINKING_LEVELS`.
 
 A focused source-launcher check covers paths and arguments containing spaces, empty arguments, caller working-directory preservation, canonical launcher metadata, idempotent installation, conflicting commands, and chained relative symlinks.
 

@@ -22,7 +22,7 @@ cd /path/to/project
 prime-agent
 ```
 
-The launcher resolves its real path through symlinks and preserves the caller's working directory. Use that behavior to run a source checkout against a separate test project.
+The launcher resolves its real path through symlinks, preserves the caller's working directory, and explicitly loads the checkout's root TypeScript configuration so workspace imports resolve to source files. The installer validates the required source files and runs a non-interactive command check before reporting success.
 
 ## Product and Source Names
 
