@@ -294,6 +294,10 @@ interface ResidentWorker {
 	recovery?: Promise<void>;
 	/** Coalesces concurrent explicit requests to revive a metadata-only root. */
 	wake?: Promise<void>;
+	/** A stop owns its tombstone, archive, and descriptor deletion until it settles. */
+	stop?: Promise<void>;
+	/** Prevents a stale routing reference from reviving a worker after deletion. */
+	stopFinalized?: boolean;
 	deferredRecovery?: Promise<void>;
 	intentionalStop: boolean;
 	stopRevision: number;
@@ -2487,8 +2491,26 @@ export class DaemonSupervisor {
 		}
 	}
 
-	/** Start a metadata-only worker once an explicit user operation targets it. */
+	/** Return the in-flight stop that owns this descriptor, or fail a stale route. */
+	private stopFenceForWake(worker: ResidentWorker): Promise<void> | undefined {
+		if (worker.stop) {
+			return worker.stop.then(() => {
+				throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
+			});
+		}
+		if (worker.stopFinalized) {
+			throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
+		}
+		return undefined;
+	}
+
 	private async wakePassivatedWorker(worker: ResidentWorker): Promise<void> {
+		// Do not introduce an await when no stop exists: that would leave a gap in
+		// which a concurrent stop could install its tombstone before this wake starts.
+		const stopFence = this.stopFenceForWake(worker);
+		if (stopFence) await stopFence;
+		// A stop marks its fence before its asynchronous archive/delete finalization.
+		// Never clear that tombstone or launch a replacement from a stale route.
 		// The second caller can arrive after the first has changed lifecycle to
 		// recovering but before it has connected. Join it instead of leaking an
 		// opaque "recovering" error (or starting a second worker).
@@ -5827,6 +5849,9 @@ export class DaemonSupervisor {
 			await this.finalizeArchivedWorkerStop(worker);
 			assertStopStillApplies();
 		}
+		// Leave an immutable marker for any route that captured this worker before
+		// descriptor deletion. A later create/retry must resolve a fresh route.
+		worker.stopFinalized = true;
 		this.invalidateWorkerSessionInputPauses(worker, "Session worker stopped while input was paused");
 		this.workers.delete(worker.descriptor.workerId);
 		if (removeDescriptor) {
