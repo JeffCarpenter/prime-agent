@@ -31,6 +31,7 @@ import {
 import {
 	type AgentCronJob,
 	AgentCronJobStore,
+	isHeartbeatCronJob,
 	migrateLegacyCronJobsToSessionArtifacts,
 	SESSION_SCHEDULED_JOBS_FILENAME,
 } from "../../core/cron-jobs.js";
@@ -291,6 +292,8 @@ interface ResidentWorker {
 	snapshotGenerations: Map<string, Map<string, SnapshotTranscriptGeneration>>;
 	snapshotLoads: Map<string, Promise<DaemonAttachResult>>;
 	recovery?: Promise<void>;
+	/** Coalesces concurrent explicit requests to revive a metadata-only root. */
+	wake?: Promise<void>;
 	deferredRecovery?: Promise<void>;
 	intentionalStop: boolean;
 	stopRevision: number;
@@ -770,8 +773,10 @@ export class DaemonSupervisor {
 			rmSync(this.snapshotCacheRoot, { recursive: true, force: true });
 			mkdirSync(this.snapshotCacheRoot, { recursive: true, mode: 0o700 });
 			this.commandJournal = new CommandRecoveryJournal(join(this.descriptorDir, "command-journal.jsonl"));
-			this.loadWorkerDescriptors();
-			const workersToAdopt = [...this.workers.values()];
+			await this.loadWorkerDescriptors();
+			const workersToAdopt = [...this.workers.values()].filter(
+				(worker) => worker.descriptor.lifecycle !== "passivated",
+			);
 
 			this.server = createServer((socket) => this.handleConnection(socket));
 			await this.listen();
@@ -1035,11 +1040,15 @@ export class DaemonSupervisor {
 		};
 	}
 
-	private loadWorkerDescriptors(): void {
+	/**
+	 * A descriptor normally means "recover this worker". That was too broad:
+	 * a cleanly-idle root leaves a durable JSONL and descriptor behind, so a
+	 * supervisor restart used to recreate every completed conversation merely to
+	 * discover that it was idle. Keep known-quiescent roots as routing records.
+	 */
+	private async loadWorkerDescriptors(): Promise<void> {
 		for (const name of readdirSync(this.descriptorDir)) {
-			if (name === SUPERVISOR_CONFIG_FILE_NAME || !name.endsWith(".json")) {
-				continue;
-			}
+			if (name === SUPERVISOR_CONFIG_FILE_NAME || !name.endsWith(".json")) continue;
 			const path = join(this.descriptorDir, name);
 			try {
 				const descriptor: unknown = JSON.parse(readFileSync(path, "utf8"));
@@ -1047,7 +1056,6 @@ export class DaemonSupervisor {
 					continue;
 				}
 				descriptor.supervisorSocketPath = normalizeSocketPath(descriptor.supervisorSocketPath);
-				descriptor.lifecycle = "recovering";
 				descriptor.recoveryJournalPath ??= join(this.descriptorDir, `${descriptor.workerId}.recovery.jsonl`);
 				descriptor.orphanProcessJournalPath ??= join(this.descriptorDir, `${descriptor.workerId}.orphans.jsonl`);
 				const durableDescriptor = durableDaemonWorkerDescriptor(descriptor);
@@ -1062,11 +1070,53 @@ export class DaemonSupervisor {
 					intentionalStop: durableDescriptor.stopRequestedAt !== undefined,
 					stopRevision: 0,
 				};
+				// Never passivate a live process: adoption performs generation fencing
+				// and is the only safe way to reconnect work that may still be running.
+				const passive =
+					!durableDescriptor.stopRequestedAt && !isProcessAlive(durableDescriptor.pid)
+						? await this.passivatedSummaryForDescriptor(durableDescriptor)
+						: undefined;
+				if (passive) {
+					durableDescriptor.lifecycle = "passivated";
+					worker.summaries.set(durableDescriptor.rootActiveSessionId, passive);
+				} else {
+					durableDescriptor.lifecycle = "recovering";
+				}
 				this.persistWorker(worker);
 				this.workers.set(durableDescriptor.workerId, worker);
 			} catch (error) {
 				this.log(`Ignoring invalid worker descriptor ${path}: ${String(error)}`);
 			}
+		}
+	}
+
+	private async passivatedSummaryForDescriptor(
+		descriptor: DaemonWorkerDescriptor,
+	): Promise<SessionSummary | undefined> {
+		if (!descriptor.sessionFile) return undefined;
+		const info = await readSessionInfo(descriptor.sessionFile);
+		if (!info || this.descriptorHasRecoverableWork(descriptor, info)) return undefined;
+		const currentVerdict =
+			info.agentStatus?.taskState !== undefined && info.agentStatus.basedOnMessageCount === info.messageCount;
+		// Archived sessions are explicitly inactive. Active JSONLs require a current
+		// terminal/needs-input verdict; stale metadata must not suppress recovery.
+		if (info.state?.status !== "archived" && info.state?.status !== "crash" && !currentVerdict) return undefined;
+		return { ...summaryForInactiveSession(info), activeSessionId: descriptor.rootActiveSessionId };
+	}
+
+	private descriptorHasRecoverableWork(descriptor: DaemonWorkerDescriptor, info: SessionInfo): boolean {
+		try {
+			if (new WorkerRecoveryJournal(descriptor.recoveryJournalPath).getLatest().some((record) => record.busy))
+				return true;
+			const artifactDir = join(dirname(dirname(info.path)), "session-artifacts", info.id);
+			const cronStore = AgentCronJobStore.forSessionArtifacts();
+			cronStore.registerSessionArtifact(info.id, artifactDir);
+			return cronStore
+				.list()
+				.some((job) => job.status === "active" || (!isHeartbeatCronJob(job) && job.status === "paused"));
+		} catch {
+			// Recovery is safer than dropping an unreadable durable schedule/journal.
+			return true;
 		}
 	}
 
@@ -2168,6 +2218,9 @@ export class DaemonSupervisor {
 				if (!summary) throw new Error("Woken session worker has no target session");
 				target = { worker, summary };
 			}
+			// A2A delivery is an explicit target operation. The source is already
+			// resident (it is issuing this command), so revive only the target.
+			await this.wakePassivatedWorker(target.worker);
 			const targetActiveSessionId = target.summary.activeSessionId ?? target.summary.id;
 			if (source && command.agentOrigin === true) {
 				assertAgentFamilyReach(this.familyCatalogEntry(source.summary), this.familyCatalogEntry(target.summary));
@@ -2242,6 +2295,12 @@ export class DaemonSupervisor {
 					});
 				}
 				return await forward();
+			}
+			if (match.worker.descriptor.lifecycle === "passivated") {
+				// There is no process to ask to kill. Finalize the same tombstone and
+				// archive path without pointlessly reviving a completed root.
+				await this.stopWorker(match.worker, true, false, true);
+				return success(command.id, command.type);
 			}
 			this.persistWorkerStopTombstone(match.worker, true);
 			const releaseStopOwnership = this.acquireWorkerStopOwnership(match.worker);
@@ -2400,6 +2459,40 @@ export class DaemonSupervisor {
 				this.openingWorkers.delete(key);
 			}
 		}
+	}
+
+	/** Start a metadata-only worker once an explicit user operation targets it. */
+	private async wakePassivatedWorker(worker: ResidentWorker): Promise<void> {
+		// The second caller can arrive after the first has changed lifecycle to
+		// recovering but before it has connected. Join it instead of leaking an
+		// opaque "recovering" error (or starting a second worker).
+		if (worker.wake) return worker.wake;
+		if (worker.descriptor.lifecycle !== "passivated") return;
+		const wake = (async () => {
+			worker.intentionalStop = false;
+			worker.descriptor.stopRequestedAt = undefined;
+			worker.descriptor.archiveOnStop = undefined;
+			worker.descriptor.lifecycle = "recovering";
+			worker.descriptor.consecutiveFailures = 0;
+			this.persistWorker(worker);
+			await this.recoverWorker(worker);
+			// recoverWorker mutates lifecycle through the normal launch/adoption
+			// path; read it after await rather than retaining the narrowed value.
+			const lifecycle = worker.descriptor.lifecycle as DaemonWorkerDescriptor["lifecycle"];
+			if (lifecycle !== "ready" || !worker.client) {
+				throw new Error(worker.descriptor.lastError ?? "Could not wake passivated session worker");
+			}
+		})();
+		worker.wake = wake;
+		void wake.then(
+			() => {
+				if (worker.wake === wake) worker.wake = undefined;
+			},
+			() => {
+				if (worker.wake === wake) worker.wake = undefined;
+			},
+		);
+		return wake;
 	}
 
 	private reuseWorkerForCreate(
@@ -2965,6 +3058,7 @@ export class DaemonSupervisor {
 			!this.shuttingDown &&
 			!worker.intentionalStop &&
 			worker.descriptor.stopRequestedAt === undefined &&
+			worker.descriptor.lifecycle !== "passivated" &&
 			this.workers.get(worker.descriptor.workerId) === worker &&
 			worker.client === undefined
 		);
@@ -3931,6 +4025,68 @@ export class DaemonSupervisor {
 		return matches.values().next().value;
 	}
 
+	private commandExplicitlyWakesWorker(command: DaemonCommand): boolean {
+		// List/status queries deliberately remain metadata-only. Every command in
+		// this list is an explicit user operation which needs a runtime to change,
+		// resume, or export this one session. Keep destructive root kill out: its
+		// tombstone path must be able to remove a passivated descriptor directly.
+		switch (command.type) {
+			case "prompt":
+			case "prompt_and_wait":
+			case "steer":
+			case "follow_up":
+			case "restore_next_turn":
+			case "restore_actions":
+			case "append_custom_message":
+			case "resume_queue":
+			case "send_message":
+			case "agent_messages_clear":
+			case "start_side_question":
+			case "execute_bash":
+			case "execute_bash_and_wait":
+			case "clear_queue":
+			case "abort_and_clear_queue":
+			case "cron_add":
+			case "cron_cancel":
+			case "heartbeat_manage":
+			case "heartbeat_set":
+			case "heartbeat_update":
+			case "set_model":
+			case "cycle_model":
+			case "set_scoped_models":
+			case "set_thinking_level":
+			case "cycle_thinking_level":
+			case "set_service_tier":
+			case "set_transport":
+			case "set_steering_mode":
+			case "set_follow_up_mode":
+			case "set_auto_compaction":
+			case "set_auto_retry":
+			case "compact":
+			case "refine":
+			case "reload":
+			case "new_session":
+			case "switch_session":
+			case "fork":
+			case "navigate_tree":
+			case "import_jsonl":
+			case "export_html":
+			case "export_jsonl":
+			case "rename":
+			case "rename_saved_session":
+			case "delete_saved_session":
+			case "set_session_name":
+			case "set_rlm_max_depth":
+			case "set_session_entry_label":
+			case "cancel_rlm_child":
+			case "delete_rlm_subagent":
+			case "extension_ui_response":
+				return true;
+			default:
+				return false;
+		}
+	}
+
 	private async forwardToWorker(
 		worker: ResidentWorker,
 		command: DaemonCommand,
@@ -3990,6 +4146,7 @@ export class DaemonSupervisor {
 			}
 		}
 		const match = await this.findWorkerForClient(client, command.activeSessionId);
+		await this.wakePassivatedWorker(match.worker);
 		this.assertTelemetryAttachAllowed(match.worker, command.telemetryDisabled);
 		this.requireAvailableWorkerClient(match.worker);
 		const activeSessionId = match.summary.activeSessionId ?? match.summary.id;
