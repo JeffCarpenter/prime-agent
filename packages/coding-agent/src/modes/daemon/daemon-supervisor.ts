@@ -1093,24 +1093,36 @@ export class DaemonSupervisor {
 					delete durableDescriptor.pid;
 					delete durableDescriptor.processStartId;
 				}
-				// Client-owned workers require the caller's transient launch environment,
-				// which is intentionally never persisted. Keep their descriptors recoverable
-				// until the owner reconnects rather than creating an unwakeable passive root.
-				const passive =
-					durableDescriptor.ownerClientId === undefined &&
-					!durableDescriptor.stopRequestedAt &&
-					(alreadyPassivated ||
-						durableDescriptor.pid === undefined ||
-						!isProcessAlive(durableDescriptor.pid))
-						? await this.passivatedSummaryForDescriptor(durableDescriptor)
-						: undefined;
-				if (passive) {
+				// A client-owned worker's launch environment is transient and deliberately
+				// never persisted. A processless descriptor therefore cannot be safely
+				// restarted at supervisor startup: only its owner can provide that env on a
+				// subsequent attach. Keep it processless, visible, and wakeable by that path.
+				const ownerOwnedProcessless =
+					durableDescriptor.ownerClientId !== undefined && durableDescriptor.pid === undefined;
+				if (ownerOwnedProcessless && !durableDescriptor.stopRequestedAt) {
+					// Fail closed even if the durable transcript is unreadable or has work
+					// pending. The owner attach path identifies this root from its descriptor
+					// and supplies launchEnv before it asks recovery to spawn anything.
 					durableDescriptor.lifecycle = "passivated";
-					delete durableDescriptor.pid;
-					delete durableDescriptor.processStartId;
-					worker.summaries.set(durableDescriptor.rootActiveSessionId, passive);
+					const passive = await this.passivatedSummaryForDescriptor(durableDescriptor);
+					if (passive) worker.summaries.set(durableDescriptor.rootActiveSessionId, passive);
 				} else {
-					durableDescriptor.lifecycle = "recovering";
+					const passive =
+						durableDescriptor.ownerClientId === undefined &&
+						!durableDescriptor.stopRequestedAt &&
+						(alreadyPassivated ||
+							durableDescriptor.pid === undefined ||
+							!isProcessAlive(durableDescriptor.pid))
+							? await this.passivatedSummaryForDescriptor(durableDescriptor)
+							: undefined;
+					if (passive) {
+						durableDescriptor.lifecycle = "passivated";
+						delete durableDescriptor.pid;
+						delete durableDescriptor.processStartId;
+						worker.summaries.set(durableDescriptor.rootActiveSessionId, passive);
+					} else {
+						durableDescriptor.lifecycle = "recovering";
+					}
 				}
 				this.persistWorker(worker);
 				this.workers.set(durableDescriptor.workerId, worker);
@@ -3360,10 +3372,12 @@ export class DaemonSupervisor {
 		if (
 			worker.descriptor.ownerClientId &&
 			!worker.launchEnv &&
-			worker.descriptor.pid !== undefined &&
-			!isProcessAlive(worker.descriptor.pid)
+			(worker.descriptor.pid === undefined || !isProcessAlive(worker.descriptor.pid))
 		) {
-			worker.descriptor.lifecycle = "failed";
+			// Never infer an owner environment or relaunch an owner-owned worker from
+			// persisted state. This includes processless/passivated descriptors, whose
+			// missing PID must not bypass the owner/no-env guard.
+			worker.descriptor.lifecycle = "passivated";
 			worker.descriptor.lastError = "Waiting for the owning client to reconnect";
 			this.persistWorker(worker);
 			return;
