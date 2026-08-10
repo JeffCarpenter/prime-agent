@@ -1,0 +1,1 @@
+- Fixed daemon-backed extension notifications emitted during `session_start` being lost before the first capable client attaches ([#1146](https://github.com/PrimeIntellect-ai/prime-agent/pull/1146) by [@Diyoncrz18](https://github.com/Diyoncrz18)).

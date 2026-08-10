@@ -1648,24 +1648,28 @@ export class DaemonSupervisor {
 					const streamedResult = this.createStreamedAttachResult(attached.result, transcript);
 					try {
 						this.write(client, success(command.id, "attach", streamedResult));
-						void this.streamSnapshot(
+						const streaming = this.streamSnapshot(
 							client,
 							attached.worker,
 							streamedResult,
 							transcript,
 							"attach",
 							attached.releaseTranscript,
-						).catch((error) =>
-							this.log(
-								`Failed to stream attach snapshot for ${streamedResult.activeSessionId}: ${String(error)}`,
-							),
 						);
+						void streaming
+							.then(() => this.syncWorkerExtensionUi(streamedResult.activeSessionId))
+							.catch((error) =>
+								this.log(
+									`Failed to stream attach snapshot for ${streamedResult.activeSessionId}: ${String(error)}`,
+								),
+							);
 					} catch (error) {
 						attached.releaseTranscript?.();
 						throw error;
 					}
 					return undefined;
 				}
+				setImmediate(() => void this.syncWorkerExtensionUi(attached.result.activeSessionId));
 				return success(command.id, "attach", attached.result);
 			}
 			case "reattach": {
@@ -1709,14 +1713,17 @@ export class DaemonSupervisor {
 							releaseSnapshotReservation,
 						);
 						releaseTranscript = undefined;
-						void streaming.catch((error) =>
-							this.log(`Failed to stream reattach snapshot for ${targetActiveSessionId}: ${String(error)}`),
-						);
+						void streaming
+							.then(() => this.syncWorkerExtensionUi(targetActiveSessionId))
+							.catch((error) =>
+								this.log(`Failed to stream reattach snapshot for ${targetActiveSessionId}: ${String(error)}`),
+							);
 						return undefined;
 					}
 					this.write(client, success(command.id, command.type, attached.result));
 					this.detachClient(client, command.activeSessionId);
 					releaseSnapshotReservation();
+					setImmediate(() => void this.syncWorkerExtensionUi(targetActiveSessionId));
 					return undefined;
 				} catch (error) {
 					releaseTranscript?.();
@@ -2760,7 +2767,10 @@ export class DaemonSupervisor {
 			throw new Error("Session worker is not connected");
 		}
 		const supportsExtensionUi = [...this.clients].some(
-			(client) => client.attachedActiveSessionIds.has(activeSessionId) && client.supportsExtensionUi,
+			(client) =>
+				!client.socket.destroyed &&
+				client.attachedActiveSessionIds.has(activeSessionId) &&
+				client.supportsExtensionUi,
 		);
 		const response = await worker.client.requestWorker({
 			type: "worker_subscribe",
@@ -4083,7 +4093,6 @@ export class DaemonSupervisor {
 					lastEventSequence: publicResult.lastEventSequence,
 				});
 			}
-			void this.syncWorkerExtensionUi(activeSessionId);
 			const detachingSessions = this.detachingInputPauseSessions?.get(client);
 			detachingSessions?.delete(command.activeSessionId);
 			detachingSessions?.delete(activeSessionId);
@@ -4948,6 +4957,7 @@ export class DaemonSupervisor {
 						releaseTranscript,
 					);
 					releaseTranscript = undefined;
+					await this.syncWorkerExtensionUi(activeSessionId);
 					continue;
 				}
 				const meta = createDaemonEventMeta(
@@ -4977,6 +4987,7 @@ export class DaemonSupervisor {
 					}
 					return;
 				}
+				await this.syncWorkerExtensionUi(activeSessionId);
 			} catch (error) {
 				releaseTranscript?.();
 				this.log(`Failed to catch up client ${client.id} for ${activeSessionId}: ${String(error)}`);
