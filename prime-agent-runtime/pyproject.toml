@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Kernel-side runtime shim for Prime Agent recursion"
 requires-python = ">=3.11"
 dependencies = [
+  "httpx>=0.28.1",
   "ipykernel",
   "mcp>=2,<3",
   "nest-asyncio",
@@ -16,3 +17,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rlm"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
