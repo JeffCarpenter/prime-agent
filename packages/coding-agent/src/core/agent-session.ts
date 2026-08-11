@@ -9800,12 +9800,12 @@ export class AgentSession {
 		const childSessionManager = options.parentSession.sessionManager.isPersisted()
 			? SessionManager.create(childCwd, options.sessionDir)
 			: SessionManager.inMemory(childCwd, options.sessionDir);
-		if (options.parentSession.sessionFile) {
-			childSessionManager.newSession({
-				parentSession: options.parentSession.sessionFile,
-				rlmDepth: options.rlmDepth,
-			});
-		}
+		// Explicit depth is required for in-memory children too: their initial manager
+		// header otherwise defaults to root depth when there is no parent session file.
+		childSessionManager.newSession({
+			parentSession: options.parentSession.sessionFile,
+			rlmDepth: options.rlmDepth,
+		});
 		childSessionManager.appendModelChange(options.model.provider, options.model.id);
 		childSessionManager.appendThinkingLevelChange(options.thinkingLevel);
 		childSessionManager.appendServiceTierChange(options.serviceTier);
