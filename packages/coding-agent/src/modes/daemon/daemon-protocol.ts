@@ -63,7 +63,7 @@ export const DAEMON_COMMAND_ENVELOPE_MIN_PROTOCOL_VERSION = 7;
 // Revision 17 reports attach ownership (wasAttached) on attach results so shared-client
 // cleanup can tell its own attachment from a sibling connection's.
 export const DAEMON_SCHEMA_REVISION = 17;
-export const DAEMON_SCHEMA_ID = "protocol-7-schema-17-1bcb9e7f1a49";
+export const DAEMON_SCHEMA_ID = "protocol-7-schema-17-b4c725df7a0a";
 
 export type DaemonProtocolName = typeof DAEMON_PROTOCOL_NAME;
 export type DaemonProtocolVersion = number;
