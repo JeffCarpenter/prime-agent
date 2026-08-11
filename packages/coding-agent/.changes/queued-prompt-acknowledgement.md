@@ -1,0 +1,1 @@
+- Fixed prompts queued during streaming lacking an immediate receipt acknowledgement ([#1185](https://github.com/PrimeIntellect-ai/prime-agent/pull/1185) by [@nnunley](https://github.com/nnunley)).
