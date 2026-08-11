@@ -194,6 +194,7 @@ import {
 	type AutoRefineReview,
 	appendGlobalRefinement,
 	applyRefinementProposal,
+	assertHarnessStateWritable,
 	generateRefinementId,
 	getGlobalHarnessStateDir,
 	getLocalHarnessStateDir,
@@ -7665,9 +7666,14 @@ export class AgentSession {
 	}
 
 	private _autoRefineAllowedForSession(): boolean {
-		return (
-			isPersistentHarnessStorageSupported() && this._rlmDepth === 0 && this._localHarnessStateDir() !== undefined
-		);
+		if (!isPersistentHarnessStorageSupported() || this._rlmDepth !== 0 || this._localHarnessStateDir() === undefined)
+			return false;
+		try {
+			assertHarnessStateWritable(loadHarnessState(this._localHarnessStateDir()!, "local"));
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	private _settlePostCompactionContinue(error?: Error): void {

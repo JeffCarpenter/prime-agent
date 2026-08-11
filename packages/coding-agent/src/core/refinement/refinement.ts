@@ -380,12 +380,23 @@ export function loadHarnessState(
 	scope: HarnessScope = "global",
 ): HarnessState {
 	if (!isPersistentHarnessStorageSupported()) return emptyHarnessState();
-	const statePath = getHarnessStatePath(harnessStateDir);
-	if (!existsSync(statePath)) {
-		return emptyHarnessState();
+	const directoryError = validateHarnessDirectory(harnessStateDir);
+	if (directoryError) {
+		const state = emptyHarnessState();
+		state.persistentWriteError = directoryError;
+		return state;
 	}
-	if (lstatSync(statePath).isSymbolicLink()) {
-		throw new Error(`Refusing to use non-regular private file: ${statePath}`);
+	const statePath = getHarnessStatePath(harnessStateDir);
+	try {
+		const info = lstatSync(statePath);
+		if (info.isSymbolicLink() || !info.isFile()) {
+			const state = emptyHarnessState();
+			state.persistentWriteError = `Refusing to use non-regular private file: ${statePath}`;
+			return state;
+		}
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return emptyHarnessState();
+		throw error;
 	}
 	let parsed: Partial<HarnessState>;
 	try {
@@ -427,6 +438,10 @@ export function loadHarnessState(
 		state.refinements = parsed.refinements;
 	}
 	return state;
+}
+
+export function assertHarnessStateWritable(state: HarnessState): void {
+	if (state.persistentWriteError) throw new Error(state.persistentWriteError);
 }
 
 export function mergeHarnessStates(globalState: HarnessState, localState?: HarnessState): HarnessState {
@@ -857,13 +872,19 @@ export function appendGlobalRefinement(harnessStateDir: string, result: Refineme
 }
 
 export function loadGlobalRefinementHistory(harnessStateDir: string = getGlobalHarnessStateDir()): RefinementResult[] {
-	if (!isPersistentHarnessStorageSupported()) return [];
+	if (!isPersistentHarnessStorageSupported() || validateHarnessDirectory(harnessStateDir)) return [];
 	const historyPath = getRefinementHistoryPath(harnessStateDir);
 	if (!existsSync(historyPath)) {
 		return [];
 	}
 	const results: RefinementResult[] = [];
-	for (const line of readPrivateFile(historyPath, "utf8").split("\n")) {
+	let content: string;
+	try {
+		content = readPrivateFile(historyPath, "utf8");
+	} catch {
+		return results;
+	}
+	for (const line of content.split("\n")) {
 		const trimmed = line.trim();
 		if (!trimmed) continue;
 		try {

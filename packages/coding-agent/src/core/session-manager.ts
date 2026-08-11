@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ImageContent, Message, ServiceTier, TextContent, Usage } from "@earendil-works/pi-ai";
 import { randomUUID } from "crypto";
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { readdir, readFile, stat } from "fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "path";
 import { v7 as uuidv7 } from "uuid";
@@ -12,7 +12,7 @@ import {
 	appendPrivateFile,
 	assertRegularFileNoSymlink,
 	ensurePrivateDirectory,
-	writePrivateFileAtomic,
+	writePrivateFileAtomicLines,
 } from "../utils/private-files.js";
 import {
 	type BashExecutionMessage,
@@ -264,7 +264,7 @@ export type ReadonlySessionManager = Pick<
 	| "getSessionName"
 >;
 
-export const SESSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,127})$/;
+export const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 export function assertValidSessionId(sessionId: string): void {
 	if (!SESSION_ID_PATTERN.test(sessionId)) {
@@ -313,9 +313,34 @@ export function getSessionArtifactPathForFile(sessionFile: string, sessionId?: s
 	return getSessionArtifactPath(dirname(sessionFile), sessionId ?? basename(sessionFile).replace(/\.jsonl$/, ""));
 }
 
-function ensureSessionArtifactPath(sessionDir: string, sessionId: string): string {
+function ensureSessionArtifactPath(sessionDir: string, sessionId: string, create = true): string {
 	const artifactRoot = getSessionArtifactsRoot(sessionDir);
 	const artifactPath = getSessionArtifactPath(sessionDir, sessionId);
+	if (!create) {
+		if (!existsSync(artifactRoot)) return artifactPath;
+		const rootStats = lstatSync(artifactRoot);
+		if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) {
+			throw new Error(`Refusing to use non-directory private path: ${artifactRoot}`);
+		}
+		if (process.platform !== "win32" && (rootStats.mode & 0o777) !== 0o700) {
+			throw new Error(`Refusing to read non-private session artifact directory: ${artifactRoot}`);
+		}
+		if (!existsSync(artifactPath)) return artifactPath;
+		const artifactStats = lstatSync(artifactPath);
+		if (artifactStats.isSymbolicLink() || !artifactStats.isDirectory()) {
+			throw new Error(`Refusing to use non-directory private path: ${artifactPath}`);
+		}
+		if (process.platform !== "win32" && (artifactStats.mode & 0o777) !== 0o700) {
+			throw new Error(`Refusing to read non-private session artifact directory: ${artifactPath}`);
+		}
+		const canonicalRoot = realpathSync(artifactRoot);
+		const canonicalArtifactPath = realpathSync(artifactPath);
+		const canonicalRelativePath = relative(canonicalRoot, canonicalArtifactPath);
+		if (canonicalRelativePath.startsWith("..") || isAbsolute(canonicalRelativePath)) {
+			throw new Error(`Session artifact path escapes its canonical root: ${artifactPath}`);
+		}
+		return canonicalArtifactPath;
+	}
 	ensurePrivateDirectory(artifactRoot);
 	ensurePrivateDirectory(artifactPath);
 	const canonicalRoot = realpathSync(artifactRoot);
@@ -324,7 +349,7 @@ function ensureSessionArtifactPath(sessionDir: string, sessionId: string): strin
 	if (canonicalRelativePath.startsWith("..") || isAbsolute(canonicalRelativePath)) {
 		throw new Error(`Session artifact path escapes its canonical root: ${artifactPath}`);
 	}
-	return artifactPath;
+	return canonicalArtifactPath;
 }
 
 /** Generate a unique short ID (8 hex chars, collision-checked) */
@@ -1635,7 +1660,7 @@ export class SessionManager {
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
 		const content = `${this.fileEntries.map((e) => JSON.stringify(e)).join("\n")}\n`;
-		writePrivateFileAtomic(this.sessionFile, content);
+		writePrivateFileAtomicLines(this.sessionFile, [content], { preserveOwnership: true });
 		this._notifyPersistListeners();
 	}
 
@@ -1710,11 +1735,9 @@ export class SessionManager {
 	}
 
 	getSessionArtifactDir(options: { create?: boolean } = {}): string | undefined {
-		if (!this.persist) return undefined;
-		return options.create === false
-			? getSessionArtifactPath(this.sessionDir, this.sessionId)
-			: ensureSessionArtifactPath(this.sessionDir, this.sessionId);
-	}
+		return this.persist
+			? ensureSessionArtifactPath(this.sessionDir, this.sessionId, options.create ?? true)
+			: undefined;
 	}
 
 	/**
@@ -2457,7 +2480,10 @@ export class SessionManager {
 			const out = parentId === entry.parentId ? entry : { ...entry, parentId };
 			forkedEntries.push(out);
 		}
-		writePrivateFileAtomic(newSessionFile, `${forkedEntries.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+		function* serializedEntries(): Iterable<string> {
+			for (const entry of forkedEntries) yield `${JSON.stringify(entry)}\n`;
+		}
+		writePrivateFileAtomicLines(newSessionFile, serializedEntries());
 
 		return new SessionManager(targetCwd, dir, newSessionFile, true);
 	}

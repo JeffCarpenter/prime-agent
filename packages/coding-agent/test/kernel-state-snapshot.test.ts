@@ -101,8 +101,8 @@ describe("buildSnapshotCode", () => {
 		expect(code).toContain('getattr(os, "O_NOFOLLOW", 0)');
 		expect(code).toContain("os.replace");
 		expect(code).toContain("except _b.KeyboardInterrupt");
-		expect(code).toContain("os.chmod(out_dir, 0o700)");
-		expect(code).toContain('os.chmod("/state/sess.dill", 0o600)');
+		expect(code).toContain("os.lstat(out_dir)");
+		expect(code).toContain("os.fchmod");
 		// rlm and the IPython display names must never be serialized.
 		expect(code).toContain('"rlm"');
 		expect(code).toContain(`print(${JSON.stringify(MARKER)}`);
@@ -114,7 +114,7 @@ describe("buildRestoreCode", () => {
 
 	it("embeds the input path and rejects non-regular or symlinked snapshot files", () => {
 		expect(code).toContain('"/state/sess.dill"');
-		expect(code).toContain("os.path.exists");
+		expect(code).toContain("os.path.lexists");
 		expect(code).toContain("os.lstat");
 		expect(code).toContain("S_ISREG");
 		expect(code).toContain('getattr(os, "O_NOFOLLOW", 0)');
