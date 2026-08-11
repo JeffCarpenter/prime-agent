@@ -10411,6 +10411,7 @@ function makeRuntimeSession(
 		extensionRunner: {
 			hasHandlers: vi.fn(() => false),
 			emit: vi.fn(async () => {}),
+			getShortcuts: vi.fn(() => new Map()),
 		},
 		sessionFile: sessionManager.getSessionFile(),
 		sessionId: sessionManager.getSessionId(),

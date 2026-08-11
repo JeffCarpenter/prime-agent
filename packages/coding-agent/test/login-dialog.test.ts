@@ -323,7 +323,7 @@ describe("LoginDialogComponent", () => {
 			const dialog = new LoginDialogComponent(createFakeTui(), "anthropic", () => {}, "Anthropic");
 			dialog.showAuth("https://example.com/oauth?client_id=test");
 			const prompt = dialog.showPrompt("Paste the authorization code:");
-		dialog.handleInput("c");
+			dialog.handleInput("c");
 			dialog.handleInput("\r");
 
 			await expect(prompt).resolves.toBe("c");

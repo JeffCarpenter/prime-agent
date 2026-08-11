@@ -2457,6 +2457,18 @@ export class AgentDaemon {
 		return passive ? this.hydratePassiveRlmSubagent(passive) : this.getOrHydrateBoundSessionState(selector);
 	}
 
+	private isRlmAncestorState(state: ActiveSessionState, candidate: ActiveSessionState): boolean {
+		const visited = new Set<string>();
+		let current: ActiveSessionState | undefined = state;
+		while (current && !visited.has(current.activeSessionId)) {
+			if (current.activeSessionId === candidate.activeSessionId) return true;
+			visited.add(current.activeSessionId);
+			const parentId: string | undefined = current.runtime.metadata.parentActiveSessionId;
+			current = parentId ? this.sessions.get(parentId) : undefined;
+		}
+		return false;
+	}
+
 	private createSubagentRuntimeHost(parentState: ActiveSessionState): SubagentRuntimeHost {
 		return {
 			createRlmSubagentRuntime: async (options) => this.createRlmSubagentRuntime(parentState, options),

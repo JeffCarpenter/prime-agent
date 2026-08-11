@@ -463,4 +463,3 @@ def _install_subprocess_run_kill_tree() -> None:
 
 if os.environ.get("PRIME_AGENT_DISABLE_SUBPROCESS_KILL_TREE") != "1":
     _install_subprocess_run_kill_tree()
-

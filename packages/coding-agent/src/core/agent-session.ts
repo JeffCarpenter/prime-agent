@@ -10398,7 +10398,7 @@ export class AgentSession {
 		this._unsettledRlmChildRuns.add(run);
 		const emitChildUpdate = () => {
 			const childModel = childSession?.model ?? modelSelection.model;
-			const active = run.status === "running" || run.status === "queued";
+			const publishActivity = run.status !== "cancelled" && run.status !== "error";
 			this._emit({
 				type: "rlm_child_update",
 				child: {
@@ -10414,7 +10414,7 @@ export class AgentSession {
 					tokenCount: childSession?._contextTokensForCurrentMessages(),
 					recap: childSession?.getCurrentRecap(),
 					sessionDir: childSessionDir,
-					activity: active ? activity : undefined,
+					activity: publishActivity ? activity : undefined,
 					repliedSinceTask: childSession?._repliedToParentSinceTask,
 					error: run.error,
 				},

@@ -312,15 +312,16 @@ export function sweepStaleSessionLeases(agentDir: string): number {
 	for (const entry of readdirSync(root)) {
 		if (!entry.endsWith(".lock")) continue;
 		const directory = join(root, entry);
-		const owner = readLeaseOwner(directory);
-		if (!owner) {
+		const read = readLeaseOwner(directory);
+		if (read.status === "absent") {
 			// Malformed or incomplete lease directory: reclaim it.
-			reclaimStaleLease(directory);
-			swept++;
+			if (reclaimStaleLease(directory)) swept++;
 			continue;
 		}
-		if (!isLeaseOwnerAlive(owner)) {
-			reclaimStaleLease(directory);
+		if (read.status === "unreadable") {
+			continue;
+		}
+		if (!isLeaseOwnerAlive(read.owner) && reclaimStaleLease(directory)) {
 			swept++;
 		}
 	}

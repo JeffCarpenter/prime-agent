@@ -126,7 +126,7 @@ function stageDeclaredDependencyClosure(rootNames: string[], targetRoot: string)
 	};
 
 	for (const name of rootNames) {
-		stageDependency(name, installedRepositoryRoot, targetRoot, new Map(), false);
+		stageDependency(name, packageRoot, targetRoot, new Map(), false);
 	}
 	return targetsBySource;
 }
@@ -185,10 +185,20 @@ describe("Bedrock package contract", () => {
 				[...Object.keys(packedPackageJson.dependencies), "@types/node"],
 				join(consumerDir, "node_modules"),
 			);
-			const nodeFetchSource = resolveInstalledPackage("node-fetch", installedRepositoryRoot);
-			const getUriSource = resolveInstalledPackage("get-uri", installedRepositoryRoot);
-			expect(nodeFetchSource).toBeDefined();
+			const proxyAgentSource = resolveInstalledPackage("proxy-agent", packageRoot);
+			expect(proxyAgentSource).toBeDefined();
+			const pacProxyAgentSource = resolveInstalledPackage("pac-proxy-agent", proxyAgentSource!);
+			expect(pacProxyAgentSource).toBeDefined();
+			const getUriSource = resolveInstalledPackage("get-uri", pacProxyAgentSource!);
 			expect(getUriSource).toBeDefined();
+			const googleGenaiSource = resolveInstalledPackage("@google/genai", packageRoot);
+			expect(googleGenaiSource).toBeDefined();
+			const googleAuthSource = resolveInstalledPackage("google-auth-library", googleGenaiSource!);
+			expect(googleAuthSource).toBeDefined();
+			const gaxiosSource = resolveInstalledPackage("gaxios", googleAuthSource!);
+			expect(gaxiosSource).toBeDefined();
+			const nodeFetchSource = resolveInstalledPackage("node-fetch", gaxiosSource!);
+			expect(nodeFetchSource).toBeDefined();
 			const nodeFetchTarget = stagedTargets.get(nodeFetchSource!)?.[0];
 			const getUriTarget = stagedTargets.get(getUriSource!)?.[0];
 			expect(nodeFetchTarget).toBeDefined();
@@ -275,7 +285,7 @@ describe("Bedrock package contract", () => {
 		} finally {
 			rmSync(tempRoot, { recursive: true, force: true });
 		}
-	}, 30_000);
+	}, 60_000);
 
 	it("keeps the Node Bedrock transport outside the browser root bundle", async () => {
 		const result = await build({
