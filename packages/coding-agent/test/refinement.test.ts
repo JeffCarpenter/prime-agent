@@ -33,6 +33,7 @@ import {
 	getRefinementHistoryPath,
 	type HarnessState,
 	inferRefinementResultScope,
+	isPersistentHarnessStorageSupported,
 	loadGlobalRefinementHistory,
 	loadHarnessState,
 	mergeHarnessStates,
@@ -44,6 +45,7 @@ import {
 	type RefinementResult,
 	refineHarness,
 	saveHarnessState,
+	WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR,
 } from "../src/core/refinement/index.js";
 import { getProcessStartId } from "../src/core/session-lease.js";
 import type { CustomEntry } from "../src/core/session-manager.js";

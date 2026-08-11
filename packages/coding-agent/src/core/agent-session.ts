@@ -200,6 +200,7 @@ import {
 	getRefinementHistory,
 	type HarnessState,
 	inferRefinementResultScope,
+	isPersistentHarnessStorageSupported,
 	loadGlobalRefinementHistory,
 	loadHarnessState,
 	mergeHarnessStates,
@@ -211,6 +212,7 @@ import {
 	type RefinementResult,
 	reviewAutoRefine,
 	saveHarnessState,
+	WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR,
 } from "./refinement/index.js";
 import { resolveConfigValue } from "./resolve-config-value.js";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.js";
@@ -7663,7 +7665,9 @@ export class AgentSession {
 	}
 
 	private _autoRefineAllowedForSession(): boolean {
-		return this._rlmDepth === 0 && this._localHarnessStateDir() !== undefined;
+		return (
+			isPersistentHarnessStorageSupported() && this._rlmDepth === 0 && this._localHarnessStateDir() !== undefined
+		);
 	}
 
 	private _settlePostCompactionContinue(error?: Error): void {
@@ -12150,7 +12154,7 @@ export class AgentSession {
 	}
 
 	private _rlmSessionDirForReading(): string | undefined {
-		return this._rlmSessionDir ?? this.sessionManager.getSessionArtifactDir();
+		return this._rlmSessionDir ?? this.sessionManager.getSessionArtifactDir({ create: false });
 	}
 
 	private _contextWindowResolver(): ContextWindowResolver {

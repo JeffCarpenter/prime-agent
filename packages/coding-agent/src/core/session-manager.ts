@@ -1502,9 +1502,15 @@ export class SessionManager {
 	setSessionFile(sessionFile: string, preloadedEntries?: FileEntry[]): void {
 		this.sessionFile = resolve(sessionFile);
 		if (existsSync(this.sessionFile)) {
-			const firstHeader = readSessionHeader(this.sessionFile);
-			if (firstHeader?.type === "session" && typeof firstHeader.id === "string") {
-				assertValidSessionId(firstHeader.id);
+			try {
+				const firstHeader = readSessionHeader(this.sessionFile);
+				if (firstHeader?.type === "session" && typeof firstHeader.id === "string") {
+					assertValidSessionId(firstHeader.id);
+				}
+			} catch (error) {
+				// A malformed first line is handled by the existing corrupt-file recovery
+				// path below. Preserve errors from filesystem safety checks and invalid IDs.
+				if (!(error instanceof SyntaxError)) throw error;
 			}
 			this.fileEntries = preloadedEntries ?? loadEntriesFromFile(this.sessionFile);
 
@@ -1703,8 +1709,12 @@ export class SessionManager {
 		return this.sessionFile;
 	}
 
-	getSessionArtifactDir(): string | undefined {
-		return this.persist ? ensureSessionArtifactPath(this.sessionDir, this.sessionId) : undefined;
+	getSessionArtifactDir(options: { create?: boolean } = {}): string | undefined {
+		if (!this.persist) return undefined;
+		return options.create === false
+			? getSessionArtifactPath(this.sessionDir, this.sessionId)
+			: ensureSessionArtifactPath(this.sessionDir, this.sessionId);
+	}
 	}
 
 	/**

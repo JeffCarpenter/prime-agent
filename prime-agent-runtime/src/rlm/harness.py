@@ -44,6 +44,7 @@ ThinkingLevel = Literal["off", "minimal", "low", "medium", "high", "xhigh", "max
 
 _DEFAULT_FILE_NAME = "harness_state.json"
 _DEFAULT_HARNESS_DIR_NAME = "harness"
+WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR = "Persistent harness storage is unsupported on Windows"
 _KINDS: tuple[HarnessKind, ...] = ("prompt", "memory", "skill", "subagent")
 _THINKING_LEVELS: tuple[ThinkingLevel, ...] = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 _DEFAULT_LOCK_TIMEOUT_SECONDS = 10.0
@@ -610,6 +611,12 @@ class HarnessState:
         lock_timeout_seconds: float = _DEFAULT_LOCK_TIMEOUT_SECONDS,
         stale_lock_seconds: float = _DEFAULT_STALE_LOCK_SECONDS,
     ):
+        # Windows cannot provide the required no-follow and private-ACL guarantees
+        # through this portable implementation. Keep reads as an empty proxy and
+        # reject every mutation without resolving or touching a path.
+        if os.name == "nt":
+            in_memory = True
+            local_write_error = WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR
         # in_memory mode never resolves or touches a path. It is the safe fallback when
         # path resolution itself fails, so constructing it cannot re-raise that error.
         if in_memory:
@@ -679,6 +686,9 @@ class HarnessState:
             self.refinements = []
             self._loaded_mtime = None
             return self
+        info = self.file_path.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise OSError(f"Refusing to use non-regular private file: {self.file_path}")
         mtime = self._disk_mtime()
         try:
             with _open_private_for_read(self.file_path) as f:
@@ -1561,8 +1571,11 @@ def get_harness_state(
 ) -> HarnessState:
     """Return the cached local harness state, or global when requested."""
     global_ = _resolve_global_flag(global_, kwargs)
-    file_path = _state_file(state_dir, global_=global_)
     scope: HarnessScope = "global" if global_ else "local"
+    if os.name == "nt":
+        # Do not resolve state_dir or access the filesystem on unsupported Windows.
+        return HarnessState(in_memory=True, scope=scope, local_write_error=WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR)
+    file_path = _state_file(state_dir, global_=global_)
     cache_key = (file_path, scope)
     state = _state_cache.get(cache_key)
     if state is None:
