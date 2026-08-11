@@ -759,6 +759,7 @@ export class KernelManager {
 	private lastCellCode?: string;
 	private readonly inFlightHostRequests = new Set<Promise<void>>();
 	private readonly hostRequestsByCommId = new Map<string, InFlightHostRequest>();
+	private hostLifetimeController = new AbortController();
 	private state: "idle" | "starting" | "running" | "shutdown" = "idle";
 	/** Bumped by every teardown so a stale in-flight doStart can never touch a newer kernel. */
 	private startGeneration = 0;
@@ -805,6 +806,7 @@ export class KernelManager {
 
 	private async doStart(startOptions: KernelStartOptions): Promise<void> {
 		if (this.state !== "idle") return;
+		this.prepareHostLifetime();
 		const generation = ++this.startGeneration;
 		this.state = "starting";
 		installSignalHandlersOnce();
@@ -1749,10 +1751,10 @@ export class KernelManager {
 			if (request.timeout && typeof request.timeout === "object" && "unref" in request.timeout) {
 				request.timeout.unref();
 			}
-
-			const result = await this.handleHostRequest(envelope, controller.signal);
+			const signal = AbortSignal.any([controller.signal, this.hostLifetimeController.signal]);
+			const result = await this.handleHostRequest(envelope, signal);
 			if (request.closed) return;
-			await this.sendHostRequestReply(commId, { status: "ok", ...result }, controller.signal);
+			await this.sendHostRequestReply(commId, { status: "ok", ...result }, signal);
 		} catch (error) {
 			if (request?.closed) return;
 			this.appendKernelDiagnostic(`host request failed for comm ${commId}: ${errorMessage(error)}`);
@@ -1866,6 +1868,7 @@ export class KernelManager {
 
 	private cleanupResources(killSignal: NodeJS.Signals = "SIGTERM", options: { removeTempDir?: boolean } = {}): void {
 		this.startGeneration++; // any teardown invalidates in-flight starts
+		this.abortHostLifetime("IPython kernel stopped");
 		this.clearSnapshotTimer();
 		this.lateSentAgentMessageHandlers.clear();
 		for (const request of this.hostRequestsByCommId.values()) {
@@ -1987,6 +1990,18 @@ export class KernelManager {
 		return await this.waitForKernelExit(KERNEL_SIGKILL_TIMEOUT_MS, kernel, forked);
 	}
 
+	private abortHostLifetime(message: string): void {
+		if (!this.hostLifetimeController.signal.aborted) {
+			this.hostLifetimeController.abort(new Error(message));
+		}
+	}
+
+	private prepareHostLifetime(): void {
+		if (this.hostLifetimeController.signal.aborted) {
+			this.hostLifetimeController = new AbortController();
+		}
+	}
+
 	private async waitForHostRequestsToSettle(tasks: Promise<void>[], timeoutMs: number): Promise<void> {
 		let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
 		const timeoutPromise = new Promise<"timeout">((resolve) => {
@@ -2019,6 +2034,7 @@ export class KernelManager {
 		}
 		// Captured before any await: teardowns and newer starts bump the counter.
 		const generation = this.startGeneration;
+		this.abortHostLifetime("IPython kernel shut down");
 		// Best-effort final flush (bounded) before teardown — used by signal handlers
 		// so a SIGINT/SIGTERM exit doesn't lose work the debounced snapshot hasn't saved.
 		if (opts.snapshot) {
@@ -2089,6 +2105,7 @@ export class KernelManager {
 	}
 
 	async kill(): Promise<void> {
+		this.abortHostLifetime("IPython kernel killed");
 		this.state = "shutdown";
 		liveKernels.delete(this);
 		this.cleanupResources("SIGKILL");
@@ -2223,13 +2240,13 @@ export class KernelManager {
 			if (this.activeExecution) {
 				this.clearExecuteReplyIdleGrace(this.activeExecution);
 			}
+			this.abortHostLifetime("IPython kernel disposed");
 			// Final namespace flush while the kernel is still live (session end / reload).
 			await this.flushSnapshotForDispose();
 			if (this.startStale(generation)) return; // superseded mid-flush: the newer owner already cleaned this kernel
 			this.state = "shutdown";
 			liveKernels.delete(this);
 			const inFlightHostRequests = [...this.inFlightHostRequests];
-			// TODO: plumb AbortSignal through AgentSession.prompt so disposal can cancel long-running child loops.
 			try {
 				if (inFlightHostRequests.length > 0) {
 					await this.waitForHostRequestsToSettle(inFlightHostRequests, HOST_REQUEST_DISPOSE_TIMEOUT_MS);
@@ -2262,6 +2279,7 @@ export class KernelManager {
 
 	/** Synchronous best-effort cleanup. Safe to call from `process.on('exit')`. */
 	disposeSync(): void {
+		this.abortHostLifetime("IPython kernel disposed");
 		this.state = "shutdown";
 		liveKernels.delete(this);
 		// TODO: replace this best-effort hard-exit path if Node exposes an awaitable process-exit cleanup hook.

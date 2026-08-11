@@ -14,6 +14,10 @@ interface KernelHostRequestTestApi {
 	sendCommMessage(commId: string, data: Record<string, unknown>): Promise<void>;
 	inFlightHostRequests: Set<Promise<void>>;
 	hostRequestsByCommId: Map<string, unknown>;
+	hostLifetimeController: AbortController;
+	prepareHostLifetime(): void;
+	flushSnapshotForDispose(): Promise<void>;
+	state: "idle" | "starting" | "running" | "shutdown";
 }
 
 function commClose(commId: string): TestCommMessage {
@@ -375,5 +379,47 @@ describe("KernelManager host request deadlines", () => {
 			vi.useRealTimers();
 			await manager.dispose();
 		}
+	});
+
+	it("aborts the host lifetime before flushing a final snapshot", async () => {
+		let signal: AbortSignal | undefined;
+		const manager = new KernelManager({
+			hostHandlers: {
+				"goal.get": async (_payload, context) => {
+					signal = context?.signal;
+					return {};
+				},
+			},
+		});
+		const kernel = manager as unknown as KernelHostRequestTestApi;
+		kernel.sendCommMessage = async () => {};
+
+		kernel.handleCommMessage(commOpen("comm-admitted", { type: "goal.get" }));
+		await waitFor(() => signal !== undefined && kernel.inFlightHostRequests.size === 0);
+		const snapshotSignalStates: boolean[] = [];
+		kernel.flushSnapshotForDispose = async () => {
+			snapshotSignalStates.push(signal?.aborted === true);
+		};
+
+		await manager.dispose();
+
+		expect(snapshotSignalStates).toEqual([true]);
+		expect(signal?.reason).toEqual(new Error("IPython kernel disposed"));
+	});
+
+	it("prepares a fresh host lifetime for a restarted kernel generation", () => {
+		const manager = new KernelManager({});
+		const kernel = manager as unknown as KernelHostRequestTestApi;
+		const previousLifetime = kernel.hostLifetimeController;
+
+		manager.disposeSync();
+		expect(previousLifetime.signal.aborted).toBe(true);
+
+		kernel.state = "idle";
+		kernel.prepareHostLifetime();
+
+		expect(kernel.hostLifetimeController).not.toBe(previousLifetime);
+		expect(kernel.hostLifetimeController.signal.aborted).toBe(false);
+		manager.disposeSync();
 	});
 });

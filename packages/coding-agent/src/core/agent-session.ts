@@ -10718,6 +10718,7 @@ export class AgentSession {
 		} finally {
 			if (requestedSessionName) this._pendingRlmSubagentSessionNames.delete(requestedSessionName);
 		}
+		throwIfHostRequestAborted(signal);
 		if (requestedThinkingLevel !== undefined) {
 			const supported = getSupportedThinkingLevels(modelSelection.model) as ThinkingLevel[];
 			if (!supported.includes(requestedThinkingLevel)) {
@@ -10801,6 +10802,12 @@ export class AgentSession {
 		};
 		this._activeRlmChildRuns.set(run.id, run);
 		this._unsettledRlmChildRuns.add(run);
+		const abortFromHost = () => {
+			const reason = signal?.reason;
+			this._cancelRlmChildRun(run, reason instanceof Error ? reason.message : "IPython kernel host request aborted");
+		};
+		signal?.addEventListener("abort", abortFromHost, { once: true });
+		if (signal?.aborted) abortFromHost();
 		const emitChildUpdate = () => {
 			const childModel = childSession?.model ?? modelSelection.model;
 			const publishActivity = run.status !== "cancelled" && run.status !== "error";
@@ -11082,6 +11089,7 @@ export class AgentSession {
 					}
 				}
 			} finally {
+				signal?.removeEventListener("abort", abortFromHost);
 				flushChildUsage();
 				if (run.detachedDeletion) {
 					run.deletionRunFinished = true;
