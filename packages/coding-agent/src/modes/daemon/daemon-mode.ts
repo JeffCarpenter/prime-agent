@@ -5941,6 +5941,7 @@ export class AgentDaemon {
 			id: createAgentSessionMessageId(),
 			source: AGENT_MESSAGE_SOURCE,
 			message,
+			composedAt: new Date().toISOString(),
 			from:
 				options.sender ??
 				this.createAgentSessionMessageSender(options.fromState, options.clientId ?? options.origin),

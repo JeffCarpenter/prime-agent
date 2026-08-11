@@ -1,0 +1,1 @@
+- Added the sender's compose time to delivered agent-to-agent messages so a recipient can judge how long a queued message waited ([#823](https://github.com/PrimeIntellect-ai/prime-agent/issues/823)).
