@@ -315,6 +315,8 @@ interface ResidentWorker {
 	wake?: Promise<void>;
 	/** Every active stop finalization. This is only a wake fence: each caller still executes its own stop request. */
 	stopFinalizations?: Set<Promise<void>>;
+	/** Retains this exact worker's registry and descriptor while stop cleanup owns them. */
+	stopOwnershipCount?: number;
 	/** The one archival side effect may be shared, without sharing the callers' stop results. */
 	archiveFinalization?: Promise<void>;
 	/** Prevents a stale routing reference from reviving a worker after a completed stop. */
@@ -745,7 +747,6 @@ export class DaemonSupervisor {
 	private workerExtensionUiSyncs?: Map<string, Promise<void>>;
 	private readonly protocolClientIds = new WeakMap<DaemonSocketClient, string>();
 	private readonly workers = new Map<string, ResidentWorker>();
-	private workerStopCounts?: Map<ResidentWorker, number>;
 	private readonly openingWorkers = new Map<string, Promise<ResidentWorker>>();
 	/** Public admission ids are scoped to the socket that registered them. */
 	private readonly promptAdmissions = new Map<DaemonSocketClient, Map<string, SupervisorPromptAdmission>>();
@@ -2043,7 +2044,7 @@ export class DaemonSupervisor {
 				);
 				const worker = direct ?? (await this.findWorkerForClient(client, command.activeSessionId)).worker;
 				this.assertWorkerAccessibleToClient(client, worker, command.activeSessionId);
-				if ((worker.stopFinalizations?.size ?? 0) > 0 || (this.workerStopCounts?.get(worker) ?? 0) > 0) {
+				if ((worker.stopFinalizations?.size ?? 0) > 0 || (worker.stopOwnershipCount ?? 0) > 0) {
 					throw new Error("Session worker is stopping; retry after it finishes");
 				}
 				if (worker.stopFinalized) throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
@@ -3033,7 +3034,7 @@ export class DaemonSupervisor {
 					1000,
 				);
 				await this.assertRecoveryAllowed();
-				client.onFrame((frame) => this.handleWorkerFrame(worker, frame));
+				client.onFrame((frame) => this.handleWorkerFrame(worker, frame, client));
 				client.onClose((error) => void this.handleWorkerClose(worker, client, error));
 				worker.client?.close();
 				worker.client = client;
@@ -5191,7 +5192,14 @@ export class DaemonSupervisor {
 		pending.push(Buffer.from(payload));
 	}
 
-	private handleWorkerFrame(worker: ResidentWorker, frame: PrivateFrame<DaemonWorkerFrameHeader>): void {
+	private handleWorkerFrame(
+		worker: ResidentWorker,
+		frame: PrivateFrame<DaemonWorkerFrameHeader>,
+		sourceClient?: DaemonWorkerClient,
+	): void {
+		if (sourceClient && worker.client !== sourceClient) {
+			return;
+		}
 		if (frame.header.kind !== "outbound") {
 			return;
 		}
@@ -5676,7 +5684,7 @@ export class DaemonSupervisor {
 			// An exact stop owns its registration and descriptor cleanup until its
 			// tuple assertions complete. A synchronous root shutdown event can arrive
 			// before its request resolves, so leave both intact while it is active.
-			if ((this.workerStopCounts?.get(worker) ?? 0) === 0) {
+			if (this.workers.get(worker.descriptor.workerId) === worker && (worker.stopOwnershipCount ?? 0) === 0) {
 				this.invalidateWorkerSessionInputPauses(worker, "Session worker stopped while input was paused");
 				this.workers.delete(worker.descriptor.workerId);
 				this.deleteWorkerDescriptor(worker);
@@ -6075,16 +6083,13 @@ export class DaemonSupervisor {
 	 * because a synchronous shutdown event may arrive before the worker replies.
 	 */
 	private acquireWorkerStopOwnership(worker: ResidentWorker): () => void {
-		if (!this.workerStopCounts) this.workerStopCounts = new Map();
-		const stopCounts = this.workerStopCounts;
-		stopCounts.set(worker, (stopCounts.get(worker) ?? 0) + 1);
+		worker.stopOwnershipCount = (worker.stopOwnershipCount ?? 0) + 1;
 		let released = false;
 		return () => {
 			if (released) return;
 			released = true;
-			const remaining = (stopCounts.get(worker) ?? 1) - 1;
-			if (remaining === 0) stopCounts.delete(worker);
-			else stopCounts.set(worker, remaining);
+			const remaining = (worker.stopOwnershipCount ?? 1) - 1;
+			worker.stopOwnershipCount = remaining === 0 ? undefined : remaining;
 		};
 	}
 

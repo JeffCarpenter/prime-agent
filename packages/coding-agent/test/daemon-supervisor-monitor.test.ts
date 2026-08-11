@@ -1481,26 +1481,30 @@ describe("daemon worker supervisor monitoring", () => {
 			transcriptCaches: new Map(),
 			snapshotGenerations: new Map(),
 			snapshotLoads: new Map(),
+			extensionStatusOverlays: new Map(),
 			intentionalStop: false,
 			stopRevision: 0,
+			stopOwnershipCount: undefined as number | undefined,
+			stopFinalized: undefined as boolean | undefined,
+			stopFinalizations: undefined as Set<Promise<void>> | undefined,
 		};
 		const workers = new Map([[worker.descriptor.workerId, worker]]);
 		const deleteWorkerDescriptor = vi.fn();
-		const stopWorkerUntracked = vi.fn(async (target: typeof worker, removeDescriptor: boolean) => {
+		const stopWorkerOnce = vi.fn(async (target: typeof worker, removeDescriptor: boolean) => {
 			// The root-kill ownership and this exact stop are both active here.
-			expect(supervisor.workerStopCounts.get(target)).toBe(2);
+			expect(target.stopOwnershipCount).toBe(2);
 			expect(workers.get(target.descriptor.workerId)).toBe(target);
+			target.stopFinalized = true;
 			workers.delete(target.descriptor.workerId);
 			if (removeDescriptor) deleteWorkerDescriptor(target);
 		});
 		const supervisor = Object.assign(Object.create(DaemonSupervisor.prototype), {
 			workers,
-			workerStopCounts: new Map(),
 			clients: new Set(),
 			shuttingDown: false,
 			streamReconstructor: { observe: vi.fn() },
 			invalidateWorkerSnapshot: vi.fn(),
-			refreshWorkerSummaries: vi.fn(async () => undefined),
+			scheduleWorkerSummaryRefresh: vi.fn(),
 			syncAgentPeers: vi.fn(async () => undefined),
 			persistWorkerStopTombstone: vi.fn(),
 			deleteWorkerDescriptor,
@@ -1519,10 +1523,9 @@ describe("daemon worker supervisor monitoring", () => {
 				expect(deleteWorkerDescriptor).not.toHaveBeenCalled();
 				return success(undefined, "kill");
 			}),
-			stopWorkerUntracked,
+			stopWorkerOnce,
 		}) as {
 			workers: typeof workers;
-			workerStopCounts: Map<typeof worker, number>;
 			handleCommand(
 				client: DaemonSocketClient,
 				command: { type: "kill"; activeSessionId: string },
@@ -1533,10 +1536,44 @@ describe("daemon worker supervisor monitoring", () => {
 		await expect(
 			supervisor.handleCommand({} as DaemonSocketClient, { type: "kill", activeSessionId: "root-active" }),
 		).resolves.toEqual(success(undefined, "kill"));
-		expect(stopWorkerUntracked).toHaveBeenCalledWith(worker, true, false, true, false, undefined);
+		expect(stopWorkerOnce).toHaveBeenCalledWith(worker, true, false, true, false, undefined);
 		expect(workers.has(worker.descriptor.workerId)).toBe(false);
 		expect(deleteWorkerDescriptor).toHaveBeenCalledWith(worker);
-		expect(supervisor.workerStopCounts.has(worker)).toBe(false);
+		expect(worker.stopOwnershipCount).toBeUndefined();
+		expect(worker.stopFinalizations).toBeUndefined();
+	});
+
+	it("ignores a root shutdown frame from a replaced worker client", () => {
+		const currentClient = {};
+		const staleClient = {};
+		const worker = {
+			descriptor: { workerId: "worker-current", rootActiveSessionId: "root-active" },
+			client: currentClient,
+			intentionalStop: false,
+		};
+		const deleteWorkerDescriptor = vi.fn();
+		const supervisor = Object.assign(Object.create(DaemonSupervisor.prototype), {
+			workers: new Map([[worker.descriptor.workerId, worker]]),
+			deleteWorkerDescriptor,
+		}) as {
+			handleWorkerFrame(
+				target: typeof worker,
+				frame: PrivateFrame<DaemonWorkerFrameHeader>,
+				sourceClient: object,
+			): void;
+		};
+
+		supervisor.handleWorkerFrame(
+			worker,
+			{
+				header: { kind: "outbound", outboundType: "session_closed", activeSessionId: "root-active" },
+				payload: Buffer.from(JSON.stringify({ type: "session_closed", reason: "shutdown" })),
+			},
+			staleClient,
+		);
+
+		expect(worker.intentionalStop).toBe(false);
+		expect(deleteWorkerDescriptor).not.toHaveBeenCalled();
 	});
 
 	it("cancels an in-flight recovery after an intentional stop tombstone", async () => {

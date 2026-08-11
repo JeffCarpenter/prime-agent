@@ -1,0 +1,1 @@
+- Fixed root-session kills losing authoritative worker cleanup when shutdown completed synchronously ([#1240](https://github.com/PrimeIntellect-ai/prime-agent/pull/1240) by [@sethkarten](https://github.com/sethkarten)).
