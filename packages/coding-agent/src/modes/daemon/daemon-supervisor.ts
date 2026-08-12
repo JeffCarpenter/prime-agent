@@ -1098,7 +1098,12 @@ export class DaemonSupervisor {
 			// current-version hello while refusing every command, so clients can
 			// neither use it nor replace it. Restore the record when no live
 			// successor owns the scope; otherwise surface the original error.
-			if (!isSupervisorGenerationStale(error) || this.shuttingDown || !(await this.restoreOwnershipRecord())) {
+			if (
+				!isSupervisorGenerationStale(error) ||
+				this.shuttingDown ||
+				this.updateRestartPhase !== undefined ||
+				!(await this.restoreOwnershipRecord())
+			) {
 				throw error;
 			}
 			await ownership.assertCurrent();
