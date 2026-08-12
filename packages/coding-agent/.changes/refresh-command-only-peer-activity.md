@@ -1,0 +1,1 @@
+- Fixed daemon peers retaining stale session activity while slash commands execute or finish ([#565](https://github.com/PrimeIntellect-ai/prime-agent/pull/565) by [@snimu](https://github.com/snimu)).

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionMessageAgentSummary } from "../src/core/agent-messages.js";
 import type { SessionSummary } from "../src/modes/daemon/daemon-session-list.js";
 import { DaemonSupervisor } from "../src/modes/daemon/daemon-supervisor.js";
+import type { DaemonWorkerFrameHeader } from "../src/modes/daemon/daemon-worker-protocol.js";
+import type { PrivateFrame } from "../src/modes/session-worker/private-framing.js";
 
 interface Deferred<T = void> {
 	promise: Promise<T>;
@@ -40,8 +42,13 @@ interface SupervisorPeerSyncInternals {
 	agentPeerSyncStats: PeerSyncStats;
 	agentPeerSyncRetryAttempt: number;
 	agentPeerSyncRetryTimer?: ReturnType<typeof setTimeout>;
+	pendingWorkerSummaryRefreshes: Set<PeerWorker>;
+	activeWorkerSummaryRefreshes: Set<PeerWorker>;
 	log: ReturnType<typeof vi.fn>;
 	beginShutdown(): void;
+	handleWorkerFrame(worker: PeerWorker, frame: PrivateFrame<DaemonWorkerFrameHeader>): void;
+	invalidateWorkerSnapshot(worker: PeerWorker, activeSessionId: string, transcriptChanged?: boolean): void;
+	refreshWorkerSummaries(worker: PeerWorker): Promise<void>;
 	resetAgentPeerSyncRetry(): void;
 	scheduleAgentPeerSyncRetry(): void;
 	syncAgentPeers(): Promise<void>;
@@ -121,6 +128,76 @@ function sentPeers(client: PeerClient, call: number): AgentSessionMessageAgentSu
 }
 
 describe("daemon supervisor peer synchronization", () => {
+	it("serializes action-driven summary refreshes and publishes the terminal state", async () => {
+		const firstRefreshReached = deferred();
+		const releaseFirstRefresh = deferred();
+		const resident = worker("worker");
+		const supervisor = createSupervisor([resident]);
+		supervisor.invalidateWorkerSnapshot = vi.fn();
+		const activeSessionId = resident.descriptor.rootActiveSessionId;
+		let refreshCount = 0;
+		let inFlight = 0;
+		let maxInFlight = 0;
+		const publishedUnfinishedCounts: number[] = [];
+		supervisor.refreshWorkerSummaries = vi.fn(async () => {
+			refreshCount++;
+			inFlight++;
+			maxInFlight = Math.max(maxInFlight, inFlight);
+			if (refreshCount === 1) {
+				firstRefreshReached.resolve();
+				await releaseFirstRefresh.promise;
+				resident.summaries.set(
+					activeSessionId,
+					summary("worker", {
+						isSessionActive: true,
+						unfinishedActionCount: 1,
+						sessionActions: {
+							queuedCount: 0,
+							active: { kind: "session_command", phase: "running", label: "/refine" },
+							steering: [],
+							followUps: [],
+						},
+					}),
+				);
+			} else {
+				resident.summaries.set(activeSessionId, summary("worker", { unfinishedActionCount: 0 }));
+			}
+			inFlight--;
+		});
+		supervisor.syncAgentPeers = vi.fn(async () => {
+			publishedUnfinishedCounts.push(resident.summaries.get(activeSessionId)?.unfinishedActionCount ?? -1);
+		});
+		const frame: PrivateFrame<DaemonWorkerFrameHeader> = {
+			header: {
+				kind: "outbound",
+				outboundType: "session_event",
+				activeSessionId,
+				sessionEventType: "session_action_update",
+			},
+			payload: Buffer.from("{}"),
+		};
+
+		supervisor.handleWorkerFrame(resident, frame);
+		await firstRefreshReached.promise;
+		for (let index = 0; index < 20; index++) supervisor.handleWorkerFrame(resident, frame);
+
+		expect(supervisor.refreshWorkerSummaries).toHaveBeenCalledOnce();
+		releaseFirstRefresh.resolve();
+		await vi.waitFor(() => {
+			expect(supervisor.refreshWorkerSummaries).toHaveBeenCalledTimes(2);
+			expect(supervisor.syncAgentPeers).toHaveBeenCalledTimes(2);
+			expect(supervisor.activeWorkerSummaryRefreshes.size).toBe(0);
+		});
+
+		expect(maxInFlight).toBe(1);
+		expect(publishedUnfinishedCounts).toEqual([1, 0]);
+		expect(resident.summaries.get(activeSessionId)).toMatchObject({
+			isSessionActive: false,
+			unfinishedActionCount: 0,
+		});
+		expect(supervisor.pendingWorkerSummaryRefreshes.size).toBe(0);
+	});
+
 	it("coalesces a dirty burst into one follow-up pass with linear send count", async () => {
 		const firstPassReached = deferred();
 		const releaseFirstPass = deferred();

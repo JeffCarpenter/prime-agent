@@ -754,6 +754,8 @@ export class DaemonSupervisor {
 	private commandJournal!: CommandRecoveryJournal;
 	private readonly streamReconstructor = new CompactAssistantStreamReconstructor();
 	private readonly compactCatchupInProgress = new Set<string>();
+	private readonly pendingWorkerSummaryRefreshes = new Set<ResidentWorker>();
+	private readonly activeWorkerSummaryRefreshes = new Set<ResidentWorker>();
 	private agentPeerSyncDirty = false;
 	private agentPeerSyncDrain?: Promise<void>;
 	private agentPeerSyncRetryTimer?: ReturnType<typeof setTimeout>;
@@ -3730,6 +3732,36 @@ export class DaemonSupervisor {
 		}
 	}
 
+	private scheduleWorkerSummaryRefresh(worker: ResidentWorker): void {
+		if (this.shuttingDown || this.isWorkerStopping(worker)) return;
+		this.pendingWorkerSummaryRefreshes.add(worker);
+		if (this.activeWorkerSummaryRefreshes.has(worker)) return;
+		this.activeWorkerSummaryRefreshes.add(worker);
+		void this.drainWorkerSummaryRefresh(worker);
+	}
+
+	private async drainWorkerSummaryRefresh(worker: ResidentWorker): Promise<void> {
+		try {
+			while (
+				!this.shuttingDown &&
+				!this.isWorkerStopping(worker) &&
+				this.pendingWorkerSummaryRefreshes.delete(worker)
+			) {
+				await this.refreshWorkerSummaries(worker);
+				await this.syncAgentPeers();
+			}
+		} catch {
+			// Worker transitions are best-effort; a later event retries the refresh.
+		} finally {
+			this.activeWorkerSummaryRefreshes.delete(worker);
+			if (this.shuttingDown || this.isWorkerStopping(worker)) {
+				this.pendingWorkerSummaryRefreshes.delete(worker);
+			} else if (this.pendingWorkerSummaryRefreshes.has(worker)) {
+				this.scheduleWorkerSummaryRefresh(worker);
+			}
+		}
+	}
+
 	private async familyCatalogEntries(): Promise<AgentFamilyCatalogEntry[]> {
 		const active = [...this.workers.values()].flatMap((worker) => [...worker.summaries.values()]);
 		const activePaths = new Set(
@@ -5364,18 +5396,15 @@ export class DaemonSupervisor {
 		if (decodedOutbound?.type === "session_closed" || decodedOutbound?.type === "session_replaced") {
 			this.clearStartupNotificationState(activeSessionId);
 		}
-		if (outboundType === "session_replaced" || outboundType === "session_closed") {
-			void this.refreshWorkerSummaries(worker)
-				.then(() => this.syncAgentPeers())
-				.catch(() => undefined);
-		} else if (
+		if (
+			outboundType === "session_replaced" ||
+			outboundType === "session_closed" ||
 			sessionEventType === "turn_start" ||
 			sessionEventType === "turn_end" ||
-			sessionEventType === "rlm_child_update"
+			sessionEventType === "rlm_child_update" ||
+			sessionEventType === "session_action_update"
 		) {
-			void this.refreshWorkerSummaries(worker)
-				.then(() => this.syncAgentPeers())
-				.catch(() => undefined);
+			this.scheduleWorkerSummaryRefresh(worker);
 		}
 		if (
 			decodedOutbound?.type === "session_closed" &&
