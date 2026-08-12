@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getProcessStartId } from "../src/core/session-lease.js";
@@ -20,6 +20,11 @@ import {
 } from "../src/modes/daemon/daemon-protocol.js";
 import type { SessionSummary } from "../src/modes/daemon/daemon-session-list.js";
 import { DaemonSupervisor } from "../src/modes/daemon/daemon-supervisor.js";
+import {
+	acquireDaemonShutdownAdmission,
+	DAEMON_SUPERVISOR_REGISTRY_DIR_ENV,
+	getDaemonSupervisorRegistryDir,
+} from "../src/modes/daemon/daemon-supervisor-ownership.js";
 import {
 	DAEMON_WORKER_STARTUP_GATE_COMMIT,
 	DAEMON_WORKER_SUPERVISOR_SOCKET_ENV,
@@ -39,7 +44,7 @@ const workerLaunchTestState = vi.hoisted(() => ({
 	gateMarkerPath: "",
 	tsxCliPath: "",
 	cliEntrypoint: "",
-	spawned: [] as Array<{ child: ChildProcess; args: readonly string[] }>,
+	spawned: [] as Array<{ child: ChildProcess; args: readonly string[]; env: NodeJS.ProcessEnv | undefined }>,
 }));
 
 vi.mock("node:child_process", async (importOriginal) => {
@@ -51,7 +56,7 @@ vi.mock("node:child_process", async (importOriginal) => {
 		spawn(command: string, args: readonly string[], options: SpawnOptions): ChildProcess {
 			const child = actual.spawn(command, args, options);
 			if (workerLaunchTestState.capture) {
-				workerLaunchTestState.spawned.push({ child, args });
+				workerLaunchTestState.spawned.push({ child, args, env: options.env });
 			}
 			return child;
 		},
@@ -115,7 +120,7 @@ vi.mock("../src/core/session-lease.js", async (importOriginal) => {
 	};
 });
 
-const supervisorRegistryDirEnv = "PRIME_AGENT_INTERNAL_DAEMON_SUPERVISOR_REGISTRY_DIR";
+const supervisorRegistryDirEnv = DAEMON_SUPERVISOR_REGISTRY_DIR_ENV;
 const previousSupervisorRegistryDir = process.env[supervisorRegistryDirEnv];
 const supervisorRegistryDirs = new Set<string>();
 
@@ -300,6 +305,35 @@ describe("daemon worker supervisor monitoring", () => {
 			delete process.env[supervisorRegistryDirEnv];
 		} else {
 			process.env[supervisorRegistryDirEnv] = previousSupervisorRegistryDir;
+		}
+	});
+
+	it("resolves relative supervisor registry authority before forwarding it to workers", () => {
+		expect(
+			getDaemonSupervisorRegistryDir({
+				[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV]: "relative-supervisor-registry",
+			}),
+		).toBe(resolve("relative-supervisor-registry"));
+	});
+
+	it("checks shutdown admission in the captured supervisor registry", async () => {
+		const capturedRegistryDir = mkdtempSync(join(tmpdir(), "prime-supervisor-captured-registry-test-"));
+		const changedRegistryDir = mkdtempSync(join(tmpdir(), "prime-supervisor-changed-registry-test-"));
+		supervisorRegistryDirs.add(capturedRegistryDir);
+		supervisorRegistryDirs.add(changedRegistryDir);
+		process.env[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV] = capturedRegistryDir;
+		const admission = await acquireDaemonShutdownAdmission();
+		process.env[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV] = changedRegistryDir;
+		const supervisor = Object.assign(Object.create(DaemonSupervisor.prototype), {
+			supervisorRegistryDir: capturedRegistryDir,
+			ownership: { assertCurrent: vi.fn(async () => undefined) },
+		}) as { assertRecoveryAllowed(): Promise<void> };
+		try {
+			await expect(supervisor.assertRecoveryAllowed()).rejects.toMatchObject({
+				code: "supervisor_recovery_cancelled",
+			});
+		} finally {
+			await admission.release();
 		}
 	});
 
@@ -649,7 +683,9 @@ describe("daemon worker supervisor monitoring", () => {
 		const root = mkdtempSync(join(tmpdir(), "prime-supervisor-committed-gate-test-"));
 		const descriptorDir = join(root, "descriptors");
 		const markerPath = join(root, "startup-marker");
+		const registryDir = join(root, "isolated-supervisor-registry");
 		mkdirSync(descriptorDir, { recursive: true });
+		mkdirSync(registryDir, { recursive: true });
 		supervisorRegistryDirs.add(root);
 		workerLaunchTestState.capture = true;
 		workerLaunchTestState.forceMissingProcessStartId = true;
@@ -674,6 +710,7 @@ describe("daemon worker supervisor monitoring", () => {
 			...createSupervisorSnapshotState(),
 			defaultSessionConfig: { cwd: root, agentDir: root },
 			descriptorDir,
+			supervisorRegistryDir: registryDir,
 			socketPath: join(root, "supervisor.sock"),
 			workers,
 			shuttingDown: false,
@@ -684,16 +721,52 @@ describe("daemon worker supervisor monitoring", () => {
 			syncAgentPeers: vi.fn(async () => undefined),
 			log: vi.fn(),
 		}) as {
-			launchWorker(command: {
-				type: "create";
-				config: { cwd: string; agentDir: string };
-			}): Promise<{ descriptor: { lifecycle: string } }>;
+			launchWorker(
+				command: { type: "create"; config: { cwd: string; agentDir: string }; launchEnv?: Record<string, string> },
+				existing?: {
+					descriptor: {
+						lifecycle: string;
+						createCommand: { type: "create"; config: { cwd: string; agentDir: string } };
+						launchEnv?: Record<string, string>;
+					};
+				},
+				ownerClientId?: string,
+			): Promise<{
+				descriptor: {
+					workerId: string;
+					lifecycle: string;
+					ownerClientId?: string;
+					createCommand: { type: "create"; config: { cwd: string; agentDir: string } };
+				};
+				launchEnv?: Record<string, string>;
+			}>;
 		};
+		process.env[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV] = join(root, "changed-host-registry");
 
-		const worker = await supervisor.launchWorker({ type: "create", config: { cwd: root, agentDir: root } });
+		const worker = await supervisor.launchWorker(
+			{
+				type: "create",
+				config: { cwd: root, agentDir: root },
+				launchEnv: {
+					[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV]: join(root, "untrusted-registry"),
+					SAFE_CALLER_VALUE: "preserved",
+				},
+			},
+			undefined,
+			"client-1",
+		);
+		await supervisor.launchWorker(worker.descriptor.createCommand, worker);
 
+		expect(
+			workerLaunchTestState.spawned.slice(-2).map(({ env }) => env?.[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV]),
+		).toEqual([registryDir, registryDir]);
 		expect(readFileSync(markerPath, "utf8")).toBe("start\n");
-		expect(connectWorker).toHaveBeenCalledOnce();
+		expect(worker.descriptor.ownerClientId).toBe("client-1");
+		expect(worker.launchEnv).toEqual({ SAFE_CALLER_VALUE: "preserved" });
+		expect(readFileSync(join(descriptorDir, `${worker.descriptor.workerId}.json`), "utf8")).not.toContain(
+			DAEMON_SUPERVISOR_REGISTRY_DIR_ENV,
+		);
+		expect(connectWorker).toHaveBeenCalledTimes(2);
 		expect(worker.descriptor.lifecycle).toBe("ready");
 		expect(workers.size).toBe(1);
 		expect(readdirSync(descriptorDir).filter((name) => name.endsWith(".json"))).toHaveLength(1);

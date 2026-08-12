@@ -131,6 +131,8 @@ import {
 } from "./daemon-socket.js";
 import {
 	acquireDaemonSupervisorOwnership,
+	DAEMON_SUPERVISOR_REGISTRY_DIR_ENV,
+	getDaemonSupervisorRegistryDir,
 	isDaemonShutdownAdmissionActive,
 	waitForDaemonStartupFence,
 } from "./daemon-supervisor-ownership.js";
@@ -753,6 +755,8 @@ export class DaemonSupervisor {
 	private readonly sessionInputPauses = new Map<string, SupervisorSessionInputPause>();
 	private readonly signalCleanupHandlers: Array<() => void> = [];
 	private readonly descriptorDir: string;
+	/** Captured from host authority and forwarded to every worker launch. */
+	private readonly supervisorRegistryDir = getDaemonSupervisorRegistryDir();
 	private readonly generation = randomUUID();
 	private readonly supervisorConfigPath: string;
 	private readonly defaultSessionConfig: AgentSessionRuntimeConfig;
@@ -811,13 +815,14 @@ export class DaemonSupervisor {
 				throw new Error("Daemon supervisor config is missing agentDir");
 			}
 			this.socketLease = await acquireDaemonSocketPathLease(this.socketPath);
-			await waitForDaemonStartupFence(this.socketPath);
+			await waitForDaemonStartupFence(this.socketPath, 10_000, this.supervisorRegistryDir);
 			this.ownership = await acquireDaemonSupervisorOwnership({
 				socketPath: this.socketPath,
 				descriptorDir: this.descriptorDir,
 				agentDir,
 				generation: this.generation,
 				appVersion: VERSION,
+				registryDir: this.supervisorRegistryDir,
 			});
 			await prepareDaemonSocketPath(this.socketPath, this.socketLease);
 
@@ -1071,7 +1076,7 @@ export class DaemonSupervisor {
 
 	private async assertRecoveryAllowed(): Promise<void> {
 		await this.assertCurrentOwnership();
-		if (await isDaemonShutdownAdmissionActive()) {
+		if (await isDaemonShutdownAdmissionActive(this.supervisorRegistryDir)) {
 			throw new SupervisorRecoveryCancelledError("Daemon shutdown admission cancelled worker recovery");
 		}
 	}
@@ -2778,7 +2783,11 @@ export class DaemonSupervisor {
 			throw new Error(`Session worker ${existing.descriptor.workerId} recovery was cancelled`);
 		}
 		const recoveryStopRevision = existing?.stopRevision;
-		const launchEnv = command.launchEnv ?? existing?.launchEnv;
+		const requestedLaunchEnv = command.launchEnv ?? existing?.launchEnv;
+		const launchEnv = requestedLaunchEnv ? { ...requestedLaunchEnv } : undefined;
+		if (launchEnv) {
+			delete launchEnv[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV];
+		}
 		const { createCommand, processCwd } = prepareWorkerLaunch(this.defaultSessionConfig, command);
 		const workerId = existing?.descriptor.workerId ?? createActiveSessionId();
 		const rootActiveSessionId = existing?.descriptor.rootActiveSessionId ?? createActiveSessionId();
@@ -2799,6 +2808,8 @@ export class DaemonSupervisor {
 			[DAEMON_WORKER_ACTIVE_SESSION_ID_ENV]: rootActiveSessionId,
 			[DAEMON_WORKER_SUPERVISOR_SOCKET_ENV]: this.socketPath,
 			[DAEMON_WORKER_RECOVERY_JOURNAL_ENV]: recoveryJournalPath,
+			// Host authority, set after inherited and caller launch env so neither can override it.
+			[DAEMON_SUPERVISOR_REGISTRY_DIR_ENV]: this.supervisorRegistryDir,
 			[DAEMON_WORKER_STARTUP_GATE_FD_ENV]: String(WORKER_STARTUP_GATE_FD),
 			[ORPHAN_PROCESS_JOURNAL_ENV]: orphanProcessJournalPath,
 			[SESSION_LEASES_ENABLED_ENV]: "1",

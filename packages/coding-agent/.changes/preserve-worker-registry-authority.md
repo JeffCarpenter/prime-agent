@@ -1,0 +1,1 @@
+- Fixed recovered daemon workers losing their supervisor's registry authority after relaunch ([#1267](https://github.com/PrimeIntellect-ai/prime-agent/pull/1267) by [@sethkarten](https://github.com/sethkarten)).
