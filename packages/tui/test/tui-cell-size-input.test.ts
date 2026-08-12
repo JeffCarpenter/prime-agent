@@ -1,5 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
+import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings.js";
 import { getCellDimensions, resetCapabilitiesCache, setCellDimensions } from "../src/terminal-image.js";
 import { type Component, TUI } from "../src/tui.js";
 import { VirtualTerminal } from "./virtual-terminal.js";
@@ -42,6 +43,30 @@ function withImageTerminal<T>(fn: () => T): T {
 }
 
 describe("TUI cell size responses", () => {
+	it("honors the configured global debug action", () => {
+		setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS, { "tui.debug": "ctrl+x" }));
+		const terminal = new VirtualTerminal(80, 24);
+		const tui = new TUI(terminal);
+		const recorder = new InputRecorder();
+		let debugCount = 0;
+		tui.onDebug = () => {
+			debugCount += 1;
+		};
+		tui.setFocus(recorder);
+		tui.start();
+
+		try {
+			terminal.sendInput("\x18");
+			terminal.sendInput("q");
+
+			assert.equal(debugCount, 1);
+			assert.deepStrictEqual(recorder.inputs, ["q"]);
+		} finally {
+			tui.stop();
+			setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
+		}
+	});
+
 	it("forwards bare escape even when a cell size query was sent at startup", () => {
 		withImageTerminal(() => {
 			const terminal = new VirtualTerminal(80, 24);

@@ -2,6 +2,9 @@ import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.js";
 import { KeybindingsManager } from "../src/core/keybindings.js";
+import type { ResolvedPaths } from "../src/core/package-manager.js";
+import type { SettingsManager } from "../src/core/settings-manager.js";
+import { ConfigSelectorComponent } from "../src/modes/interactive/components/config-selector.js";
 import { ModelSelectorComponent } from "../src/modes/interactive/components/model-selector.js";
 import { OAuthSelectorComponent } from "../src/modes/interactive/components/oauth-selector.js";
 import { PrimeTeamSelectorComponent } from "../src/modes/interactive/components/prime-team-selector.js";
@@ -138,5 +141,73 @@ describe("searchable selector navigation", () => {
 		selector.handleInput("\r");
 
 		expect(enabledModelIds).toEqual([`${harness.models[0]?.provider}/faux-1`]);
+	});
+
+	it("uses configured clear and cancel actions in the scoped model selector", async () => {
+		setKeybindings(
+			new KeybindingsManager({
+				"app.clear": "alt+x",
+				"tui.select.cancel": "alt+y",
+			}),
+		);
+		const harness = await createHarness();
+		harnesses.push(harness);
+		let cancelCount = 0;
+		const selector = new ScopedModelsSelectorComponent(
+			{ allModels: harness.models, enabledModelIds: null },
+			{
+				onChange: () => {},
+				onPersist: () => {},
+				onCancel: () => {
+					cancelCount += 1;
+				},
+			},
+		);
+
+		selector.handleInput("query");
+		selector.handleInput("\x1bx");
+		expect(selector.getSearchInput().getValue()).toBe("");
+		expect(cancelCount).toBe(0);
+
+		selector.handleInput("\x1by");
+		expect(cancelCount).toBe(1);
+	});
+
+	it("uses configured clear and cancel actions in the resource selector", () => {
+		setKeybindings(
+			new KeybindingsManager({
+				"app.clear": "alt+x",
+				"tui.select.cancel": "alt+y",
+			}),
+		);
+		const resolvedPaths: ResolvedPaths = {
+			extensions: [],
+			skills: [],
+			prompts: [],
+			themes: [],
+			diagnostics: [],
+		};
+		let cancelCount = 0;
+		let exitCount = 0;
+		const selector = new ConfigSelectorComponent(
+			resolvedPaths,
+			{} as SettingsManager,
+			process.cwd(),
+			process.cwd(),
+			() => {
+				cancelCount += 1;
+			},
+			() => {
+				exitCount += 1;
+			},
+			() => {},
+		);
+
+		selector.getResourceList().handleInput("\x1bx");
+		expect(exitCount).toBe(1);
+		expect(cancelCount).toBe(0);
+
+		selector.getResourceList().handleInput("\x1by");
+		expect(cancelCount).toBe(1);
 	});
 });
