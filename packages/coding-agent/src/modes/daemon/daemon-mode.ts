@@ -4013,12 +4013,13 @@ export class AgentDaemon {
 						lastEventSequence: result.lastEventSequence,
 					});
 				}
-				this.write(client, success(command.id, "attach", result));
 				this.schedulePendingExtensionUiNotifications(state, client);
-				// Legacy clients reset extension UI while attaching and need the
-				// ordered status replay after the inline attach payload.
-				this.replayExtensionStatusesToClient(client, state);
-				return undefined;
+				setImmediate(() => {
+					// Legacy clients reset extension UI while attaching and need the
+					// ordered status replay after the inline attach response.
+					this.replayExtensionStatusesToClient(client, state);
+				});
+				return success(command.id, "attach", result);
 			}
 
 			case "detach": {

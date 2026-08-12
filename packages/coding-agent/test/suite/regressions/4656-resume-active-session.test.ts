@@ -219,16 +219,15 @@ describe("ENG-4656 active session resume", () => {
 
 		await expect(connection.switchSession("/tmp/target-active.jsonl")).resolves.toEqual({ cancelled: false });
 
-		expect(client.requests.map((request) => request.type)).toEqual(["attach", "switch_session", "reattach"]);
+		expect(client.requests.map((request) => request.type)).toEqual(["attach", "switch_session", "attach", "detach"]);
 		expect(client.requests[2]).toMatchObject({
-			type: "reattach",
-			activeSessionId: sourceActiveSessionId,
-			targetActiveSessionId,
+			type: "attach",
+			activeSessionId: targetActiveSessionId,
 		});
 		const initialAttach = client.requests[0] as Extract<DaemonCommand, { type: "attach" }>;
-		const reattach = client.requests[2] as Extract<DaemonCommand, { type: "reattach" }>;
+		const targetAttach = client.requests[2] as Extract<DaemonCommand, { type: "attach" }>;
 		expect(initialAttach.capabilities).toContain("extension_status_snapshot");
-		expect(reattach.capabilities).toContain("extension_status_snapshot");
+		expect(targetAttach.capabilities).toContain("extension_status_snapshot");
 		await expect(connection.getState()).resolves.toMatchObject({
 			activeSessionId: targetActiveSessionId,
 			sessionId: `${targetActiveSessionId}-session`,

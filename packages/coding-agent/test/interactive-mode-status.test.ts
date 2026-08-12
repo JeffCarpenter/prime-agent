@@ -3356,6 +3356,7 @@ describe("InteractiveMode session switch command catalog", () => {
 				connectionModelsRefreshVersion: 0,
 				bindLocalSessionExtensions: false,
 				uiServices: { getThemes: () => [] },
+				defaultEditor: { onExtensionShortcut: undefined },
 				toolDefinitionCache: { clear: vi.fn() },
 				applyRuntimeSettings: vi.fn(),
 				applyConnectionModelCatalog: vi.fn(),

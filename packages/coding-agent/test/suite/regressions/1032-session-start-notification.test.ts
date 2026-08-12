@@ -639,6 +639,8 @@ function createState(harness: Harness): ActiveSessionState {
 		diagnostics: [],
 		setRuntimeEnvScope: vi.fn(),
 		setSubagentRuntimeHost: vi.fn(),
+		setBeforeSessionReplace: vi.fn(),
+		setSessionReplaceFailed: vi.fn(),
 		setRebindSession: vi.fn(),
 		dispose: vi.fn(async () => {}),
 	} as unknown as AgentSessionRuntime;
