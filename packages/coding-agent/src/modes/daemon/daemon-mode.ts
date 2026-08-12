@@ -6232,6 +6232,9 @@ export class AgentDaemon {
 
 	private createUpdateRestartSession(state: ActiveSessionState): DaemonUpdateRestartSession | undefined {
 		const session = state.runtime.session;
+		if (!session.sessionManager.isPersisted()) {
+			return undefined;
+		}
 		const queue = {
 			actions: session.getSessionActionRecoverySnapshot(),
 			nextTurn: [...session.getPendingNextTurnMessageSnapshots()],
@@ -6251,13 +6254,7 @@ export class AgentDaemon {
 			wasRetrying ||
 			hadAcceptedPromptInFlight ||
 			queue.actions.actions.length > 0;
-		const sessionFile =
-			session.sessionFile ??
-			(hasQueuedMessages || shouldResume
-				? session.sessionManager.materializeSessionFile(
-						state.runtime.runtimeConfig?.sessionDir ?? this.options.defaultSessionConfig.sessionDir,
-					)
-				: undefined);
+		const sessionFile = session.sessionFile;
 		if (!sessionFile || (this.isEmptyDraftContent(state) && !hasQueuedMessages && !shouldResume)) {
 			return undefined;
 		}

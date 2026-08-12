@@ -898,7 +898,7 @@ describe("issue #4257 update restart resume", () => {
 		});
 	});
 
-	it("materializes queued in-memory drafts before update restart", async () => {
+	it("does not materialize queued no-session runs before update restart", async () => {
 		const harness = await createHarness({ persistSession: false });
 		harnesses.push(harness);
 
@@ -914,6 +914,7 @@ describe("issue #4257 update restart resume", () => {
 
 		const sessionDir = `${harness.tempDir}/sessions`;
 		const internals = createDaemonInternals(harness, { sessionDir });
+		const materialize = vi.spyOn(harness.sessionManager, "materializeSessionFile");
 		internals.sessions.set(
 			"active-1",
 			createState(harness, "active-1", { kind: "top-level", createdAt: Date.now() }),
@@ -921,28 +922,20 @@ describe("issue #4257 update restart resume", () => {
 
 		const manifest = await internals.prepareUpdateRestart();
 
-		expect(manifest.sessions).toHaveLength(1);
-		const session = manifest.sessions[0];
-		expect(session?.sessionFile.startsWith(`${sessionDir}/`)).toBe(true);
-		expect(harness.session.sessionFile).toBe(session?.sessionFile);
-		expect(readFileSync(session?.sessionFile ?? "", "utf8")).toContain('"type":"session"');
-		expect(session?.queue.actions.actions).toEqual([
-			expect.objectContaining({
-				queueKey: "heartbeat:job-1",
-				agentMessageId: "agentmsg_followup",
-				payload: expect.objectContaining({ kind: "turn", text: "queued follow-up", content: followUpContent }),
-			}),
-		]);
-		expect(session?.shouldResume).toBe(true);
+		expect(manifest.sessions).toEqual([]);
+		expect(manifest.discardedActiveSessionIds).toEqual(["active-1"]);
+		expect(materialize).not.toHaveBeenCalled();
+		expect(harness.session.sessionFile).toBeUndefined();
 	});
 
-	it("materializes busy in-memory drafts before update restart", async () => {
+	it("does not materialize busy no-session runs before update restart", async () => {
 		const harness = await createHarness({ persistSession: false });
 		harnesses.push(harness);
 		(harness.session.agent.state as { isStreaming: boolean }).isStreaming = true;
 
 		const sessionDir = `${harness.tempDir}/sessions`;
 		const internals = createDaemonInternals(harness, { sessionDir });
+		const materialize = vi.spyOn(harness.sessionManager, "materializeSessionFile");
 		internals.sessions.set(
 			"active-1",
 			createState(harness, "active-1", { kind: "top-level", createdAt: Date.now() }),
@@ -950,15 +943,10 @@ describe("issue #4257 update restart resume", () => {
 
 		const manifest = await internals.prepareUpdateRestart();
 
-		expect(manifest.sessions).toHaveLength(1);
-		const session = manifest.sessions[0];
-		expect(session?.sessionFile.startsWith(`${sessionDir}/`)).toBe(true);
-		expect(harness.session.sessionFile).toBe(session?.sessionFile);
-		expect(session).toMatchObject({
-			shouldResume: true,
-			wasStreaming: true,
-			queue: { actions: { formatVersion: 1, actions: [] }, nextTurn: [] },
-		});
+		expect(manifest.sessions).toEqual([]);
+		expect(manifest.discardedActiveSessionIds).toEqual(["active-1"]);
+		expect(materialize).not.toHaveBeenCalled();
+		expect(harness.session.sessionFile).toBeUndefined();
 	});
 
 	it("restores queued actions through the public recovery API with stable ids and FIFO", async () => {

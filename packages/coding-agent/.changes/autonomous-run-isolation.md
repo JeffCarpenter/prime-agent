@@ -1,1 +1,3 @@
 - Added security and sandboxing guidance for unattended runs and kept `--no-session` RLM descendants ephemeral ([#1251](https://github.com/PrimeIntellect-ai/prime-agent/pull/1251) by [@sethkarten](https://github.com/sethkarten)).
+- Fixed daemon update restarts persisting `--no-session` runs.
+- Fixed forks before the first user prompt failing private session-file validation.
