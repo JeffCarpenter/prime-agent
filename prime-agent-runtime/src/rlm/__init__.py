@@ -147,21 +147,23 @@ def _spawn_handle_from_payload(payload: Any) -> RLMSpawnHandle:
 
 
 def _resolve_host_request_timeout_ms(timeout_ms: int | None) -> int:
-    value: object = os.environ.get(HOST_REQUEST_TIMEOUT_ENV) if timeout_ms is None else timeout_ms
-    if value is None:
-        return DEFAULT_HOST_REQUEST_TIMEOUT_MS
-    if isinstance(value, str):
+    if timeout_ms is not None:
+        if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int):
+            raise TypeError("timeout_ms must be an int")
+        value = timeout_ms
+        name = "timeout_ms"
+    else:
+        raw_value = os.environ.get(HOST_REQUEST_TIMEOUT_ENV)
+        if raw_value is None:
+            return DEFAULT_HOST_REQUEST_TIMEOUT_MS
         try:
-            value = int(value)
+            value = int(raw_value)
         except ValueError as error:
             raise ValueError(
                 f"{HOST_REQUEST_TIMEOUT_ENV} must be an integer from 1 to {MAX_HOST_REQUEST_TIMEOUT_MS}"
             ) from error
-    if isinstance(value, bool) or not isinstance(value, int):
-        name = "timeout_ms" if timeout_ms is not None else HOST_REQUEST_TIMEOUT_ENV
-        raise TypeError(f"{name} must be an int")
+        name = HOST_REQUEST_TIMEOUT_ENV
     if value < 1 or value > MAX_HOST_REQUEST_TIMEOUT_MS:
-        name = "timeout_ms" if timeout_ms is not None else HOST_REQUEST_TIMEOUT_ENV
         raise ValueError(f"{name} must be from 1 to {MAX_HOST_REQUEST_TIMEOUT_MS}")
     return value
 
@@ -191,6 +193,9 @@ async def host_request(
     resolved_timeout_ms = _resolve_host_request_timeout_ms(timeout_ms)
     if Comm is None:
         raise RuntimeError("Jupyter comm support is unavailable in this kernel")
+    # The warm forkserver imports this module before IPython creates its shell.
+    # Retry here so every child installs ownership tracking once the shell exists.
+    _install_host_request_task_tracking()
     _install_control_comm_handlers()
 
     loop = asyncio.get_running_loop()
@@ -240,7 +245,21 @@ async def host_request(
 
         _schedule(_resolve_unexpected)
 
+    def _on_close(_msg: dict[str, Any]) -> None:
+        def _resolve_closed() -> None:
+            if not future.done():
+                future.set_exception(
+                    RuntimeError(
+                        f'host request "{request_type}" Comm closed before a reply was received'
+                    )
+                )
+
+        _schedule(_resolve_closed)
+
     comm.on_msg(_on_msg)
+    on_close = getattr(comm, "on_close", None)
+    if callable(on_close):
+        on_close(_on_close)
     try:
         # Reserved bridge metadata and request_type go last so payload keys
         # cannot change the deadline or reroute the request.
@@ -252,14 +271,16 @@ async def host_request(
                 "type": request_type,
             }
         )
-        try:
-            return await asyncio.wait_for(future, resolved_timeout_ms / 1000)
-        except asyncio.TimeoutError as error:
+        done, _pending = await asyncio.wait(
+            {future}, timeout=resolved_timeout_ms / 1000
+        )
+        if future not in done:
             raise TimeoutError(
                 f'host request "{request_type}" timed out after {resolved_timeout_ms}ms; '
                 "its outcome is unknown because the request, handler, or reply may have stalled; "
                 "inspect host state before retrying"
-            ) from error
+            )
+        return future.result()
     finally:
         if not future.done():
             future.cancel()
@@ -267,6 +288,11 @@ async def host_request(
             comm.on_msg(None)
         except Exception:
             pass
+        if callable(on_close):
+            try:
+                on_close(None)
+            except Exception:
+                pass
         try:
             comm.close()
         except Exception:

@@ -82,7 +82,7 @@ describe("KernelManager host request deadlines", () => {
 			expect(replies[0]).toEqual({
 				status: "error",
 				error_type: "timeout",
-				error: 'host request "goal.complete" timed out after 10ms',
+				error: 'host request "goal.complete" timed out after 10ms; its outcome is unknown because the request, handler, or reply may have stalled; inspect host state before retrying',
 			});
 			expect(signal?.aborted).toBe(true);
 			expect(kernel.inFlightHostRequests.size).toBe(0);
@@ -92,6 +92,71 @@ describe("KernelManager host request deadlines", () => {
 			expect(replies).toHaveLength(1);
 		} finally {
 			release({});
+			await manager.dispose();
+		}
+	});
+
+	it("bounds a stalled success reply and clears all request bookkeeping", async () => {
+		vi.useFakeTimers();
+		const manager = new KernelManager({
+			hostHandlers: { "goal.get": async () => ({ goal: { status: "active" } }) },
+		});
+		const kernel = manager as unknown as KernelHostRequestTestApi;
+		const replies: Record<string, unknown>[] = [];
+		let sends = 0;
+		kernel.sendCommMessage = async (_commId, data) => {
+			sends += 1;
+			if (sends === 1) await new Promise<void>(() => {});
+			replies.push(data);
+		};
+
+		try {
+			kernel.handleCommMessage(
+				commOpen("comm-stalled-success-reply", {
+					type: "goal.get",
+					_prime_agent_timeout_ms: 10,
+				}),
+			);
+			await vi.advanceTimersByTimeAsync(10);
+			for (let i = 0; i < 10 && kernel.inFlightHostRequests.size > 0; i++) await Promise.resolve();
+
+			expect(sends).toBe(2);
+			expect(replies).toEqual([
+				{
+					status: "error",
+					error_type: "timeout",
+					error: 'host request "goal.get" timed out after 10ms; its outcome is unknown because the request, handler, or reply may have stalled; inspect host state before retrying',
+				},
+			]);
+			expect(kernel.inFlightHostRequests.size).toBe(0);
+			expect(kernel.hostRequestsByCommId.size).toBe(0);
+		} finally {
+			vi.useRealTimers();
+			await manager.dispose();
+		}
+	});
+
+	it("bounds a stalled error reply and clears all request bookkeeping", async () => {
+		vi.useFakeTimers();
+		const manager = new KernelManager({
+			hostHandlers: {
+				"goal.get": async () => {
+					throw new Error("handler failed");
+				},
+			},
+		});
+		const kernel = manager as unknown as KernelHostRequestTestApi;
+		kernel.sendCommMessage = async () => new Promise<void>(() => {});
+
+		try {
+			kernel.handleCommMessage(commOpen("comm-stalled-error-reply", { type: "goal.get" }));
+			await vi.advanceTimersByTimeAsync(1_000);
+			for (let i = 0; i < 10 && kernel.inFlightHostRequests.size > 0; i++) await Promise.resolve();
+
+			expect(kernel.inFlightHostRequests.size).toBe(0);
+			expect(kernel.hostRequestsByCommId.size).toBe(0);
+		} finally {
+			vi.useRealTimers();
 			await manager.dispose();
 		}
 	});

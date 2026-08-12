@@ -36,6 +36,7 @@ const IOPUB_SUBSCRIBE_DELAY_MS = 50;
 const DEFAULT_MAX_OUTPUT_CHARS = 65536;
 const HOST_REQUEST_DISPOSE_TIMEOUT_MS = 5000;
 const KERNEL_SHUTDOWN_TIMEOUT_MS = 5000;
+const HOST_REQUEST_REPLY_TIMEOUT_MS = 1000;
 const DEFAULT_HOST_REQUEST_TIMEOUT_MS = 120_000;
 const MAX_HOST_REQUEST_TIMEOUT_MS = 3_600_000;
 const HOST_REQUEST_TIMEOUT_FIELD = "_prime_agent_timeout_ms";
@@ -477,7 +478,9 @@ interface InFlightHostRequest {
 
 class HostRequestTimeoutError extends Error {
 	constructor(requestType: string, timeoutMs: number) {
-		super(`host request "${requestType}" timed out after ${timeoutMs}ms`);
+		super(
+			`host request "${requestType}" timed out after ${timeoutMs}ms; its outcome is unknown because the request, handler, or reply may have stalled; inspect host state before retrying`,
+		);
 		this.name = "HostRequestTimeoutError";
 	}
 }
@@ -1748,13 +1751,7 @@ export class KernelManager {
 
 			const result = await this.handleHostRequest(envelope, controller.signal);
 			if (request.closed) return;
-			try {
-				await this.sendCommMessage(commId, { status: "ok", ...result });
-			} catch (replyError) {
-				this.appendKernelDiagnostic(
-					`failed to send host request ok reply for comm ${commId}: ${errorMessage(replyError)}`,
-				);
-			}
+			await this.sendHostRequestReply(commId, { status: "ok", ...result }, controller.signal);
 		} catch (error) {
 			if (request?.closed) return;
 			this.appendKernelDiagnostic(`host request failed for comm ${commId}: ${errorMessage(error)}`);
@@ -1765,11 +1762,15 @@ export class KernelManager {
 						? { error_type: "aborted" }
 						: {};
 			try {
-				await this.sendCommMessage(commId, {
-					status: "error",
-					...errorType,
-					error: errorMessage(error),
-				});
+				await this.sendHostRequestReply(
+					commId,
+					{
+						status: "error",
+						...errorType,
+						error: errorMessage(error),
+					},
+					request && !request.controller.signal.aborted ? request.controller.signal : undefined,
+				);
 			} catch (replyError) {
 				this.appendKernelDiagnostic(
 					`failed to send host request error reply for comm ${commId}: ${errorMessage(replyError)}`,
@@ -1814,6 +1815,27 @@ export class KernelManager {
 		}
 		const msg = buildMessage("comm_msg", { comm_id: commId, data }, this.session, this.options.username);
 		await channel.send(encode(msg, this.connection.key));
+	}
+
+	private async sendHostRequestReply(
+		commId: string,
+		data: Record<string, unknown>,
+		signal?: AbortSignal,
+	): Promise<void> {
+		let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_resolve, reject) => {
+			timeout = globalThis.setTimeout(
+				() => reject(new Error(`host request reply send timed out after ${HOST_REQUEST_REPLY_TIMEOUT_MS}ms`)),
+				HOST_REQUEST_REPLY_TIMEOUT_MS,
+			);
+			if (timeout && typeof timeout === "object" && "unref" in timeout) timeout.unref();
+		});
+		const boundedSend = Promise.race([this.sendCommMessage(commId, data), timeoutPromise]);
+		try {
+			await (signal ? raceHostRequestWithAbort(boundedSend, signal) : boundedSend);
+		} finally {
+			if (timeout) globalThis.clearTimeout(timeout);
+		}
 	}
 
 	private async interrupt(): Promise<void> {

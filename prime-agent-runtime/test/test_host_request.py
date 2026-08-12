@@ -18,6 +18,8 @@ class FakeComm:
         self.primary = primary
         self.callback = None
         self.last_callback = None
+        self.close_callback = None
+        self.last_close_callback = None
         self.open_data: dict[str, object] | None = None
         self.closed = False
         self.__class__.instances.append(self)
@@ -26,6 +28,11 @@ class FakeComm:
         self.callback = callback
         if callback is not None:
             self.last_callback = callback
+
+    def on_close(self, callback) -> None:
+        self.close_callback = callback
+        if callback is not None:
+            self.last_close_callback = callback
 
     def open(self, *, data: dict[str, object]) -> None:
         self.open_data = data
@@ -36,6 +43,10 @@ class FakeComm:
     def deliver(self, data: dict[str, object]) -> None:
         if self.callback is not None:
             self.callback({"content": {"data": data}})
+
+    def deliver_close(self) -> None:
+        if self.close_callback is not None:
+            self.close_callback({"content": {}})
 
 
 class HostRequestTest(unittest.TestCase):
@@ -69,6 +80,7 @@ class HostRequestTest(unittest.TestCase):
         )
         self.assertTrue(comm.closed)
         self.assertIsNone(comm.callback)
+        self.assertIsNone(comm.close_callback)
 
     def test_times_out_a_lost_host_request_and_closes_the_comm(self) -> None:
         async def run() -> None:
@@ -101,14 +113,35 @@ class HostRequestTest(unittest.TestCase):
                     {
                         "status": "error",
                         "error_type": "timeout",
-                        "error": 'host request "rlm.run" timed out after 100ms',
+                        "error": "host deadline fired exactly",
                     }
                 )
-                with self.assertRaisesRegex(TimeoutError, "rlm.run"):
+                with self.assertRaises(TimeoutError) as raised:
                     await request
+                self.assertEqual(str(raised.exception), "host deadline fired exactly")
 
         asyncio.run(run())
         self.assertTrue(FakeComm.instances[0].closed)
+
+    def test_host_close_settles_the_request_before_its_deadline(self) -> None:
+        async def run() -> None:
+            with (
+                patch.object(rlm_module, "Comm", FakeComm),
+                patch.object(rlm_module, "_install_control_comm_handlers"),
+            ):
+                request = asyncio.create_task(
+                    rlm_module.host_request("goal.get", timeout_ms=1_000)
+                )
+                await asyncio.sleep(0)
+                FakeComm.instances[0].deliver_close()
+                with self.assertRaisesRegex(RuntimeError, "Comm closed before a reply"):
+                    await request
+
+        asyncio.run(run())
+        comm = FakeComm.instances[0]
+        self.assertTrue(comm.closed)
+        self.assertIsNone(comm.callback)
+        self.assertIsNone(comm.close_callback)
 
     def test_ignores_a_reply_that_arrives_after_timeout(self) -> None:
         loop_errors: list[dict[str, object]] = []
@@ -174,7 +207,7 @@ class HostRequestTest(unittest.TestCase):
         asyncio.run(run())
 
     def test_validates_per_call_and_environment_timeout_bounds(self) -> None:
-        invalid_call_values = (0, -1, 3_600_001, True, 1.5)
+        invalid_call_values = (0, -1, 3_600_001, True, 1.5, "25")
         for value in invalid_call_values:
             with self.subTest(timeout_ms=value):
                 with self.assertRaises((TypeError, ValueError)):
@@ -222,6 +255,47 @@ class HostRequestTest(unittest.TestCase):
                 "type": "goal.get",
             },
         )
+
+    def test_retries_task_tracking_after_a_warm_fork_import(self) -> None:
+        class FakeEvents:
+            def __init__(self) -> None:
+                self.registered: list[tuple[str, object]] = []
+
+            def register(self, name, callback) -> None:
+                self.registered.append((name, callback))
+
+            def unregister(self, name, callback) -> None:
+                self.registered.remove((name, callback))
+
+        class FakeShell:
+            def __init__(self) -> None:
+                self.events = FakeEvents()
+
+        async def run() -> None:
+            shell = FakeShell()
+            with (
+                patch.object(rlm_module, "Comm", FakeComm),
+                patch.object(rlm_module, "get_ipython", return_value=shell),
+                patch.object(rlm_module, "_install_control_comm_handlers"),
+                patch.object(rlm_module, "_host_request_task_tracking_installed", False),
+                patch.object(rlm_module, "_host_request_execution_task", None),
+            ):
+                request = asyncio.create_task(
+                    rlm_module.host_request("goal.get", timeout_ms=100)
+                )
+                await asyncio.sleep(0)
+                self.assertTrue(rlm_module._host_request_task_tracking_installed)
+                self.assertEqual(
+                    [name for name, _callback in shell.events.registered],
+                    ["pre_run_cell", "post_run_cell"],
+                )
+                self.assertFalse(
+                    FakeComm.instances[0].open_data["_prime_agent_execution_owned"]
+                )
+                FakeComm.instances[0].deliver({"status": "ok"})
+                await request
+
+        asyncio.run(run())
 
 
 if __name__ == "__main__":
