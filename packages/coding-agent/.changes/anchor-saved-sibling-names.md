@@ -1,0 +1,1 @@
+- Fixed saved sibling validation and name reservations treating equivalent relative parent paths as different families ([#1262](https://github.com/PrimeIntellect-ai/prime-agent/pull/1262) by [@sethkarten](https://github.com/sethkarten)).
