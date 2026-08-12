@@ -1,0 +1,1 @@
+- Fixed `prime-agent update` failing with `EALLOWREMOTE` on npm 12 when the release is installed from its tarball URL ([#1272](https://github.com/PrimeIntellect-ai/prime-agent/pull/1272) by [@smwbev](https://github.com/smwbev)).
