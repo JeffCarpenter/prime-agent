@@ -28,6 +28,7 @@ import type {
 import {
 	clampThinkingLevel,
 	cleanupSessionResources,
+	extractStreamFailureInfo,
 	getSupportedThinkingLevels,
 	isContextOverflow,
 	isQuotaExhaustionMessage,
@@ -550,6 +551,11 @@ interface ProviderQuotaFailure {
 	status?: number;
 	requestId?: string;
 	errorMessage: string;
+}
+
+export interface ProviderQuotaOperationRegistration {
+	epoch: number;
+	release(): void;
 }
 
 type ProviderQuotaCircuitEntry =
@@ -1275,6 +1281,9 @@ export class AgentSession {
 	/** Latest recap for this session, written by the daemon summarizer; read by a parent to label its child snapshots. */
 	private _currentRecap?: string;
 	private _providerQuotaFailure?: ProviderQuotaFailure;
+	private _providerQuotaEpoch = 0;
+	private _providerQuotaRunEpoch?: number;
+	private readonly _providerQuotaOperationAborters = new Set<() => void>();
 
 	private _modelRegistry: ModelRegistry;
 
@@ -3662,6 +3671,9 @@ export class AgentSession {
 	}
 
 	private async _processAgentEvent(event: AgentEvent): Promise<void> {
+		if (event.type === "agent_start") {
+			this._providerQuotaRunEpoch = this._familyRootSession()._providerQuotaEpoch;
+		}
 		let clearedDispatchEnded = false;
 		if ((event.type === "message_start" || event.type === "message_end") && event.message.role === "toolResult") {
 			this._applyLateIpythonSentAgentMessages(event.message);
@@ -3737,9 +3749,7 @@ export class AgentSession {
 				this._lastAssistantMessage = event.message;
 
 				const assistantMsg = event.message as AssistantMessage;
-				if (this._isProviderQuotaExhausted(assistantMsg)) {
-					this._tripProviderQuotaCircuit(assistantMsg);
-				}
+				this.recordProviderFailure(assistantMsg, undefined, this._providerQuotaRunEpoch);
 				if (assistantMsg.stopReason !== "error") {
 					addAutonomousUsage(this._autonomousState, assistantMsg.usage);
 				}
@@ -7590,7 +7600,13 @@ export class AgentSession {
 		let result = extensionCompaction;
 		if (!result) {
 			this._assertProviderQuotaCircuitClosed();
-			result = await compact(preparation, model, apiKey, headers, customInstructions, signal, this.thinkingLevel);
+			const quotaEpoch = this._familyRootSession()._providerQuotaEpoch;
+			try {
+				result = await compact(preparation, model, apiKey, headers, customInstructions, signal, this.thinkingLevel);
+			} catch (error) {
+				this.recordProviderFailure(error, model, quotaEpoch);
+				throw error;
+			}
 		}
 		const { summary, firstKeptEntryId, tokensBefore, details } = result;
 
@@ -8031,17 +8047,23 @@ export class AgentSession {
 		}
 		const { apiKey, headers } = await this._getRequiredRequestAuth(model);
 		this._assertProviderQuotaCircuitClosed();
-		return reviewAutoRefine(
-			this.agent.state.messages,
-			this._loadMergedHarnessState(),
-			this._loadRefinementHistory(),
-			model,
-			apiKey,
-			context,
-			headers,
-			signal,
-			this.thinkingLevel,
-		);
+		const quotaEpoch = this._familyRootSession()._providerQuotaEpoch;
+		try {
+			return await reviewAutoRefine(
+				this.agent.state.messages,
+				this._loadMergedHarnessState(),
+				this._loadRefinementHistory(),
+				model,
+				apiKey,
+				context,
+				headers,
+				signal,
+				this.thinkingLevel,
+			);
+		} catch (error) {
+			this.recordProviderFailure(error, model, quotaEpoch);
+			throw error;
+		}
 	}
 
 	/** Global harness state overlaid with this session's local state, when persisted. */
@@ -8271,17 +8293,24 @@ export class AgentSession {
 			}
 		}
 		if (!options.rollbackId) this._assertProviderQuotaCircuitClosed();
-		const plan = await planRefinement(
-			this.agent.state.messages,
-			planningState,
-			history,
-			model,
-			requestAuth?.apiKey ?? "",
-			options,
-			requestAuth?.headers,
-			signal,
-			this.thinkingLevel,
-		);
+		const quotaEpoch = this._familyRootSession()._providerQuotaEpoch;
+		let plan: RefinementPlan;
+		try {
+			plan = await planRefinement(
+				this.agent.state.messages,
+				planningState,
+				history,
+				model,
+				requestAuth?.apiKey ?? "",
+				options,
+				requestAuth?.headers,
+				signal,
+				this.thinkingLevel,
+			);
+		} catch (error) {
+			if (!options.rollbackId) this.recordProviderFailure(error, model, quotaEpoch);
+			throw error;
+		}
 		if (this._disposed || signal.aborted) {
 			throw new Error("Refinement cancelled because the session was disposed.");
 		}
@@ -9544,8 +9573,33 @@ export class AgentSession {
 		if (failure) throw new Error(this._formatProviderQuotaFailure(failure));
 	}
 
-	private _appendProviderQuotaNotice(failure: ProviderQuotaFailure): void {
-		const content = this._formatProviderQuotaFailure(failure);
+	assertProviderQuotaCircuitClosed(): void {
+		this._assertProviderQuotaCircuitClosed();
+	}
+
+	registerProviderQuotaOperation(abort: () => void): ProviderQuotaOperationRegistration {
+		const root = this._familyRootSession();
+		this._assertProviderQuotaCircuitClosed();
+		root._providerQuotaOperationAborters.add(abort);
+		try {
+			this._assertProviderQuotaCircuitClosed();
+		} catch (error) {
+			root._providerQuotaOperationAborters.delete(abort);
+			abort();
+			throw error;
+		}
+		let released = false;
+		return {
+			epoch: root._providerQuotaEpoch,
+			release: () => {
+				if (released) return;
+				released = true;
+				root._providerQuotaOperationAborters.delete(abort);
+			},
+		};
+	}
+
+	private _persistProviderQuotaTrip(failure: ProviderQuotaFailure): void {
 		try {
 			this.sessionManager.appendCustomEntryWithRollback(PROVIDER_QUOTA_CIRCUIT_CUSTOM_TYPE, {
 				state: "tripped",
@@ -9554,6 +9608,11 @@ export class AgentSession {
 		} catch {
 			// The in-memory circuit remains authoritative if persistence is unavailable.
 		}
+	}
+
+	private _appendProviderQuotaNotice(failure: ProviderQuotaFailure): void {
+		const content = this._formatProviderQuotaFailure(failure);
+		this._persistProviderQuotaTrip(failure);
 		const message = {
 			role: "custom" as const,
 			customType: PROVIDER_QUOTA_NOTICE_CUSTOM_TYPE,
@@ -9578,6 +9637,8 @@ export class AgentSession {
 
 	private _failClosedForProviderQuota(failure: ProviderQuotaFailure): void {
 		const error = new Error(this._formatProviderQuotaFailure(failure));
+		for (const abort of this._providerQuotaOperationAborters) abort();
+		this._providerQuotaOperationAborters.clear();
 		this.requestAbort();
 		this._cancelSessionActions(sessionActionUsesProvider, error);
 		this.agent.clearAllQueues();
@@ -9592,37 +9653,76 @@ export class AgentSession {
 		this._emitQueueUpdate();
 	}
 
-	private _tripProviderQuotaCircuit(message: AssistantMessage): void {
+	private _tripProviderQuotaFailure(failure: ProviderQuotaFailure, epoch?: number): void {
 		const root = this._familyRootSession();
+		if (epoch !== undefined && epoch !== root._providerQuotaEpoch) return;
 		if (root._providerQuotaFailure) return;
-		const details = this._getProviderStreamFailureDetails(message);
-		const rawStatus = details?.status;
-		const status =
-			typeof rawStatus === "number"
-				? rawStatus
-				: typeof rawStatus === "string" && Number.isInteger(Number(rawStatus))
-					? Number(rawStatus)
-					: undefined;
-		const rawRequestId = details?.requestId;
-		const failure: ProviderQuotaFailure = {
-			timestamp: Date.now(),
-			sessionId: this.sessionId,
-			...(this.sessionName ? { sessionName: this.sessionName } : {}),
-			...(this._rlmParentNodeId ? { childId: this._rlmParentNodeId } : {}),
-			provider: message.provider,
-			model: message.model,
-			...(status !== undefined ? { status } : {}),
-			...(typeof rawRequestId === "string" ? { requestId: rawRequestId } : {}),
-			errorMessage: message.errorMessage ?? "Provider quota exhausted",
-		};
 		root._providerQuotaFailure = failure;
 		root._appendProviderQuotaNotice(failure);
 		root._failClosedForProviderQuota(failure);
 	}
 
+	private _providerQuotaFailureFor(
+		model: { provider: string; id?: string; model?: string },
+		errorMessage: string,
+		details?: { status?: number; requestId?: string },
+	): ProviderQuotaFailure {
+		return {
+			timestamp: Date.now(),
+			sessionId: this.sessionId,
+			...(this.sessionName ? { sessionName: this.sessionName } : {}),
+			...(this._rlmParentNodeId ? { childId: this._rlmParentNodeId } : {}),
+			provider: model.provider,
+			model: model.model ?? model.id ?? "unknown",
+			...(details?.status !== undefined ? { status: details.status } : {}),
+			...(details?.requestId ? { requestId: details.requestId } : {}),
+			errorMessage,
+		};
+	}
+
+	recordProviderFailure(
+		failure: unknown,
+		model: { provider: string; id: string } | undefined = this.model,
+		epoch?: number,
+	): void {
+		if (typeof failure === "object" && failure !== null && "role" in failure && failure.role === "assistant") {
+			const message = failure as AssistantMessage;
+			if (!this._isProviderQuotaExhausted(message)) return;
+			const details = this._getProviderStreamFailureDetails(message);
+			const rawStatus = details?.status;
+			const status =
+				typeof rawStatus === "number"
+					? rawStatus
+					: typeof rawStatus === "string" && Number.isInteger(Number(rawStatus))
+						? Number(rawStatus)
+						: undefined;
+			const rawRequestId = details?.requestId;
+			this._tripProviderQuotaFailure(
+				this._providerQuotaFailureFor(message, message.errorMessage ?? "Provider quota exhausted", {
+					...(status !== undefined ? { status } : {}),
+					...(typeof rawRequestId === "string" ? { requestId: rawRequestId } : {}),
+				}),
+				epoch,
+			);
+			return;
+		}
+		if (!model) return;
+		const info = extractStreamFailureInfo(failure);
+		const errorMessage = failure instanceof Error ? failure.message : String(failure);
+		if (info.kind !== "quota" && !isQuotaExhaustionMessage(errorMessage)) return;
+		this._tripProviderQuotaFailure(
+			this._providerQuotaFailureFor(model, errorMessage, {
+				...(info.status !== undefined ? { status: info.status } : {}),
+				...(info.requestId ? { requestId: info.requestId } : {}),
+			}),
+			epoch,
+		);
+	}
+
 	private _resetProviderQuotaCircuit(): void {
 		const root = this._familyRootSession();
 		if (!root._providerQuotaFailure) return;
+		root._providerQuotaEpoch++;
 		try {
 			root.sessionManager.appendCustomEntryWithRollback(PROVIDER_QUOTA_CIRCUIT_CUSTOM_TYPE, {
 				state: "reset",
@@ -11042,7 +11142,7 @@ export class AgentSession {
 			return false;
 		}
 
-		if (this._isStructuredPermanentProviderRetryExhausted(message)) {
+		if (this._isPermanentProviderRetryExhausted(message)) {
 			return false;
 		}
 
@@ -11824,19 +11924,28 @@ export class AgentSession {
 				const model = this.model!;
 				const { apiKey, headers } = await this._getRequiredRequestAuth(model);
 				const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
-				const result = await generateBranchSummary(entriesToSummarize, {
-					model,
-					apiKey,
-					headers,
-					signal: this._branchSummaryAbortController.signal,
-					customInstructions,
-					replaceInstructions,
-					reserveTokens: branchSummarySettings.reserveTokens,
-				});
+				this._assertProviderQuotaCircuitClosed();
+				const quotaEpoch = this._familyRootSession()._providerQuotaEpoch;
+				let result: Awaited<ReturnType<typeof generateBranchSummary>>;
+				try {
+					result = await generateBranchSummary(entriesToSummarize, {
+						model,
+						apiKey,
+						headers,
+						signal: this._branchSummaryAbortController.signal,
+						customInstructions,
+						replaceInstructions,
+						reserveTokens: branchSummarySettings.reserveTokens,
+					});
+				} catch (error) {
+					this.recordProviderFailure(error, model, quotaEpoch);
+					throw error;
+				}
 				if (result.aborted) {
 					return { cancelled: true, aborted: true };
 				}
 				if (result.error) {
+					this.recordProviderFailure(new Error(result.error), model, quotaEpoch);
 					throw new Error(result.error);
 				}
 				summaryText = result.summary;
@@ -11897,6 +12006,10 @@ export class AgentSession {
 			this._restoreLateIpythonSentAgentMessages();
 			this._reloadGoalStateFromBranch();
 			this._reloadRlmMaxDepthFromBranch();
+			const providerQuotaFailure = this._providerQuotaCircuitFailure();
+			if (providerQuotaFailure && this._familyRootSession() === this) {
+				this._persistProviderQuotaTrip(providerQuotaFailure);
+			}
 			this._invalidateQueuedPromptPreparation();
 
 			await this._extensionRunner.emit({

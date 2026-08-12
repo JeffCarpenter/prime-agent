@@ -3,6 +3,7 @@ import { type AssistantMessage, fauxAssistantMessage } from "@earendil-works/pi-
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession } from "../../src/core/agent-session.js";
 import { SessionManager } from "../../src/core/session-manager.js";
+import { startSideQuestion } from "../../src/core/side-question.js";
 import { createHarness, getUserTexts, type Harness } from "./harness.js";
 import { createDeferred, withStreaming } from "./scheduling.js";
 
@@ -94,6 +95,48 @@ describe("AgentSession financial safety", () => {
 
 		expect(harness.session.isProviderQuotaCircuitOpen).toBe(true);
 		expect(harness.faux.state.callCount).toBe(0);
+	});
+
+	it("ignores a late failure from the provider epoch that an explicit retry replaced", async () => {
+		const harness = await createHarness();
+		harnesses.push(harness);
+		const abort = vi.fn();
+		const staleFailure = providerFailure("quota", "You've hit your session limit", "req_stale_epoch");
+		const operation = harness.session.registerProviderQuotaOperation(abort);
+
+		harness.session.recordProviderFailure(staleFailure, undefined, operation.epoch);
+		expect(abort).toHaveBeenCalledOnce();
+		expect(harness.session.isProviderQuotaCircuitOpen).toBe(true);
+
+		harness.setResponses([fauxAssistantMessage("recovered")]);
+		await harness.session.prompt("retry explicitly");
+		expect(harness.session.isProviderQuotaCircuitOpen).toBe(false);
+
+		harness.session.recordProviderFailure(staleFailure, undefined, operation.epoch);
+		expect(harness.session.isProviderQuotaCircuitOpen).toBe(false);
+	});
+
+	it("contains quota failures from side-question model calls", async () => {
+		const harness = await createHarness();
+		harnesses.push(harness);
+		harness.setResponses([providerFailure("quota", "You've hit your session limit", "req_side_question")]);
+		let operation: ReturnType<AgentSession["registerProviderQuotaOperation"]> | undefined;
+		const run = startSideQuestion(harness.session.agent, "quota-side-question", "Will this stop?", () => {}, [], {
+			onAssistantMessage: (message) => harness.session.recordProviderFailure(message, undefined, operation?.epoch),
+		});
+		operation = harness.session.registerProviderQuotaOperation(() => run.abort());
+
+		try {
+			await run.done;
+		} finally {
+			operation.release();
+		}
+
+		expect(harness.faux.state.callCount).toBe(1);
+		expect(harness.session.isProviderQuotaCircuitOpen).toBe(true);
+		await expect(harness.session.prompt("automatic follow-up", { automatic: true })).rejects.toThrow(
+			/req_side_question/,
+		);
 	});
 
 	it("allows inference-free refinement rollback while the quota circuit is open", async () => {

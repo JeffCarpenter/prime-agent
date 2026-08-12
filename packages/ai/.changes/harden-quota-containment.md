@@ -1,0 +1,1 @@
+- Added terminal quota and credit exhaustion classification while preserving transient throttling behavior ([#795](https://github.com/PrimeIntellect-ai/prime-agent/pull/795) by [@kcoopermiller](https://github.com/kcoopermiller)).

@@ -145,6 +145,7 @@ export interface GenerateAgentStatusParams {
 	messages: readonly AgentMessage[];
 	isWorking: boolean;
 	signal?: AbortSignal;
+	onProviderFailure?: (failure: unknown, model: Model<Api>) => void;
 }
 
 /** One cheap model call for a fresh status, or undefined if unavailable/empty/failed. */
@@ -177,6 +178,7 @@ export async function generateAgentStatus(params: GenerateAgentStatusParams): Pr
 			{ maxTokens: SUMMARY_MAX_TOKENS, apiKey: auth.apiKey, headers: auth.headers, signal },
 		);
 		if (response.stopReason === "error") {
+			params.onProviderFailure?.(response, model);
 			return undefined;
 		}
 		const textContent = response.content
@@ -184,7 +186,8 @@ export async function generateAgentStatus(params: GenerateAgentStatusParams): Pr
 			.map((c) => c.text)
 			.join("\n");
 		return parseAgentStatusResponse(textContent, isWorking);
-	} catch {
+	} catch (error) {
+		params.onProviderFailure?.(error, model);
 		return undefined;
 	}
 }
@@ -320,12 +323,19 @@ export class DaemonSessionSummarizer {
 
 		const controller = new AbortController();
 		this.inFlight.set(id, controller);
+		let quotaOperation: ReturnType<typeof session.registerProviderQuotaOperation> | undefined;
 		try {
+			try {
+				quotaOperation = session.registerProviderQuotaOperation(() => controller.abort());
+			} catch {
+				return;
+			}
 			const generated = await this.generate({
 				registry: session.modelRegistry,
 				messages: contextMessages,
 				isWorking,
 				signal: controller.signal,
+				onProviderFailure: (failure, model) => session.recordProviderFailure(failure, model, quotaOperation?.epoch),
 			});
 			// A failed classification on an idle session would spin at "working"
 			// forever (the activity axis holds unjudged idle sessions there), so
@@ -371,6 +381,7 @@ export class DaemonSessionSummarizer {
 				this.onStatusChanged?.(state);
 			}
 		} finally {
+			quotaOperation?.release();
 			this.inFlight.delete(id);
 			// Re-debounce a request that arrived mid-pass instead of dropping it.
 			if (this.rerunRequested.delete(id)) {

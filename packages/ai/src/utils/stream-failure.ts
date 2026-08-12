@@ -75,7 +75,7 @@ function isTransientQuotaThrottleMessage(value: string): boolean {
 
 export function isQuotaExhaustionMessage(value: string): boolean {
 	if (isTransientQuotaThrottleMessage(value)) return false;
-	return /insufficient[_ -]?(?:quota|credits?|funds?)|(?:quota|credits?|funds?)[^\n]{0,48}(?:exceed(?:ed)?|exhaust(?:ed)?|deplet(?:ed)?|reached|used up|not enough)|(?:exceed(?:ed)?|exhaust(?:ed)?|deplet(?:ed)?|reached|used up)[^\n]{0,80}(?:quota|credits?|funds?|premium requests?|(?:credit|usage|spend(?:ing)?)[_ -]?limit)|(?:credit|usage|spend(?:ing)?)[_ -]?limit[^\n]{0,48}(?:exceed(?:ed)?|exhaust(?:ed)?|reached)|(?:out of|no)[_ -]*(?:premium[_ -]*)?(?:credits?|quota|funds?|requests?)(?:[_ -]*remaining)?|payment required/i.test(
+	return /insufficient[_ -]?(?:quota|credits?|funds?)|(?:quota|credits?|funds?)[^\n]{0,48}(?:exceed(?:ed)?|exhaust(?:ed)?|deplet(?:ed)?|reached|used up|not enough)|(?:exceed(?:ed)?|exhaust(?:ed)?|deplet(?:ed)?|reached|used up|hit)[^\n]{0,80}(?:quota|credits?|funds?|premium requests?|(?:credit|session|usage|spend(?:ing)?)[_ -]?limit)|(?:credit|session|usage|spend(?:ing)?)[_ -]?limit[^\n]{0,48}(?:exceed(?:ed)?|exhaust(?:ed)?|reached)|(?:out of|no)[_ -]*(?:premium[_ -]*)?(?:credits?|quota|funds?|requests?)(?:[_ -]*remaining)?|payment required/i.test(
 		value,
 	);
 }

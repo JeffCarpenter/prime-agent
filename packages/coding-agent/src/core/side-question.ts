@@ -21,6 +21,10 @@ export interface SideQuestionRun {
 	abort(): void;
 }
 
+export interface SideQuestionHooks {
+	onAssistantMessage?: (message: AssistantMessage) => void;
+}
+
 const SIDE_QUESTION_INSTRUCTION =
 	"Answer this side question using only the conversation context above. Do not use tools. The user may send follow-up side questions; none of this side conversation is added to the main session.";
 
@@ -78,6 +82,7 @@ export function startSideQuestion(
 	question: string,
 	onEvent: (event: SideQuestionEvent) => void | Promise<void>,
 	previousTurns: SideQuestionTurn[] = [],
+	hooks: SideQuestionHooks = {},
 ): SideQuestionRun {
 	const model = parent.state.model;
 	if (!model) {
@@ -143,6 +148,9 @@ export function startSideQuestion(
 	const unsubscribe = sideAgent.subscribe(async (event) => {
 		if (event.type !== "message_update" && event.type !== "message_end") {
 			return;
+		}
+		if (event.type === "message_end" && event.message.role === "assistant") {
+			hooks.onAssistantMessage?.(event.message);
 		}
 		const nextAnswer = readAssistantText(event.message);
 		if (nextAnswer === answer) {

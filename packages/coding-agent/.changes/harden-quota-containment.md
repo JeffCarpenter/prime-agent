@@ -1,0 +1,1 @@
+- Fixed terminal provider quota failures repeatedly starting model-backed work by requiring an explicit user retry ([#795](https://github.com/PrimeIntellect-ai/prime-agent/pull/795) by [@kcoopermiller](https://github.com/kcoopermiller)).

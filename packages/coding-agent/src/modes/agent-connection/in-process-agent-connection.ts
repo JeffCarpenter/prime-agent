@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, ServiceTier, Transport } from "@earendil-works/pi-ai";
 import type { AgentSessionMessageReceipt, AgentSessionMessageSafetyStatus } from "../../core/agent-messages.js";
+import type { AgentSession } from "../../core/agent-session.js";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.js";
 import type { AgentAutonomousStatus } from "../../core/autonomous.js";
 import type { BashResult } from "../../core/bash-executor.js";
@@ -390,15 +391,28 @@ export class InProcessAgentConnection implements AgentConnection {
 		if (this.sideQuestionRuns.has(id)) {
 			throw new Error(`Side question already exists: ${id}`);
 		}
+		this.session.assertProviderQuotaCircuitClosed();
+		let quotaOperation: ReturnType<AgentSession["registerProviderQuotaOperation"]> | undefined;
 		const run = startSideQuestion(
 			this.session.agent,
 			id,
 			question,
 			(event) => this.emit({ type: "side_question_event", event }),
 			previousTurns,
+			{
+				onAssistantMessage: (message) =>
+					this.session.recordProviderFailure(message, undefined, quotaOperation?.epoch),
+			},
 		);
+		try {
+			quotaOperation = this.session.registerProviderQuotaOperation(() => run.abort());
+		} catch (error) {
+			run.abort();
+			throw error;
+		}
 		this.sideQuestionRuns.set(id, run);
 		const removeRun = () => {
+			quotaOperation?.release();
 			this.sideQuestionRuns.delete(id);
 		};
 		void run.done.then(removeRun, removeRun);

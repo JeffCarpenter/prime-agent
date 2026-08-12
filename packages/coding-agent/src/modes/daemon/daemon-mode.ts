@@ -4365,14 +4365,17 @@ export class AgentDaemon {
 
 			case "start_side_question": {
 				const state = this.getSessionState(command.activeSessionId);
+				const session = state.runtime.session;
+				session.assertProviderQuotaCircuitClosed();
 				if (this.sideQuestionRuns.has(command.sideQuestionId)) {
 					throw new Error(`Side question already exists: ${command.sideQuestionId}`);
 				}
 				if (this.hasActiveSideQuestionFor(client, state.activeSessionId)) {
 					throw new Error("A side question is already running for this client and session");
 				}
+				let quotaOperation: ReturnType<AgentSession["registerProviderQuotaOperation"]> | undefined;
 				const run = startSideQuestion(
-					state.runtime.session.agent,
+					session.agent,
 					command.sideQuestionId,
 					command.question,
 					(event) => {
@@ -4386,18 +4389,30 @@ export class AgentDaemon {
 						}
 					},
 					command.previousTurns,
+					{
+						onAssistantMessage: (message) =>
+							session.recordProviderFailure(message, undefined, quotaOperation?.epoch),
+					},
 				);
+				try {
+					quotaOperation = session.registerProviderQuotaOperation(() => run.abort());
+				} catch (error) {
+					run.abort();
+					throw error;
+				}
 				this.sideQuestionRuns.set(command.sideQuestionId, {
 					run,
 					client,
 					activeSessionId: state.activeSessionId,
 				});
-				void run.done.catch((error) => {
-					this.sideQuestionRuns.delete(command.sideQuestionId);
-					this.log(
-						`side question ${command.sideQuestionId} failed: ${error instanceof Error ? error.message : String(error)}`,
-					);
-				});
+				void run.done
+					.finally(() => quotaOperation?.release())
+					.catch((error) => {
+						this.sideQuestionRuns.delete(command.sideQuestionId);
+						this.log(
+							`side question ${command.sideQuestionId} failed: ${error instanceof Error ? error.message : String(error)}`,
+						);
+					});
 				return success(command.id, "start_side_question");
 			}
 

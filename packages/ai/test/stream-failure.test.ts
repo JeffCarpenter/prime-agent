@@ -77,6 +77,7 @@ describe("classifyStreamFailure", () => {
 
 	test("keeps explicit account-capacity exhaustion classified as quota", () => {
 		expect(classifyStreamFailure("rate_limit_error", 429, "premium request quota exceeded")).toBe("quota");
+		expect(classifyStreamFailure("rate_limit_event", 429, "You've hit your session limit")).toBe("quota");
 		expect(
 			classifyStreamFailure(
 				"rate_limit_error",
@@ -84,6 +85,12 @@ describe("classifyStreamFailure", () => {
 				"You exceeded your current quota. Please check your plan and billing details.",
 			),
 		).toBe("quota");
+	});
+
+	test("does not let session-limit wording override an explicit transient window", () => {
+		expect(classifyStreamFailure("rate_limit_error", 429, "per-session requests per minute limit reached")).toBe(
+			"rate_limit",
+		);
 	});
 });
 

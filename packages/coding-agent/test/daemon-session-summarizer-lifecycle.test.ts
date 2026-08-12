@@ -10,6 +10,7 @@ function makeState(
 	opts: { working?: boolean; messages?: number; kind?: "top-level" | "subagent"; persisted?: unknown } = {},
 ): ActiveSessionState {
 	const appended: unknown[] = [];
+	const providerQuotaAborters = new Set<() => void>();
 	const state = {
 		activeSessionId: "a1",
 		summaryState: undefined,
@@ -27,10 +28,16 @@ function makeState(
 					appendAgentStatus: (s: unknown) => appended.push(s),
 					getLatestAgentStatus: () => opts.persisted,
 				},
+				registerProviderQuotaOperation: (abort: () => void) => {
+					providerQuotaAborters.add(abort);
+					return { epoch: 0, release: () => providerQuotaAborters.delete(abort) };
+				},
+				recordProviderFailure: vi.fn(),
 			},
 		},
 	} as unknown as ActiveSessionState;
 	(state as unknown as { appendedStatuses: unknown[] }).appendedStatuses = appended;
+	(state as unknown as { providerQuotaAborters: Set<() => void> }).providerQuotaAborters = providerQuotaAborters;
 	return state;
 }
 
@@ -129,6 +136,25 @@ describe("DaemonSessionSummarizer lifecycle", () => {
 
 		summarizer.notifyActivity(state);
 		await vi.advanceTimersByTimeAsync(SETTLE_MS + 500);
+		expect(generate).toHaveBeenCalledOnce();
+		expect(state.summaryState).toBeUndefined();
+	});
+
+	test("aborts and discards an in-flight summary when the quota circuit trips", async () => {
+		vi.useFakeTimers();
+		const state = makeState({ working: false });
+		const generate = vi.fn().mockImplementation(async ({ signal }: { signal?: AbortSignal }) => {
+			for (const abort of (state as unknown as { providerQuotaAborters: Set<() => void> }).providerQuotaAborters) {
+				abort();
+			}
+			expect(signal?.aborted).toBe(true);
+			return { summary: "Must not persist", taskState: "completed" };
+		});
+		const summarizer = new DaemonSessionSummarizer(() => [], undefined, generate);
+
+		summarizer.notifyActivity(state);
+		await vi.advanceTimersByTimeAsync(SETTLE_MS + 500);
+
 		expect(generate).toHaveBeenCalledOnce();
 		expect(state.summaryState).toBeUndefined();
 	});
