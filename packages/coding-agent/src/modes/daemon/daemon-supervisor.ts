@@ -58,7 +58,11 @@ import { isProcessAlive, processIdExists, signalProcessGroupOrProcess } from "..
 import type { AgentConnectionHeartbeat } from "../agent-connection/types.js";
 import { attachJsonlLineReader, serializeJsonLine, UNTRUSTED_JSONL_MAX_LINE_CHARS } from "../rpc/jsonl.js";
 import type { PrivateFrame } from "../session-worker/private-framing.js";
-import { createActiveSessionId, type DaemonSocketClient } from "./active-session-state.js";
+import {
+	createActiveSessionId,
+	type DaemonSocketClient,
+	daemonClientSupportsExtensionUiForSession,
+} from "./active-session-state.js";
 import { CommandRecoveryJournal, createCommandIdempotencyKey } from "./command-recovery-journal.js";
 import { CompactAssistantStreamReconstructor, isCompactAssistantDelta } from "./compact-session-stream.js";
 import { DAEMON_CATALOG_ROLE_ENV, DaemonCatalogClient } from "./daemon-catalog-process.js";
@@ -1190,6 +1194,7 @@ export class DaemonSupervisor {
 			this.cancelWaitingPromptAdmissionsForClient(client);
 			for (const activeSessionId of [...client.attachedActiveSessionIds]) {
 				client.attachedActiveSessionIds.delete(activeSessionId);
+				this.removeClientSessionCapabilities(client, activeSessionId);
 				void this.syncWorkerExtensionUi(activeSessionId);
 			}
 			this.scheduleOwnedWorkerCleanupForClient(this.protocolClientId(client));
@@ -1668,6 +1673,10 @@ export class DaemonSupervisor {
 							"attach",
 							attached.releaseTranscript,
 						);
+						// Subscribe while the snapshot reservation makes the public recipient
+						// ineligible for replay. Startup and later notify frames are buffered
+						// until the stream is usable, instead of being dropped by the worker.
+						void this.syncWorkerExtensionUi(streamedResult.activeSessionId, client);
 						void streaming
 							.then(() => this.syncWorkerExtensionUi(streamedResult.activeSessionId, client))
 							.catch((error) =>
@@ -1725,6 +1734,7 @@ export class DaemonSupervisor {
 							releaseSnapshotReservation,
 						);
 						releaseTranscript = undefined;
+						void this.syncWorkerExtensionUi(targetActiveSessionId, client);
 						void streaming
 							.then(() => this.syncWorkerExtensionUi(targetActiveSessionId, client))
 							.catch((error) =>
@@ -2786,11 +2796,7 @@ export class DaemonSupervisor {
 		this.replayBufferedStartupNotifications(activeSessionId);
 		const pendingFrames = this.getPendingStartupNotificationFrames();
 		const routingSessions = this.getStartupNotificationRoutingSessions();
-		const hasBufferedNotifications = (pendingFrames.get(activeSessionId)?.length ?? 0) > 0;
-		const supportsExtensionUi =
-			!hasBufferedNotifications &&
-			recipient !== undefined &&
-			this.isStartupNotificationRecipientReady(recipient, activeSessionId);
+		const supportsExtensionUi = recipient !== undefined;
 		if (supportsExtensionUi) {
 			routingSessions.add(activeSessionId);
 		}
@@ -2808,7 +2814,10 @@ export class DaemonSupervisor {
 			}
 		} finally {
 			routingSessions.delete(activeSessionId);
-			if ((pendingFrames.get(activeSessionId)?.length ?? 0) === 0) {
+			if (
+				(pendingFrames.get(activeSessionId)?.length ?? 0) === 0 &&
+				(!recipient || this.isStartupNotificationRecipientReady(recipient, activeSessionId))
+			) {
 				this.getStartupNotificationRecipients().delete(activeSessionId);
 			}
 		}
@@ -3992,7 +4001,7 @@ export class DaemonSupervisor {
 			client.id = command.clientId;
 		}
 		client.capabilities = normalizeCapabilities(command.capabilities, command.supportsExtensionUi);
-		client.supportsExtensionUi = client.capabilities.has("extension_ui");
+		this.setClientSessionCapabilities(client, activeSessionId, client.capabilities);
 
 		let result = match.worker.snapshotCache.get(activeSessionId);
 		if (
@@ -4417,9 +4426,36 @@ export class DaemonSupervisor {
 			}
 			client.catchupActiveSessionIds?.delete(resolvedId);
 			client.catchupPurposes?.delete(resolvedId);
+			this.removeClientSessionCapabilities(client, resolvedId);
 			this.write(client, { type: "session_detached", activeSessionId: resolvedId });
 			void this.syncWorkerExtensionUi(resolvedId);
 		}
+	}
+
+	private setClientSessionCapabilities(
+		client: DaemonSocketClient,
+		activeSessionId: string,
+		capabilities: ReadonlySet<DaemonClientCapability>,
+	): void {
+		client.capabilitiesByActiveSessionId ??= new Map();
+		client.capabilitiesByActiveSessionId.set(activeSessionId, new Set(capabilities));
+		client.supportsExtensionUi = [...client.capabilitiesByActiveSessionId.values()].some((value) =>
+			value.has("extension_ui"),
+		);
+	}
+
+	private removeClientSessionCapabilities(client: DaemonSocketClient, activeSessionId: string): void {
+		client.capabilitiesByActiveSessionId?.delete(activeSessionId);
+		client.supportsExtensionUi = [...(client.capabilitiesByActiveSessionId?.values() ?? [])].some((value) =>
+			value.has("extension_ui"),
+		);
+	}
+
+	private clientCapabilitiesForSession(
+		client: DaemonSocketClient,
+		activeSessionId: string,
+	): ReadonlySet<DaemonClientCapability> {
+		return client.capabilitiesByActiveSessionId?.get(activeSessionId) ?? client.capabilities;
 	}
 
 	private syncWorkerExtensionUi(activeSessionId: string, preferredRecipient?: DaemonSocketClient): Promise<void> {
@@ -4460,7 +4496,6 @@ export class DaemonSupervisor {
 		this.startupNotificationRecipients?.delete(activeSessionId);
 		this.startupNotificationRoutingSessions?.delete(activeSessionId);
 		this.pendingStartupNotificationFrames?.delete(activeSessionId);
-		this.workerExtensionUiSyncs?.delete(activeSessionId);
 	}
 
 	private async syncWorkerExtensionUiNow(
@@ -4500,7 +4535,7 @@ export class DaemonSupervisor {
 			this.clients.has(client) &&
 			!client.socket.destroyed &&
 			client.attachedActiveSessionIds.has(activeSessionId) &&
-			client.supportsExtensionUi
+			daemonClientSupportsExtensionUiForSession(client, activeSessionId)
 		);
 	}
 
@@ -4929,7 +4964,12 @@ export class DaemonSupervisor {
 		if (
 			decodedOutbound?.type === "extension_ui_request" &&
 			decodedOutbound.method === "notify" &&
-			this.getStartupNotificationRoutingSessions().has(activeSessionId)
+			(this.getStartupNotificationRoutingSessions().has(activeSessionId) ||
+				(this.getStartupNotificationRecipients().has(activeSessionId) &&
+					!this.isStartupNotificationRecipientReady(
+						this.getStartupNotificationRecipients().get(activeSessionId)!,
+						activeSessionId,
+					)))
 		) {
 			this.routeStartupNotification(activeSessionId, publicPayload);
 			return;
@@ -5085,8 +5125,8 @@ export class DaemonSupervisor {
 				const attached = await this.attachClient(client, {
 					type: "attach",
 					activeSessionId,
-					capabilities: [...client.capabilities],
-					supportsExtensionUi: client.supportsExtensionUi,
+					capabilities: [...this.clientCapabilitiesForSession(client, activeSessionId)],
+					supportsExtensionUi: daemonClientSupportsExtensionUiForSession(client, activeSessionId),
 				});
 				releaseTranscript = attached.releaseTranscript;
 				if (client.capabilities.has("chunked_snapshot")) {

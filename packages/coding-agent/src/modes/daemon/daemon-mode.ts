@@ -6123,7 +6123,16 @@ export class AgentDaemon {
 		}
 		this.abortSideQuestionsFor(client, state.activeSessionId);
 		abortClientSnapshotStreaming(client, state.activeSessionId);
+		const wasStartupNotificationRecipient = state.pendingExtensionUiNotificationRecipient === client;
 		detachClientFromActiveSession(client, state);
+		if (wasStartupNotificationRecipient && state.pendingExtensionUiNotifications?.length) {
+			const fallback = [...state.clients].find(
+				(candidate) =>
+					!candidate.socket.destroyed &&
+					daemonClientSupportsExtensionUiForSession(candidate, state.activeSessionId),
+			);
+			if (fallback) this.schedulePendingExtensionUiNotifications(state, fallback);
+		}
 		this.write(client, {
 			type: "session_detached",
 			activeSessionId: state.activeSessionId,
@@ -6754,11 +6763,7 @@ export class AgentDaemon {
 		state: ActiveSessionState,
 		preferredClient: DaemonSocketClient,
 	): void {
-		if (
-			!state.pendingExtensionUiNotifications?.length ||
-			preferredClient.socket.destroyed ||
-			!daemonClientSupportsExtensionUiForSession(preferredClient, state.activeSessionId)
-		) {
+		if (!state.pendingExtensionUiNotifications?.length) {
 			return;
 		}
 		const selected = state.pendingExtensionUiNotificationRecipient;
@@ -6770,12 +6775,25 @@ export class AgentDaemon {
 		) {
 			state.pendingExtensionUiNotificationRecipient = undefined;
 		}
-		state.pendingExtensionUiNotificationRecipient ??= preferredClient;
-		if (state.pendingExtensionUiNotificationRecipient !== preferredClient) {
+		const preferredIsEligible =
+			state.clients.has(preferredClient) &&
+			!preferredClient.socket.destroyed &&
+			daemonClientSupportsExtensionUiForSession(preferredClient, state.activeSessionId);
+		const recipient =
+			state.pendingExtensionUiNotificationRecipient ??
+			(preferredIsEligible
+				? preferredClient
+				: [...state.clients].find(
+						(candidate) =>
+							!candidate.socket.destroyed &&
+							daemonClientSupportsExtensionUiForSession(candidate, state.activeSessionId),
+					));
+		if (!recipient) {
 			return;
 		}
+		state.pendingExtensionUiNotificationRecipient = recipient;
 		const session = state.runtime.session;
-		setImmediate(() => this.replayPendingExtensionUiNotifications(state, preferredClient, session));
+		setImmediate(() => this.replayPendingExtensionUiNotifications(state, recipient, session));
 	}
 
 	private replayPendingExtensionUiNotificationsToWorker(state: ActiveSessionState, client: DaemonSocketClient): void {

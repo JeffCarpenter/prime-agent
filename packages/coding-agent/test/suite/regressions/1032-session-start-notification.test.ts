@@ -6,10 +6,15 @@ import {
 	bindActiveSessionState,
 	MAX_PENDING_EXTENSION_UI_NOTIFICATIONS,
 } from "../../../src/modes/daemon/daemon-extension-binding.js";
-import { AgentDaemon, detachClientFromActiveSession } from "../../../src/modes/daemon/daemon-mode.js";
+import {
+	AgentDaemon,
+	detachClientFromActiveSession,
+	setDaemonClientSessionCapabilities,
+} from "../../../src/modes/daemon/daemon-mode.js";
 import {
 	DAEMON_PROTOCOL_INFO,
 	type DaemonAttachResult,
+	type DaemonClientCapability,
 	type DaemonCommand,
 	type DaemonOutbound,
 	type DaemonResponse,
@@ -34,12 +39,22 @@ interface DaemonInternals {
 	handleCommand(client: DaemonSocketClient, command: DaemonCommand): Promise<DaemonResponse | undefined>;
 	handleWorkerCommand(client: DaemonSocketClient, command: DaemonWorkerCommand): Promise<void>;
 	closeSession(state: ActiveSessionState, reason: "killed"): Promise<void>;
+	detachClientFromSession(client: DaemonSocketClient, state: ActiveSessionState): void;
 	schedulePendingExtensionUiNotifications(state: ActiveSessionState, client: DaemonSocketClient): void;
 }
 
 interface SupervisorInternals {
 	handleCommand(client: DaemonSocketClient, command: DaemonCommand): Promise<DaemonResponse | undefined>;
 	handleWorkerFrame(worker: unknown, frame: { header: DaemonWorkerFrameHeader; payload: Buffer }): void;
+	selectStartupNotificationRecipient(
+		activeSessionId: string,
+		preferredRecipient?: DaemonSocketClient,
+	): DaemonSocketClient | undefined;
+	setClientSessionCapabilities(
+		client: DaemonSocketClient,
+		activeSessionId: string,
+		capabilities: ReadonlySet<DaemonClientCapability>,
+	): void;
 }
 
 const harnesses: Harness[] = [];
@@ -169,17 +184,107 @@ describe("Issue #1032 daemon session_start notifications", () => {
 		});
 
 		const disconnected = createClient("disconnected-recipient");
+		disconnected.client.backpressured = true;
 		await attach(internals, disconnected.client, state.activeSessionId, true);
-		detachClientFromActiveSession(disconnected.client, state);
-		(disconnected.client.socket as unknown as { destroyed: boolean }).destroyed = true;
-
 		const fallback = createClient("fallback-recipient");
 		await attach(internals, fallback.client, state.activeSessionId, true);
+		internals.detachClientFromSession(disconnected.client, state);
+		(disconnected.client.socket as unknown as { destroyed: boolean }).destroyed = true;
 		await waitForImmediate();
 
 		expect(extensionUiRequests(disconnected.outbound)).toEqual([]);
 		expect(extensionUiRequests(fallback.outbound)).toEqual([
 			expect.objectContaining({ method: "notify", payload: { message: "recipient fallback" } }),
+		]);
+	});
+
+	it("does not duplicate a notification accepted by a backpressured socket", async () => {
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("session_start", (_event, ctx) => {
+						ctx.ui.notify("accepted before drain");
+						ctx.ui.notify("after drain");
+					});
+				},
+			],
+		});
+		harnesses.push(harness);
+		const state = createState(harness);
+		const daemon = createDaemon(harness);
+		const internals = daemon as unknown as DaemonInternals;
+		internals.sessions.set(state.activeSessionId, state);
+		stubAttachResult(internals, state);
+		await bindActiveSessionState(state, {
+			broadcast: (targetState, message) => internals.broadcastToSession(targetState, message),
+			shutdown: () => {},
+		});
+
+		const recipient = createClient("partial-backpressure");
+		let backpressureNextNotification = true;
+		const socket = recipient.client.socket as unknown as {
+			write(data: string | Uint8Array): boolean;
+		};
+		const originalWrite = socket.write.bind(socket);
+		socket.write = (data) => {
+			const accepted = originalWrite(data);
+			const message = JSON.parse(String(data)) as DaemonOutbound;
+			if (message.type === "extension_ui_request" && backpressureNextNotification) {
+				backpressureNextNotification = false;
+				return false;
+			}
+			return accepted;
+		};
+
+		await attach(internals, recipient.client, state.activeSessionId, true);
+		await waitForImmediate();
+		expect(extensionUiRequests(recipient.outbound).map((message) => message.payload.message)).toEqual([
+			"accepted before drain",
+		]);
+		expect(state.pendingExtensionUiNotifications?.map((message) => message.payload.message)).toEqual(["after drain"]);
+
+		recipient.client.backpressured = false;
+		internals.schedulePendingExtensionUiNotifications(state, recipient.client);
+		await waitForImmediate();
+		expect(extensionUiRequests(recipient.outbound).map((message) => message.payload.message)).toEqual([
+			"accepted before drain",
+			"after drain",
+		]);
+	});
+
+	it("falls back when the selected client loses the session capability", async () => {
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("session_start", (_event, ctx) => ctx.ui.notify("capability fallback"));
+				},
+			],
+		});
+		harnesses.push(harness);
+		const state = createState(harness);
+		const daemon = createDaemon(harness);
+		const internals = daemon as unknown as DaemonInternals;
+		internals.sessions.set(state.activeSessionId, state);
+		stubAttachResult(internals, state);
+		await bindActiveSessionState(state, {
+			broadcast: (targetState, message) => internals.broadcastToSession(targetState, message),
+			shutdown: () => {},
+		});
+
+		const selected = createClient("capability-selected");
+		selected.client.backpressured = true;
+		await attach(internals, selected.client, state.activeSessionId, true);
+		const fallback = createClient("capability-fallback");
+		await attach(internals, fallback.client, state.activeSessionId, true);
+		await waitForImmediate();
+		expect(extensionUiRequests(fallback.outbound)).toEqual([]);
+
+		setDaemonClientSessionCapabilities(selected.client, state.activeSessionId, new Set());
+		internals.schedulePendingExtensionUiNotifications(state, selected.client);
+		await waitForImmediate();
+		expect(extensionUiRequests(selected.outbound)).toEqual([]);
+		expect(extensionUiRequests(fallback.outbound)).toEqual([
+			expect.objectContaining({ method: "notify", payload: { message: "capability fallback" } }),
 		]);
 	});
 
@@ -465,7 +570,15 @@ describe("Issue #1032 daemon session_start notifications", () => {
 				},
 			),
 			createStreamedAttachResult: vi.fn(() => attachResult),
-			streamSnapshot: vi.fn(() => snapshot),
+			streamSnapshot: vi.fn((client: DaemonSocketClient, _worker: unknown, result: DaemonAttachResult) => {
+				client.snapshotStreaming = true;
+				client.snapshotActiveSessionIds ??= new Set();
+				client.snapshotActiveSessionIds.add(result.activeSessionId);
+				return snapshot.finally(() => {
+					client.snapshotActiveSessionIds?.delete(result.activeSessionId);
+					client.snapshotStreaming = false;
+				});
+			}),
 			write: (client: DaemonSocketClient, message: DaemonOutbound) =>
 				client.socket.write(`${JSON.stringify(message)}\n`),
 			writeSerialized: (client: DaemonSocketClient, data: string | Uint8Array) => client.socket.write(data),
@@ -481,19 +594,40 @@ describe("Issue #1032 daemon session_start notifications", () => {
 		expect(extensionUiRequests(first.outbound)).toEqual([]);
 		expect(extensionUiRequests(second.outbound)).toEqual([]);
 		expect(state.pendingExtensionUiNotifications).toHaveLength(2);
+		await vi.waitFor(() => expect(worker.client.requestWorker).toHaveBeenCalled());
+		notifyAfterBind?.();
+		expect(extensionUiRequests(first.outbound)).toEqual([]);
+		expect(extensionUiRequests(second.outbound)).toEqual([]);
 
 		finishSnapshot();
 		await snapshot;
-		await vi.waitFor(() => expect(extensionUiRequests(first.outbound)).toHaveLength(2));
+		await vi.waitFor(() => expect(extensionUiRequests(first.outbound)).toHaveLength(3));
+		expect(first.outbound[0]).toMatchObject({ type: "response", success: true, command: "attach" });
 		expect(extensionUiRequests(first.outbound).map((message) => message.payload.message)).toEqual([
 			"worker startup one",
 			"worker startup two",
+			"worker live",
 		]);
 		expect(extensionUiRequests(second.outbound)).toEqual([]);
+	});
 
-		notifyAfterBind?.();
-		expect(extensionUiRequests(first.outbound).at(-1)?.payload.message).toBe("worker live");
-		expect(extensionUiRequests(second.outbound).at(-1)?.payload.message).toBe("worker live");
+	it("selects a supervisor recipient by the negotiated capability for that session", () => {
+		const wrongSessionOnly = createClient("wrong-session-only");
+		const eligible = createClient("eligible-session");
+		const clients = new Set([wrongSessionOnly.client, eligible.client]);
+		wrongSessionOnly.client.attachedActiveSessionIds.add("active-1032");
+		eligible.client.attachedActiveSessionIds.add("active-1032");
+		const supervisor = Object.assign(Object.create(DaemonSupervisor.prototype), {
+			clients,
+			startupNotificationRecipients: new Map(),
+		}) as unknown as SupervisorInternals;
+		supervisor.setClientSessionCapabilities(wrongSessionOnly.client, "different-session", new Set(["extension_ui"]));
+		supervisor.setClientSessionCapabilities(wrongSessionOnly.client, "active-1032", new Set());
+		supervisor.setClientSessionCapabilities(eligible.client, "active-1032", new Set(["extension_ui"]));
+
+		expect(supervisor.selectStartupNotificationRecipient("active-1032", wrongSessionOnly.client)).toBe(
+			eligible.client,
+		);
 	});
 });
 
