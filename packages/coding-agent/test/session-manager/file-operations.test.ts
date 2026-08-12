@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -288,6 +288,26 @@ describe("session tree metadata", () => {
 			const header = JSON.parse(readFileSync(sessionFile, "utf8").split("\n")[0] ?? "{}");
 			expect(header).toMatchObject({ parentSession: parentFile });
 			expect(header.rlmDepth).toBe(0);
+		} finally {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it("writes an assigned session file when explicitly materialized", () => {
+		const tempDir = join(tmpdir(), `materialized-assigned-session-test-${Date.now()}-${Math.random()}`);
+		mkdirSync(tempDir, { recursive: true });
+		try {
+			const session = SessionManager.create(tempDir, tempDir);
+			session.newSession();
+			const sessionFile = session.getSessionFile();
+			if (!sessionFile) throw new Error("Missing assigned session file");
+			expect(existsSync(sessionFile)).toBe(false);
+
+			expect(session.materializeSessionFile()).toBe(sessionFile);
+			expect(JSON.parse(readFileSync(sessionFile, "utf8").split("\n")[0] ?? "{}")).toMatchObject({
+				type: "session",
+				id: session.getSessionId(),
+			});
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });
 		}

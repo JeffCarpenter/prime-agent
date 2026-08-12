@@ -1710,6 +1710,10 @@ export class SessionManager {
 
 	materializeSessionFile(sessionDir?: string): string {
 		if (this.sessionFile) {
+			if (!existsSync(this.sessionFile)) {
+				this._rewriteFile();
+				this.flushed = true;
+			}
 			return this.sessionFile;
 		}
 		const dir = sessionDir ?? (this.sessionDir || getDefaultSessionDir(this.cwd));

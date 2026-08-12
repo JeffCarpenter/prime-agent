@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -30,7 +30,12 @@ import {
 	type SubagentRuntimeHost,
 } from "../src/core/rlm-runtime.js";
 import { canonicalSessionPath } from "../src/core/session-lease.js";
-import { readSessionInfo, type SessionInfo, SessionManager } from "../src/core/session-manager.js";
+import {
+	CURRENT_SESSION_VERSION,
+	readSessionInfo,
+	type SessionInfo,
+	SessionManager,
+} from "../src/core/session-manager.js";
 import type { ActiveSessionState, DaemonSocketClient } from "../src/modes/daemon/active-session-state.js";
 import {
 	AgentDaemon,
@@ -58,6 +63,21 @@ import {
 import type { SessionSummary } from "../src/modes/daemon/daemon-session-list.js";
 import { DAEMON_WORKER_SUPERVISOR_SOCKET_ENV } from "../src/modes/daemon/daemon-worker-protocol.js";
 import { RlmSpawnLedger } from "../src/modes/daemon/rlm-ledger.js";
+
+function writeSessionFixture(path: string, cwd = dirname(path)): string {
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(
+		path,
+		`${JSON.stringify({
+			type: "session",
+			version: CURRENT_SESSION_VERSION,
+			id: basename(path, ".jsonl"),
+			timestamp: "2026-01-01T00:00:00.000Z",
+			cwd,
+		})}\n`,
+	);
+	return path;
+}
 
 describe("daemon mode helpers", () => {
 	it("rejects acknowledged busy work when its recovery checkpoint cannot persist", () => {
@@ -1100,6 +1120,7 @@ describe("daemon mode helpers", () => {
 			if (!parentSessionFile) {
 				throw new Error("Missing parent session file");
 			}
+			parentManager.materializeSessionFile();
 			const childSessionDir = join(parentManager.getSessionArtifactDir() ?? tempDir, "child-1");
 			let markChildBindingStarted: (() => void) | undefined;
 			const childBindingStarted = new Promise<void>((resolve) => {
@@ -4962,6 +4983,7 @@ describe("daemon mode helpers", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "prime-agent-daemon-env-"));
 		try {
 			const sessionPath = join(tempDir, "session.jsonl");
+			writeSessionFixture(sessionPath, tempDir);
 			const createRuntime = vi.fn(async (options: Parameters<CreateAgentSessionRuntimeFactory>[0]) => {
 				return {
 					session: makeRuntimeSession(options.sessionManager),
@@ -5041,8 +5063,8 @@ describe("daemon mode helpers", () => {
 				}
 			).createRuntime.bind(daemon);
 
-			await create({ type: "create", sessionPath: join(tempDir, "session-1.jsonl") });
-			await create({ type: "create", sessionPath: join(tempDir, "session-2.jsonl") });
+			await create({ type: "create", sessionPath: writeSessionFixture(join(tempDir, "session-1.jsonl"), tempDir) });
+			await create({ type: "create", sessionPath: writeSessionFixture(join(tempDir, "session-2.jsonl"), tempDir) });
 
 			expect(listedAgentsDuringBind).toBe(2);
 		} finally {
@@ -7819,7 +7841,7 @@ describe("daemon mode helpers", () => {
 			};
 			const parentState = await internals.createRuntime({
 				type: "create",
-				sessionPath: join(tempDir, "parent.jsonl"),
+				sessionPath: writeSessionFixture(join(tempDir, "parent.jsonl"), tempDir),
 			});
 			const childSessionName = createDefaultRlmSubagentSessionName("spawn a nested worker", "child-1");
 			let publishedWhileBinding = false;
@@ -7925,9 +7947,17 @@ describe("daemon mode helpers", () => {
 			const internals = daemon as unknown as {
 				createRuntime(command: Extract<DaemonCommand, { type: "create" }>): Promise<ActiveSessionState>;
 			};
-			await internals.createRuntime({ type: "create", sessionPath: join(tempDir, "first.jsonl"), name: "taken" });
+			await internals.createRuntime({
+				type: "create",
+				sessionPath: writeSessionFixture(join(tempDir, "first.jsonl"), tempDir),
+				name: "taken",
+			});
 			await expect(
-				internals.createRuntime({ type: "create", sessionPath: join(tempDir, "second.jsonl"), name: "taken" }),
+				internals.createRuntime({
+					type: "create",
+					sessionPath: writeSessionFixture(join(tempDir, "second.jsonl"), tempDir),
+					name: "taken",
+				}),
 			).rejects.toThrow("an agent of that name already exists at depth 0 under this parent");
 
 			const failedSession = createRuntime.mock.results[1]?.value
@@ -7976,7 +8006,7 @@ describe("daemon mode helpers", () => {
 			};
 			const parentState = await internals.createRuntime({
 				type: "create",
-				sessionPath: join(tempDir, "parent.jsonl"),
+				sessionPath: writeSessionFixture(join(tempDir, "parent.jsonl"), tempDir),
 			});
 			await expect(
 				internals.createRlmSubagentRuntime(parentState, {
@@ -8062,10 +8092,11 @@ describe("daemon mode helpers", () => {
 			} as never;
 			internals.sessions.set(fromState.activeSessionId, fromState);
 
-			const created = internals.createRuntime({ type: "create", sessionPath: join(tempDir, "session.jsonl") });
-			for (let attempt = 0; attempt < 50 && internals.sessions.size < 2; attempt++) {
-				await Promise.resolve();
-			}
+			const created = internals.createRuntime({
+				type: "create",
+				sessionPath: writeSessionFixture(join(tempDir, "session.jsonl"), tempDir),
+			});
+			await vi.waitFor(() => expect(internals.sessions.size).toBe(2));
 			const bindingId = [...internals.sessions.keys()].find((id) => id !== fromState.activeSessionId);
 			expect(bindingId).toBeTruthy();
 
