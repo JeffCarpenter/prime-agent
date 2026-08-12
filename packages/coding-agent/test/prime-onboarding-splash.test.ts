@@ -95,15 +95,25 @@ describe("PrimeOnboardingSplashComponent", () => {
 
 	it("renders the configured cancel key in the skip hint", () => {
 		setKeybindings(new KeybindingsManager({ "tui.select.cancel": "ctrl+x" }));
-		const component = new PrimeOnboardingSplashComponent(
-			() => {},
-			() => {},
-			{ getRows: () => 36 },
-		);
+		const onCancel = vi.fn();
+		const component = new PrimeOnboardingSplashComponent(() => {}, onCancel, { getRows: () => 36 });
 		const output = stripAnsi(component.render(100).join("\n"));
+		component.handleInput("\x18");
 
 		expect(output).toContain("Press Ctrl+X to skip");
 		expect(output).not.toContain("Press Esc to skip");
+		expect(onCancel).toHaveBeenCalledOnce();
+	});
+
+	it("omits the skip hint when cancel is disabled", () => {
+		setKeybindings(new KeybindingsManager({ "tui.select.cancel": [] }));
+		const onCancel = vi.fn();
+		const component = new PrimeOnboardingSplashComponent(() => {}, onCancel, { getRows: () => 36 });
+		const output = stripAnsi(component.render(100).join("\n"));
+		component.handleInput("\x1b");
+
+		expect(output).not.toContain("to skip");
+		expect(onCancel).not.toHaveBeenCalled();
 	});
 
 	it("shows progress and ignores input while onboarding advances", () => {
@@ -159,9 +169,25 @@ describe("PrimeOnboardingSplashComponent", () => {
 		const logoLine = rendered.find((line) => line.includes(PRIME_BUTTERFLY_LOGO.split("\n")[0].trim()));
 		const brandLine = rendered.find((line) => line.includes("Welcome to PRIME Agent"));
 		const hintLine = rendered.find((line) => line.includes("Press Enter to login with Prime Intellect"));
+		const skipLine = rendered.find((line) => line.includes("Press Esc to skip"));
 
 		expect(logoLine?.search(/\S/)).toBeGreaterThan(0);
 		expect(brandLine?.search(/\S/)).toBeGreaterThan(0);
 		expect(hintLine?.search(/\S/)).toBeGreaterThan(0);
+		expect(skipLine?.search(/\S/)).toBeGreaterThan(0);
+	});
+
+	it("clips safely when the terminal is shorter and narrower than the panel", () => {
+		const component = new PrimeOnboardingSplashComponent(
+			() => {},
+			() => {},
+			{ getRows: () => 1 },
+		);
+		const rendered = component.render(20);
+
+		expect(rendered.length).toBeGreaterThan(1);
+		for (const line of rendered) {
+			expect(visibleWidth(line)).toBeLessThanOrEqual(20);
+		}
 	});
 });
