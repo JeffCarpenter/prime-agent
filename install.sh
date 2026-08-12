@@ -57,6 +57,7 @@ prime_agent_screen_status=
 prime_agent_screen_detail=
 prime_agent_screen_question=
 prime_agent_animation_frame=0
+prime_agent_pending_command_link=
 
 main() {
 	if [ "$prime_agent_base_url" = "$prime_agent_unconfigured_base_url" ]; then
@@ -70,7 +71,7 @@ main() {
 	if [ "$prime_agent_screen_enabled" = 1 ]; then
 		prime_agent_screen "Installing Prime Agent" "" "" ""
 	else
-		printf '\n\033[1m  Installing Prime Agent\033[0m\n\033[2m  npm global install\033[0m\n\n'
+		printf '\n\033[1m  Installing Prime Agent\033[0m\n\033[2m  isolated npm install\033[0m\n\n'
 	fi
 
 	start_preflight_checks
@@ -180,6 +181,9 @@ prime_agent_cleanup() {
 	status=$?
 	if [ -n "${prime_agent_download_dir:-}" ] && [ -d "$prime_agent_download_dir" ]; then
 		rm -rf "$prime_agent_download_dir"
+	fi
+	if [ -n "${prime_agent_pending_command_link:-}" ]; then
+		rm -f "$prime_agent_pending_command_link"
 	fi
 	prime_agent_restore_terminal
 	return "$status"
@@ -1607,45 +1611,172 @@ confirm_kernel_runtime_setup() {
 
 prime_agent_owned_npm_prefix() {
 	if [ -n "${PRIME_AGENT_INSTALL_PREFIX:-}" ]; then
-		printf '%s' "$PRIME_AGENT_INSTALL_PREFIX"
+		install_prefix="$PRIME_AGENT_INSTALL_PREFIX"
 	elif [ -n "${XDG_DATA_HOME:-}" ]; then
-		printf '%s/prime-agent/npm' "$XDG_DATA_HOME"
+		install_prefix="$XDG_DATA_HOME/prime-agent/npm"
+	elif [ -n "${HOME:-}" ]; then
+		install_prefix="$HOME/.local/share/prime-agent/npm"
 	else
-		printf '%s/.local/share/prime-agent/npm' "$HOME"
+		printf 'error: HOME is not set; set PRIME_AGENT_INSTALL_PREFIX to an absolute directory.\n' >&2
+		return 1
 	fi
+	case "$install_prefix" in
+		/*) ;;
+		*)
+			printf 'error: Prime Agent install prefix must be absolute: %s\n' "$install_prefix" >&2
+			return 1
+			;;
+	esac
+	if [ "$install_prefix" = / ]; then
+		printf 'error: refusing to use the filesystem root as the Prime Agent install prefix.\n' >&2
+		return 1
+	fi
+	printf '%s' "$install_prefix"
 }
 
 prime_agent_user_npm_prefix() {
 	npm prefix -g
 }
 
-prime_agent_link_command_binary() {
+prime_agent_normalize_path() {
+	node -e '
+		const fs = require("node:fs");
+		const path = require("node:path");
+		let current = path.resolve(process.argv[1]);
+		const suffix = [];
+		while (!fs.existsSync(current)) {
+			const parent = path.dirname(current);
+			if (parent === current) break;
+			suffix.unshift(path.basename(current));
+			current = parent;
+		}
+		try {
+			current = fs.realpathSync(current);
+		} catch {}
+		process.stdout.write(path.join(current, ...suffix));
+	' "$1"
+}
+
+prime_agent_paths_are_same() {
+	left_path=$(prime_agent_normalize_path "$1")
+	right_path=$(prime_agent_normalize_path "$2")
+	[ "$left_path" = "$right_path" ]
+}
+
+prime_agent_command_link_is_owned() {
+	command_link="$1"
+	owned_bin="$2"
+	legacy_bin="$3"
+
+	[ -L "$command_link" ] || return 1
+	link_target=$(readlink "$command_link") || return 1
+	case "$link_target" in
+		/*) ;;
+		*) link_target="$(dirname "$command_link")/$link_target" ;;
+	esac
+	prime_agent_paths_are_same "$link_target" "$owned_bin" || prime_agent_paths_are_same "$link_target" "$legacy_bin"
+}
+
+prime_agent_assert_command_link_replaceable() {
+	command_link="$1"
+	owned_bin="$2"
+	legacy_bin="$3"
+
+	if { [ -e "$command_link" ] || [ -L "$command_link" ]; } &&
+		! prime_agent_command_link_is_owned "$command_link" "$owned_bin" "$legacy_bin"; then
+		printf 'error: refusing to replace unrelated command at %s\n' "$command_link" >&2
+		printf 'Move that command or set PRIME_AGENT_INSTALL_PREFIX and expose %s yourself.\n' "$owned_bin" >&2
+		return 1
+	fi
+}
+
+prime_agent_prepare_command_link() {
 	install_prefix="$1"
-	user_prefix=$(prime_agent_user_npm_prefix)
+	user_prefix="$2"
 	user_bin_dir="$user_prefix/bin"
 	owned_bin="$install_prefix/bin/$prime_agent_cmd"
 	user_bin="$user_bin_dir/$prime_agent_cmd"
+	legacy_bin="$user_prefix/lib/node_modules/$prime_agent_package/prime-agent.sh"
 
-	mkdir -p "$user_bin_dir"
-	if [ "$user_bin" = "$owned_bin" ]; then
-		return
+	if ! mkdir -p "$user_bin_dir"; then
+		printf 'error: could not create npm command directory %s\n' "$user_bin_dir" >&2
+		return 1
 	fi
-	rm -f "$user_bin"
-	ln -s "$owned_bin" "$user_bin"
+	if [ ! -x "$owned_bin" ]; then
+		printf 'error: isolated Prime Agent command was not installed at %s\n' "$owned_bin" >&2
+		return 1
+	fi
+	prime_agent_assert_command_link_replaceable "$user_bin" "$owned_bin" "$legacy_bin" || return 1
+
+	prime_agent_pending_command_link="$user_bin.prime-agent-new.$$"
+	if [ -e "$prime_agent_pending_command_link" ] || [ -L "$prime_agent_pending_command_link" ]; then
+		printf 'error: temporary Prime Agent command link already exists at %s\n' "$prime_agent_pending_command_link" >&2
+		prime_agent_pending_command_link=
+		return 1
+	fi
+	if ! ln -s "$owned_bin" "$prime_agent_pending_command_link"; then
+		printf 'error: could not prepare Prime Agent command link in %s\n' "$user_bin_dir" >&2
+		prime_agent_pending_command_link=
+		return 1
+	fi
+}
+
+prime_agent_commit_command_link() {
+	install_prefix="$1"
+	user_prefix="$2"
+	owned_bin="$install_prefix/bin/$prime_agent_cmd"
+	user_bin="$user_prefix/bin/$prime_agent_cmd"
+	legacy_bin="$user_prefix/lib/node_modules/$prime_agent_package/prime-agent.sh"
+
+	prime_agent_assert_command_link_replaceable "$user_bin" "$owned_bin" "$legacy_bin" || return 1
+	if ! mv -f "$prime_agent_pending_command_link" "$user_bin"; then
+		printf 'error: could not expose Prime Agent at %s; the isolated command remains at %s\n' \
+			"$user_bin" "$owned_bin" >&2
+		return 1
+	fi
+	prime_agent_pending_command_link=
 }
 
 prime_agent_remove_legacy_global_package() {
-	user_prefix=$(prime_agent_user_npm_prefix)
-	install_prefix="$1"
-	if [ "$user_prefix" = "$install_prefix" ]; then
+	user_prefix="$1"
+	legacy_package_dir="$user_prefix/lib/node_modules/$prime_agent_package"
+	if [ ! -e "$legacy_package_dir" ] && [ ! -L "$legacy_package_dir" ]; then
 		return
 	fi
-	npm uninstall -g --prefix "$user_prefix" --no-fund --no-audit --loglevel=error "$prime_agent_package" >/dev/null 2>&1 || true
+
+	if npm uninstall -g --prefix "$user_prefix" --no-fund --no-audit --loglevel=error "$prime_agent_package"; then
+		return
+	else
+		uninstall_status=$?
+	fi
+	printf 'error: installed the isolated Prime Agent package, but could not remove the legacy global package from %s\n' \
+		"$user_prefix" >&2
+	return "$uninstall_status"
+}
+
+prime_agent_migrate_command_binary() {
+	install_prefix="$1"
+	user_prefix="$2"
+
+	prime_agent_prepare_command_link "$install_prefix" "$user_prefix" || return 1
+	if prime_agent_remove_legacy_global_package "$user_prefix"; then
+		migration_status=0
+	else
+		migration_status=$?
+	fi
+	prime_agent_commit_command_link "$install_prefix" "$user_prefix" || return 1
+	return "$migration_status"
 }
 
 install_prime_agent_package() {
 	tarball_path="$1"
 	install_prefix=$(prime_agent_owned_npm_prefix)
+	user_prefix=$(prime_agent_user_npm_prefix)
+	if prime_agent_paths_are_same "$user_prefix" "$install_prefix"; then
+		printf 'error: Prime Agent install prefix must differ from npm global prefix %s.\n' "$user_prefix" >&2
+		printf 'Choose another PRIME_AGENT_INSTALL_PREFIX so the unpublished package stays out of the global npm tree.\n' >&2
+		return 1
+	fi
 	if [ "$prime_agent_bootstrap_kernel_on_install" = 1 ]; then
 		npm_install_details="Preparing isolated install.
 Linking command binaries.
@@ -1670,8 +1801,7 @@ Finalizing npm install."
 			"$npm_install_details" \
 			env $(npm_allow_remote_env) PRIME_AGENT_BOOTSTRAP_TOOLS_ON_INSTALL=1 npm install -g --prefix "$install_prefix" --no-fund --no-audit --loglevel=error --progress=false "$tarball_path"
 	fi
-	prime_agent_remove_legacy_global_package "$install_prefix"
-	prime_agent_link_command_binary "$install_prefix"
+	prime_agent_migrate_command_binary "$install_prefix" "$user_prefix"
 }
 
 main "$@"
