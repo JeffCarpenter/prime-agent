@@ -469,6 +469,7 @@ async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
 				stdio: "inherit",
 				shell: shouldUseWindowsShell(step.command),
 				windowsHide: true,
+				env: step.env ? { ...process.env, ...step.env } : undefined,
 			});
 			child.on("error", (error) => {
 				reject(error);

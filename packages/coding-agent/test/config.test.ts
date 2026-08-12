@@ -243,7 +243,8 @@ describe("detectInstallMethod", () => {
 		expect(command).toEqual({
 			command: "npm",
 			args: ["--prefix", prefix, "install", "-g", tarballUrl],
-			display: `npm --prefix ${prefix} install -g ${tarballUrl}`,
+			env: { npm_config_allow_remote: "all" },
+			display: `npm_config_allow_remote=all npm --prefix ${prefix} install -g ${tarballUrl}`,
 		});
 	});
 
@@ -256,12 +257,14 @@ describe("detectInstallMethod", () => {
 		expect(command).toEqual({
 			command: "npm",
 			args: ["--prefix", prefix, "install", "-g", tarballUrl],
-			display: `npm --prefix ${prefix} install -g ${tarballUrl} && npm --prefix ${prefix} uninstall -g @earendil-works/pi-coding-agent`,
+			env: { npm_config_allow_remote: "all" },
+			display: `npm_config_allow_remote=all npm --prefix ${prefix} install -g ${tarballUrl} && npm --prefix ${prefix} uninstall -g @earendil-works/pi-coding-agent`,
 			steps: [
 				{
 					command: "npm",
 					args: ["--prefix", prefix, "install", "-g", tarballUrl],
-					display: `npm --prefix ${prefix} install -g ${tarballUrl}`,
+					env: { npm_config_allow_remote: "all" },
+					display: `npm_config_allow_remote=all npm --prefix ${prefix} install -g ${tarballUrl}`,
 				},
 				{
 					command: "npm",
