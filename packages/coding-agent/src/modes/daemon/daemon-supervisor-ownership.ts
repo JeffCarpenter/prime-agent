@@ -214,7 +214,9 @@ class RenewableRegistryRecord {
 }
 
 class DaemonSupervisorOwnership {
+	private releasing = false;
 	private released = false;
+	private releasePromise?: Promise<void>;
 
 	constructor(
 		readonly record: DaemonSupervisorOwnerRecord,
@@ -223,12 +225,19 @@ class DaemonSupervisorOwnership {
 	) {}
 
 	async assertCurrent(): Promise<void> {
-		if (this.released) {
+		if (this.releasing || this.released) {
 			throw this.ownershipLostError();
 		}
-		const current = readOwnerRecord(this.ownerDirectory);
-		if (!current || !sameOwnerRecord(current, this.record)) {
+		const current = readOwnerRecordState(this.ownerDirectory);
+		const scope = readOwnerScopeState(this.ownerDirectory);
+		if (
+			current.kind !== "valid" ||
+			!sameOwnerRecord(current.value, this.record) ||
+			scope.kind !== "valid" ||
+			!sameOwnerScope(scope.value, this.record)
+		) {
 			throw this.ownershipLostError();
+		}
 		}
 	}
 
@@ -246,33 +255,70 @@ class DaemonSupervisorOwnership {
 	 * resurrect itself past its successor.
 	 */
 	async restoreIfUnowned(): Promise<boolean> {
-		if (this.released || !matchesExactProcessIdentity(this.record)) {
+		if (this.releasing || this.released) {
 			return false;
 		}
-		return withDaemonSupervisorRegistryGuard(this.registryDir, () => {
-			const current = readOwnerRecord(this.ownerDirectory);
-			if (current) {
-				return sameOwnerRecord(current, this.record);
-			}
-			for (const directory of listOwnerDirectories(this.registryDir)) {
-				if (directory === this.ownerDirectory) {
-					continue;
-				}
-				const owner = readOwnerRecordForScope(directory, (scope) => ownerConflicts(scope, this.record));
-				if (owner && ownerConflicts(owner, this.record) && isProcessIdentityAlive(owner)) {
+		const staleDirectories: string[] = [];
+		try {
+			return await withDaemonSupervisorRegistryGuard(this.registryDir, () => {
+				if (this.releasing || this.released) {
 					return false;
 				}
+				const current = readOwnerRecordState(this.ownerDirectory);
+				const scope = readOwnerScopeState(this.ownerDirectory);
+				if (current.kind === "invalid" || scope.kind === "invalid") {
+					return false;
+				}
+				if (current.kind === "valid" && !sameOwnerRecord(current.value, this.record)) {
+					return false;
+				}
+				if (scope.kind === "valid" && !sameOwnerScope(scope.value, this.record)) {
+					return false;
+				}
+				if (current.kind === "valid" && scope.kind === "valid") {
+					return true;
+				}
+				for (const directory of listOwnerDirectories(this.registryDir)) {
+					if (directory === this.ownerDirectory) {
+						continue;
+					}
+					const owner = readOwnerRecordForScope(directory, (candidateScope) =>
+						ownerConflicts(candidateScope, this.record),
+					);
+					if (!owner || !ownerConflicts(owner, this.record)) {
+						continue;
+					}
+					if (isProcessIdentityAlive(owner)) {
+						return false;
+					}
+					const staleDirectory = `${directory}.stale-${randomUUID()}`;
+					renameSync(directory, staleDirectory);
+					staleDirectories.push(staleDirectory);
+				}
+				// The liveness proof must be made while holding the same guard as the
+				// rewrite. A predecessor that has begun releasing is fenced above.
+				if (this.releasing || this.released || !matchesVerifiedProcessIdentity(this.record)) {
+					return false;
+				}
+				this.record.updatedAt = new Date().toISOString();
+				mkdirSync(this.ownerDirectory, { recursive: true, mode: 0o700 });
+				if (scope.kind === "absent") {
+					writeOwnerScope(this.ownerDirectory, this.record);
+				}
+				if (current.kind === "absent") {
+					writeOwnerRecord(this.ownerDirectory, this.record);
+				}
+				return true;
+			});
+		} finally {
+			for (const directory of staleDirectories) {
+				rmSync(directory, { recursive: true, force: true });
 			}
-			this.record.updatedAt = new Date().toISOString();
-			mkdirSync(this.ownerDirectory, { recursive: true, mode: 0o700 });
-			writeOwnerScope(this.ownerDirectory, this.record);
-			writeOwnerRecord(this.ownerDirectory, this.record);
-			return true;
-		});
+		}
 	}
 
 	async updatePhase(phase: DaemonSupervisorOwnerPhase): Promise<void> {
-		if (this.released) {
+		if (this.releasing || this.released) {
 			return;
 		}
 		const updated = await mutateDaemonSupervisorOwner(
@@ -294,17 +340,38 @@ class DaemonSupervisorOwnership {
 		if (this.released) {
 			return;
 		}
+		if (this.releasePromise) {
+			return this.releasePromise;
+		}
+		this.releasing = true;
+		const release = this.releaseOnce();
+		this.releasePromise = release;
+		const clearRelease = (): void => {
+			if (this.releasePromise !== release) {
+				return;
+			}
+			this.releasePromise = undefined;
+			if (!this.released) {
+				this.releasing = false;
+			}
+		};
+		void release.then(clearRelease, clearRelease);
+		return release;
+	}
+
+	private async releaseOnce(): Promise<void> {
 		let releasedDirectory: string | undefined;
 		try {
 			await withDaemonSupervisorRegistryGuard(this.registryDir, () => {
 				const current = readOwnerRecord(this.ownerDirectory);
-				if (!current || current.token !== this.record.token) {
-					return;
+				if (current?.token === this.record.token) {
+					releasedDirectory = `${this.ownerDirectory}.released-${randomUUID()}`;
+					renameSync(this.ownerDirectory, releasedDirectory);
 				}
-				releasedDirectory = `${this.ownerDirectory}.released-${randomUUID()}`;
-				renameSync(this.ownerDirectory, releasedDirectory);
+				// Linearize release before the registry guard is made available to a
+				// queued restore attempt.
+				this.released = true;
 			});
-			this.released = true;
 		} finally {
 			if (releasedDirectory) {
 				rmSync(releasedDirectory, { recursive: true, force: true });
@@ -718,6 +785,14 @@ function matchesExactProcessIdentity(identity: ProcessIdentity): boolean {
 	);
 }
 
+function matchesVerifiedProcessIdentity(identity: ProcessIdentity): boolean {
+	return (
+		typeof identity.processStartId === "string" &&
+		isProcessAlive(identity.pid) &&
+		compareProcessStartIds(identity.processStartId, cachedProcessStartId(identity.pid)) === "match"
+	);
+}
+
 function isProcessAlive(pid: number): boolean {
 	try {
 		process.kill(pid, 0);
@@ -761,6 +836,15 @@ function sameOwnerRecord(left: DaemonSupervisorOwnerRecord, right: DaemonSupervi
 		left.pid === right.pid &&
 		left.processStartId === right.processStartId &&
 		left.socketPath === right.socketPath
+	);
+}
+
+function sameOwnerScope(left: DaemonSupervisorOwnerScope, right: DaemonSupervisorOwnerScope): boolean {
+	return (
+		left.token === right.token &&
+		left.generation === right.generation &&
+		left.socketPath === right.socketPath &&
+		left.descriptorDir === right.descriptorDir
 	);
 }
 
@@ -812,11 +896,18 @@ function readOwnerRecordForScope(
 }
 
 function readOwnerRecord(directory: string): DaemonSupervisorOwnerRecord | undefined {
+	const state = readOwnerRecordState(directory);
+	return state.kind === "valid" ? state.value : undefined;
+}
+
+type DurableRecordState<T> = { kind: "absent" | "invalid" } | { kind: "valid"; value: T };
+
+function readOwnerRecordState(directory: string): DurableRecordState<DaemonSupervisorOwnerRecord> {
 	try {
 		const value = JSON.parse(readFileSync(resolve(directory, "owner.json"), "utf8")) as unknown;
-		return isDaemonSupervisorOwnerRecord(value) ? value : undefined;
-	} catch {
-		return undefined;
+		return isDaemonSupervisorOwnerRecord(value) ? { kind: "valid", value } : { kind: "invalid" };
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "invalid" };
 	}
 }
 
@@ -844,14 +935,21 @@ function isDaemonSupervisorOwnerRecord(value: unknown): value is DaemonSuperviso
 }
 
 function readOwnerScope(directory: string): DaemonSupervisorOwnerScope | undefined {
+	const state = readOwnerScopeState(directory);
+	return state.kind === "valid" ? state.value : undefined;
+}
+
+function readOwnerScopeState(directory: string): DurableRecordState<DaemonSupervisorOwnerScope> {
 	try {
 		const value = JSON.parse(readFileSync(resolve(directory, "scope.json"), "utf8")) as unknown;
 		if (!isDaemonSupervisorOwnerScope(value)) {
-			return undefined;
+			return { kind: "invalid" };
 		}
-		return ownerDirectoryPath(dirname(directory), value.generation) === directory ? value : undefined;
-	} catch {
-		return undefined;
+		return ownerDirectoryPath(dirname(directory), value.generation) === directory
+			? { kind: "valid", value }
+			: { kind: "invalid" };
+	} catch (error) {
+		return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "absent" } : { kind: "invalid" };
 	}
 }
 

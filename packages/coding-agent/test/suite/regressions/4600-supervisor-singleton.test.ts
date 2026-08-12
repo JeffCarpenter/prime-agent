@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { createConnection } from "node:net";
 import { join, resolve } from "node:path";
+import lockfile from "proper-lockfile";
 import { afterEach, describe, expect, it } from "vitest";
 import { ENV_AGENT_DIR, getCronJobsPath } from "../../../src/config.js";
 import { getProcessStartId } from "../../../src/core/session-lease.js";
@@ -1175,6 +1176,97 @@ describe("ENG-4600 daemon supervisor ownership", () => {
 		await ownership.release();
 		expect(await ownership.restoreIfUnowned()).toBe(false);
 		expect(listOwnerRecords(paths.registryDir)).toEqual([]);
+	});
+
+	it("repairs only absent owner metadata and fails closed on corrupt records", async () => {
+		const paths = await createPaths();
+		const ownership = await acquireDaemonSupervisorOwnership({
+			agentDir: paths.agentDir,
+			appVersion: "test",
+			descriptorDir: paths.descriptorDir,
+			generation: "partial-owner-records",
+			registryDir: paths.registryDir,
+			socketPath: paths.socketPath,
+		});
+		const ownerPath = ownerRecordPath(paths.registryDir, ownership.record.generation);
+		const scopePath = ownerScopePath(paths.registryDir, ownership.record.generation);
+		const originalOwner = readFileSync(ownerPath, "utf8");
+		const originalScope = readFileSync(scopePath, "utf8");
+		try {
+			writeFileSync(ownerPath, "{ malformed\n");
+			expect(await ownership.restoreIfUnowned()).toBe(false);
+			expect(readFileSync(ownerPath, "utf8")).toBe("{ malformed\n");
+
+			writeFileSync(ownerPath, originalOwner);
+			rmSync(scopePath);
+			await expect(ownership.assertCurrent()).rejects.toThrow(/no longer owns its registry entry/);
+			expect(await ownership.restoreIfUnowned()).toBe(true);
+			expect(JSON.parse(readFileSync(scopePath, "utf8"))).toMatchObject({
+				token: ownership.record.token,
+				generation: ownership.record.generation,
+			});
+
+			rmSync(ownerPath);
+			writeFileSync(scopePath, "{ malformed\n");
+			expect(await ownership.restoreIfUnowned()).toBe(false);
+			expect(readFileSync(scopePath, "utf8")).toBe("{ malformed\n");
+		} finally {
+			writeFileSync(ownerPath, originalOwner);
+			writeFileSync(scopePath, originalScope);
+			await ownership.release();
+		}
+	});
+
+	it("does not restore an owner after release has begun waiting for the registry guard", async () => {
+		const paths = await createPaths();
+		const ownership = await acquireDaemonSupervisorOwnership({
+			agentDir: paths.agentDir,
+			appVersion: "test",
+			descriptorDir: paths.descriptorDir,
+			generation: "release-restore-race",
+			registryDir: paths.registryDir,
+			socketPath: paths.socketPath,
+		});
+		rmSync(ownerRecordPath(paths.registryDir, ownership.record.generation));
+		rmSync(ownerScopePath(paths.registryDir, ownership.record.generation));
+		let releaseGuard: (() => Promise<void>) | undefined = await lockfile.lock(paths.registryDir, {
+			realpath: false,
+			lockfilePath: resolve(paths.registryDir, ".guard"),
+		});
+		try {
+			const restore = ownership.restoreIfUnowned();
+			const release = ownership.release();
+			await releaseGuard();
+			releaseGuard = undefined;
+
+			await expect(restore).resolves.toBe(false);
+			await expect(release).resolves.toBeUndefined();
+			expect(existsSync(ownerRecordPath(paths.registryDir, ownership.record.generation))).toBe(false);
+			expect(existsSync(ownerScopePath(paths.registryDir, ownership.record.generation))).toBe(false);
+		} finally {
+			await releaseGuard?.();
+			await ownership.release();
+		}
+	});
+
+	it("requires the original process identity before restoring missing records", async () => {
+		const paths = await createPaths();
+		const ownership = await acquireDaemonSupervisorOwnership({
+			agentDir: paths.agentDir,
+			appVersion: "test",
+			descriptorDir: paths.descriptorDir,
+			generation: "process-identity-checked-restore",
+			registryDir: paths.registryDir,
+			socketPath: paths.socketPath,
+		});
+		rmSync(join(paths.registryDir, `${ownership.record.generation}.owner`), { recursive: true });
+		ownership.record.processStartId = `${ownership.record.processStartId ?? "missing"}-replaced`;
+
+		expect(await ownership.restoreIfUnowned()).toBe(false);
+		expect(existsSync(join(paths.registryDir, `${ownership.record.generation}.owner`))).toBe(false);
+		ownership.record.processStartId = undefined;
+		expect(await ownership.restoreIfUnowned()).toBe(false);
+		await ownership.release();
 	});
 
 	it("does not resurrect a reaped generation over a live successor", async () => {

@@ -975,7 +975,7 @@ export class DaemonSupervisor {
 		// Piggyback an ownership self-check on the periodic sweep so an idle
 		// supervisor whose owner record was externally removed heals without
 		// waiting for the next client command.
-		await this.assertCurrentOwnership().catch(() => undefined);
+		await this.assertCurrentOwnership();
 		await this.settingsManager.reload();
 		if (this.shuttingDown || this.updateRestartPhase !== undefined) return;
 		const idleEvictionMinutes = this.settingsManager.getIdleEvictionMinutes();
@@ -985,9 +985,11 @@ export class DaemonSupervisor {
 		await Promise.all(
 			[...this.workers.values()].map(async (worker) => {
 				try {
+					await this.assertCurrentOwnership();
 					await this.refreshWorkerSummaries(worker);
 					refreshed.add(worker);
-				} catch {
+				} catch (error) {
+					if (isSupervisorGenerationStale(error)) throw error;
 					// A disconnected or transitioning worker is never an eviction candidate.
 				}
 			}),
@@ -1002,6 +1004,7 @@ export class DaemonSupervisor {
 				.filter((worker) => !candidates.includes(worker))
 				.map(async (worker) => {
 					try {
+						await this.assertCurrentOwnership();
 						const response = await worker.client?.requestWorker(
 							{
 								type: "worker_passivate_idle_children",
@@ -1014,6 +1017,7 @@ export class DaemonSupervisor {
 						if (response && !response.success) throw new Error(response.error);
 						await this.refreshWorkerSummaries(worker);
 					} catch (error) {
+						if (isSupervisorGenerationStale(error)) throw error;
 						refreshed.delete(worker);
 						this.log(`Child passivation sweep failed for worker ${worker.descriptor.workerId}: ${String(error)}`);
 					}
@@ -1034,7 +1038,15 @@ export class DaemonSupervisor {
 			);
 			if (this.shuttingDown || this.updateRestartPhase !== undefined) return;
 			await Promise.all(
-				candidates.map((worker) => this.refreshWorkerSummaries(worker).catch(() => refreshed.delete(worker))),
+				candidates.map(async (worker) => {
+					try {
+						await this.assertCurrentOwnership();
+						await this.refreshWorkerSummaries(worker);
+					} catch (error) {
+						if (isSupervisorGenerationStale(error)) throw error;
+						refreshed.delete(worker);
+					}
+				}),
 			);
 			if (this.shuttingDown || this.updateRestartPhase !== undefined) return;
 			const evictable = candidates.filter(
@@ -1049,6 +1061,7 @@ export class DaemonSupervisor {
 			await Promise.all(
 				evictable.map(async (worker) => {
 					if (this.shuttingDown || this.updateRestartPhase !== undefined) return;
+					await this.assertCurrentOwnership();
 					const snapshot = this.workerEvictionSnapshot(worker);
 					const idleMinutes = Math.floor(
 						Math.min(...snapshot.sessions.map((session) => now - session.lastActivityAt)) / 60_000,

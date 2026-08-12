@@ -1,0 +1,1 @@
+- Fixed live daemon supervisors rejecting commands after temporary owner records are externally removed ([#1225](https://github.com/PrimeIntellect-ai/prime-agent/pull/1225) by [@irl-dan](https://github.com/irl-dan)).

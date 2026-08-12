@@ -34,6 +34,7 @@ interface SupervisorInternals {
 	catalog: { resolve: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> };
 	createOrReuseWorker: ReturnType<typeof vi.fn>;
 	stopWorker: ReturnType<typeof vi.fn>;
+	assertCurrentOwnership: ReturnType<typeof vi.fn>;
 	log: ReturnType<typeof vi.fn>;
 	scheduleIdleEvictionSweep(): void;
 	runIdleEvictionSweep(now?: number): Promise<void>;
@@ -99,6 +100,7 @@ function makeSupervisor(idleEvictionMinutes: number | "off" = 90): SupervisorInt
 	supervisor.stopWorker = vi.fn(async (worker: WorkerFixture) => {
 		supervisor.workers.delete(worker.descriptor.workerId);
 	});
+	supervisor.assertCurrentOwnership = vi.fn(async () => undefined);
 	supervisor.log = vi.fn();
 	return supervisor;
 }
@@ -232,6 +234,22 @@ describe("daemon supervisor whole-tree eviction", () => {
 
 		expect(supervisor.stopWorker).not.toHaveBeenCalled();
 		expect(idle.client?.request).not.toHaveBeenCalled();
+	});
+
+	it("does not mutate workers after the supervisor loses ownership", async () => {
+		const now = Date.parse("2026-08-01T12:00:00.000Z");
+		const supervisor = makeSupervisor();
+		const idle = makeWorker("idle", [makeSummary("idle-root", now)]);
+		supervisor.workers.set("idle", idle);
+		supervisor.assertCurrentOwnership.mockRejectedValue(
+			Object.assign(new Error("ownership lost"), { code: "supervisor_generation_stale" }),
+		);
+
+		await expect(supervisor.runIdleEvictionSweep(now)).rejects.toThrow("ownership lost");
+
+		expect(idle.client?.request).not.toHaveBeenCalled();
+		expect(idle.client?.requestWorker).not.toHaveBeenCalled();
+		expect(supervisor.stopWorker).not.toHaveBeenCalled();
 	});
 
 	it("awaits an in-flight eviction sweep before shutdown tears down workers", async () => {
