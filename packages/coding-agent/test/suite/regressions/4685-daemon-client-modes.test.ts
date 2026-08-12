@@ -470,6 +470,17 @@ describe("ENG-4685 daemon-backed client modes", () => {
 		await expect(bridge.uiContext.editor("Edit again", "draft")).resolves.toBeUndefined();
 	});
 
+	it("rejects unsupported RPC custom UI without writing a request", async () => {
+		const output = vi.fn();
+		const bridge = createRpcExtensionUiBridge(output);
+		const factory = vi.fn();
+
+		expect(bridge.uiContext.supportsCustom).toBe(false);
+		await expect(bridge.uiContext.custom(factory)).rejects.toThrow("not supported over RPC");
+		expect(factory).not.toHaveBeenCalled();
+		expect(output).not.toHaveBeenCalled();
+	});
+
 	it("isolates throwing RPC event listeners", () => {
 		const client = new RpcClient();
 		const observed: string[] = [];

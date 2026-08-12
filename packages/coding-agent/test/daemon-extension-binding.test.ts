@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession } from "../src/core/agent-session.js";
 import {
 	type CreateAgentSessionRuntimeFactory,
@@ -146,6 +146,37 @@ describe("daemon extension binding", () => {
 				"partial",
 			);
 		}
+	});
+
+	it("rejects custom UI without emitting an unsupported daemon request", async () => {
+		const runtime = await createRuntimeForTest(() => {}, []);
+		const detachedFactory = vi.fn();
+		const detachedUiContext = runtime.session.extensionRunner.getUIContext();
+		expect(detachedUiContext.supportsCustom).toBe(false);
+		await expect(detachedUiContext.custom(detachedFactory)).rejects.toThrow("no UI is attached to this session");
+		expect(detachedFactory).not.toHaveBeenCalled();
+
+		const outbound: DaemonOutbound[] = [];
+		const state: ActiveSessionState = {
+			activeSessionId: "active-custom",
+			runtime,
+			clients: new Set(),
+			pendingAttaches: 0,
+			extensionUiRequests: new Map(),
+			eventGeneration: "generation-custom",
+			lastEventSequence: 0,
+		};
+		await bindActiveSessionState(state, {
+			broadcast: (_state, message) => outbound.push(message),
+			shutdown: () => {},
+		});
+
+		const factory = vi.fn();
+		const uiContext = runtime.session.extensionRunner.getUIContext();
+		expect(uiContext.supportsCustom).toBe(false);
+		await expect(uiContext.custom(factory)).rejects.toThrow("not supported under the daemon/worker architecture");
+		expect(factory).not.toHaveBeenCalled();
+		expect(outbound).not.toContainEqual(expect.objectContaining({ type: "extension_ui_request" }));
 	});
 
 	it("keeps extension replacement callbacks daemon-side and rebinds before withSession", async () => {
