@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -380,7 +380,9 @@ describe("ENG-4677 snapshot catch-up replacement", () => {
 		});
 		firstTranscript.appendEncodedChunk(Buffer.from("orphaned transcript chunk"));
 		expect(firstTranscript.fileBacked).toBe(true);
-		const cacheDirectory = join(root, firstSnapshotId);
+		const cacheDirectories = readdirSync(root).filter((entry) => entry.startsWith(`${firstSnapshotId}-`));
+		expect(cacheDirectories).toHaveLength(1);
+		const cacheDirectory = join(root, cacheDirectories[0]!);
 		expect(existsSync(cacheDirectory)).toBe(true);
 		const waiter = firstTranscript.waitForChunk(1);
 		void waiter.catch(() => undefined);

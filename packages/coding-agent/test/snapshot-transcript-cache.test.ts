@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -59,6 +59,32 @@ describe("snapshot transcript cache", () => {
 		expect(cache.fileBacked).toBe(true);
 		expect(cache.readChunk(0).toString("utf8")).toContain('"session_snapshot_chunk"');
 		cache.dispose();
+	});
+
+	it("isolates concurrent file-backed caches with the same snapshot id", () => {
+		const cacheRoot = tempDir();
+		const options = {
+			activeSessionId: "active-shared",
+			snapshotId: "snapshot-shared",
+			messages: messages(6, 100),
+			cacheRoot,
+			targetChunkBytes: 180,
+			memoryCacheBytes: 300,
+		};
+		const first = new SnapshotTranscriptCache(options);
+		const second = new SnapshotTranscriptCache(options);
+		const secondChunk = second.readChunk(0);
+
+		expect(first.fileBacked).toBe(true);
+		expect(second.fileBacked).toBe(true);
+		expect(readdirSync(cacheRoot)).toHaveLength(2);
+
+		first.dispose();
+
+		expect(readdirSync(cacheRoot)).toHaveLength(1);
+		expect(second.readChunk(0)).toEqual(secondChunk);
+		second.dispose();
+		expect(readdirSync(cacheRoot)).toHaveLength(0);
 	});
 
 	it("streams opaque worker chunks to waiting attachments", async () => {

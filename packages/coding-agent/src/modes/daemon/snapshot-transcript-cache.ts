@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
@@ -257,8 +257,9 @@ export class SnapshotTranscriptCache {
 		this.totalBytes += buffer.length;
 		const memoryLimit = this.options.memoryCacheBytes ?? SNAPSHOT_MEMORY_CACHE_BYTES;
 		if (!this.cacheDirectory && this.totalBytes > memoryLimit) {
-			this.cacheDirectory = join(this.options.cacheRoot, this.options.snapshotId.replaceAll(/[^a-zA-Z0-9_-]/g, "_"));
-			mkdirSync(this.cacheDirectory, { recursive: true, mode: 0o700 });
+			mkdirSync(this.options.cacheRoot, { recursive: true, mode: 0o700 });
+			const snapshotPrefix = this.options.snapshotId.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+			this.cacheDirectory = mkdtempSync(join(this.options.cacheRoot, `${snapshotPrefix}-`));
 			for (let index = 0; index < this.chunks.length; index++) {
 				const existing = this.chunks[index]!;
 				if (!existing.buffer) {

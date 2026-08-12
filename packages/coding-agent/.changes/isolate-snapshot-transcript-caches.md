@@ -1,0 +1,1 @@
+- Fixed concurrent file-backed snapshot streams with the same ID deleting one another's cache files ([#427](https://github.com/PrimeIntellect-ai/prime-agent/pull/427) by [@sethkarten](https://github.com/sethkarten)).
