@@ -1,0 +1,1 @@
+- Added a Prime-specific `PRIME_AGENT=true` environment marker to CLI processes while retaining Pi compatibility ([#859](https://github.com/PrimeIntellect-ai/prime-agent/pull/859) by [@imMamdouhaboammar](https://github.com/imMamdouhaboammar)).
