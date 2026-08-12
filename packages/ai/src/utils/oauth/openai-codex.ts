@@ -1,17 +1,11 @@
 /** OpenAI Codex (ChatGPT OAuth) browser and device login flows. */
 
 import { generatePKCE } from "./pkce.js";
-import {
-	connectOAuthManualInput,
-	createOAuthTerminalWaiter,
-	type OAuthTerminalWaiter,
-	toOAuthLoginError,
-} from "./terminal-waiter.js";
+import { connectOAuthManualInput, createOAuthTerminalWaiter, toOAuthLoginError } from "./terminal-waiter.js";
 import {
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
 	OAuthLoginError,
-	type OAuthLoginErrorSource,
 	type OAuthPrompt,
 	type OAuthProviderInterface,
 } from "./types.js";
@@ -52,8 +46,8 @@ type JwtPayload = {
 	[key: string]: unknown;
 };
 
-function loginCancelledError(): Error {
-	return new Error("Login cancelled");
+function loginCancelledError(): OAuthLoginError {
+	return new OAuthLoginError("cancelled", "signal", "Login cancelled");
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -78,6 +72,7 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 		const onAbort = () => {
 			clearTimeout(timeout);
+			signal?.removeEventListener("abort", onAbort);
 			reject(loginCancelledError());
 		};
 		const timeout = setTimeout(() => {
@@ -122,14 +117,16 @@ function createState(): string {
 
 function parseAuthorizationInput(input: string, expectedState: string): string {
 	const value = input.trim();
-	if (!value) throw new Error("Missing authorization code");
+	if (!value) throw new OAuthLoginError("invalid_callback", "manual", "Missing authorization code");
 
 	let code: string | undefined;
 	let state: string | undefined;
+	let error: string | undefined;
 	try {
 		const url = new URL(value);
 		code = url.searchParams.get("code") ?? undefined;
 		state = url.searchParams.get("state") ?? undefined;
+		error = url.searchParams.get("error") ?? undefined;
 	} catch {
 		const separator = value.lastIndexOf("#");
 		if (separator >= 0) {
@@ -139,13 +136,21 @@ function parseAuthorizationInput(input: string, expectedState: string): string {
 			const params = new URLSearchParams(value);
 			code = params.get("code") ?? undefined;
 			state = params.get("state") ?? undefined;
+			error = params.get("error") ?? undefined;
+		} else if (value.includes("error=")) {
+			const params = new URLSearchParams(value);
+			error = params.get("error") ?? undefined;
+			state = params.get("state") ?? undefined;
 		} else {
 			code = value;
 		}
 	}
 
-	if (!code) throw new Error("Missing authorization code");
-	if (state && state !== expectedState) throw new Error("OAuth state mismatch");
+	if (error) throw new OAuthLoginError("authorization_error", "manual", `OpenAI authorization failed: ${error}`);
+	if (!code) throw new OAuthLoginError("invalid_callback", "manual", "Missing authorization code");
+	if (state && state !== expectedState) {
+		throw new OAuthLoginError("state_mismatch", "manual", "OAuth state mismatch");
+	}
 	return code;
 }
 
@@ -337,6 +342,7 @@ export async function loginOpenAICodexBrowser(options: {
 	onAuth: (info: { url: string; instructions?: string }) => void;
 	onPrompt: (prompt: OAuthPrompt) => Promise<string>;
 	signal?: AbortSignal;
+	callbackTimeoutMs?: number;
 }): Promise<OAuthCredentials> {
 	throwIfAborted(options.signal);
 	const { verifier, challenge } = await generatePKCE();
@@ -353,16 +359,30 @@ export async function loginOpenAICodexBrowser(options: {
 	url.searchParams.set("codex_cli_simplified_flow", "true");
 	url.searchParams.set("originator", "pi");
 
-	options.onAuth({
-		url: url.toString(),
-		instructions: "Complete sign-in, then paste the final redirect URL or authorization code.",
+	const waiter = createOAuthTerminalWaiter<string>({
+		timeoutMs: options.callbackTimeoutMs,
+		signal: options.signal,
 	});
-	const input = await options.onPrompt({
-		message: "Paste the final redirect URL or authorization code",
-		placeholder: "http://localhost:1455/auth/callback?code=...&state=...",
-	});
-	throwIfAborted(options.signal);
-	const code = parseAuthorizationInput(input, state);
+	let code: string;
+	try {
+		options.onAuth({
+			url: url.toString(),
+			instructions: "Complete sign-in, then paste the final redirect URL or authorization code.",
+		});
+		connectOAuthManualInput(
+			waiter,
+			() =>
+				options.onPrompt({
+					message: "Paste the final redirect URL or authorization code",
+					placeholder: "http://localhost:1455/auth/callback?code=...&state=...",
+				}),
+			(input) => parseAuthorizationInput(input, state),
+		);
+		code = await waiter.wait();
+	} catch (error) {
+		waiter.fail(toOAuthLoginError(error, "cancelled", "manual"));
+		throw error;
+	}
 	const tokenResult = await exchangeAuthorizationCode(code, verifier, BROWSER_REDIRECT_URI, options.signal);
 	if (tokenResult.type !== "success") throw new Error(tokenResult.message);
 	const accountId = getAccountId(tokenResult.access);
@@ -390,6 +410,7 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 				onAuth: callbacks.onAuth,
 				onPrompt: callbacks.onPrompt,
 				signal: callbacks.signal,
+				callbackTimeoutMs: callbacks.callbackTimeoutMs,
 			});
 		}
 		return loginOpenAICodex({ onAuth: callbacks.onAuth, signal: callbacks.signal });

@@ -34,19 +34,13 @@ const SCOPES =
 const REQUEST_TIMEOUT_MS = 30_000;
 const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
-type AuthorizationResult = {
-	code: string;
-	state: string;
-};
-
 type CallbackServer = {
 	server: Server;
-	cancelWait: () => void;
-	waitForAuthorization: () => Promise<AuthorizationResult>;
+	waiter: OAuthTerminalWaiter<AuthorizationResult>;
 };
 
-function loginCancelledError(): Error {
-	return new Error("Login cancelled");
+function loginCancelledError(): OAuthLoginError {
+	return new OAuthLoginError("cancelled", "signal", "Login cancelled");
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -121,16 +115,22 @@ async function postJson(
 	return requireRecord(data, context);
 }
 
-function parseAuthorizationInput(input: string, expectedState: string): AuthorizationResult {
+function parseAuthorizationInput(
+	input: string,
+	expectedState: string,
+	source: OAuthLoginErrorSource = "manual",
+): AuthorizationResult {
 	const value = input.trim();
-	if (!value) throw new Error("Missing authorization code");
+	if (!value) throw new OAuthLoginError("invalid_callback", source, "Missing authorization code");
 
 	let code: string | undefined;
 	let state: string | undefined;
+	let error: string | undefined;
 	try {
 		const url = new URL(value);
 		code = url.searchParams.get("code") ?? undefined;
 		state = url.searchParams.get("state") ?? undefined;
+		error = url.searchParams.get("error") ?? undefined;
 	} catch {
 		const separator = value.lastIndexOf("#");
 		if (separator >= 0) {
@@ -140,14 +140,22 @@ function parseAuthorizationInput(input: string, expectedState: string): Authoriz
 			const params = new URLSearchParams(value);
 			code = params.get("code") ?? undefined;
 			state = params.get("state") ?? undefined;
+			error = params.get("error") ?? undefined;
+		} else if (value.includes("error=")) {
+			const params = new URLSearchParams(value);
+			error = params.get("error") ?? undefined;
+			state = params.get("state") ?? undefined;
 		} else {
 			code = value;
 		}
 	}
 
-	if (!code) throw new Error("Missing authorization code");
+	if (error) {
+		throw new OAuthLoginError("authorization_error", source, `Anthropic authentication failed: ${error}`);
+	}
+	if (!code) throw new OAuthLoginError("invalid_callback", source, "Missing authorization code");
 	const resolvedState = state || expectedState;
-	if (resolvedState !== expectedState) throw new Error("OAuth state mismatch");
+	if (resolvedState !== expectedState) throw new OAuthLoginError("state_mismatch", source, "OAuth state mismatch");
 	return { code, state: resolvedState };
 }
 
@@ -196,15 +204,17 @@ function createAuthorizationUrl(challenge: string, state: string, redirectUri: s
 	return `${AUTHORIZE_URL}?${authParams.toString()}`;
 }
 
-async function startCallbackServer(expectedState: string, signal?: AbortSignal): Promise<CallbackServer> {
-	throwIfAborted(signal);
+async function startCallbackServer(options: {
+	expectedState: string;
+	callbackTimeoutMs?: number;
+	signal?: AbortSignal;
+}): Promise<CallbackServer> {
+	throwIfAborted(options.signal);
+	const waiter = createOAuthTerminalWaiter<AuthorizationResult>({
+		timeoutMs: options.callbackTimeoutMs,
+		signal: options.signal,
+	});
 	return new Promise((resolve, reject) => {
-		let settleAuthorization: ((authorization: AuthorizationResult) => void) | undefined;
-		let rejectAuthorization: ((error: Error) => void) | undefined;
-		const authorizationPromise = new Promise<AuthorizationResult>((resolveAuthorization, rejectWait) => {
-			settleAuthorization = resolveAuthorization;
-			rejectAuthorization = rejectWait;
-		});
 		const server = createServer((request, response) => {
 			try {
 				const url = new URL(request.url || "", "http://localhost");
@@ -218,7 +228,9 @@ async function startCallbackServer(expectedState: string, signal?: AbortSignal):
 				if (error) {
 					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
 					response.end(oauthErrorHtml("Anthropic authentication did not complete.", `Error: ${error}`));
-					rejectAuthorization?.(new Error(`Anthropic authentication failed: ${error}`));
+					waiter.fail(
+						new OAuthLoginError("authorization_error", "browser", `Anthropic authentication failed: ${error}`),
+					);
 					return;
 				}
 
@@ -227,40 +239,58 @@ async function startCallbackServer(expectedState: string, signal?: AbortSignal):
 				if (!code || !state) {
 					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
 					response.end(oauthErrorHtml("Missing code or state parameter."));
+					waiter.fail(new OAuthLoginError("invalid_callback", "browser", "Missing code or state parameter"));
 					return;
 				}
-				if (state !== expectedState) {
+				if (state !== options.expectedState) {
 					response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
 					response.end(oauthErrorHtml("State mismatch."));
+					waiter.fail(new OAuthLoginError("state_mismatch", "browser", "OAuth state mismatch"));
 					return;
 				}
 
 				response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
 				response.end(oauthSuccessHtml("Anthropic authentication completed. You can close this window."));
-				settleAuthorization?.({ code, state });
+				waiter.succeed({ code, state });
 			} catch (error) {
 				response.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
 				response.end("Internal error");
-				rejectAuthorization?.(error instanceof Error ? error : new Error(String(error)));
+				waiter.fail(toOAuthLoginError(error, "invalid_callback", "browser"));
 			}
 		});
 
-		const onAbort = () => rejectAuthorization?.(loginCancelledError());
-		signal?.addEventListener("abort", onAbort, { once: true });
-		server.once("error", reject);
+		const onStartupError = (error: Error) => {
+			const loginError = new OAuthLoginError(
+				"callback_server_error",
+				"server",
+				`Could not start Anthropic callback server: ${error.message}`,
+				{ cause: error },
+			);
+			waiter.fail(loginError);
+			reject(loginError);
+		};
+		server.once("error", onStartupError);
 		server.listen(CALLBACK_PORT, CALLBACK_HOST, () => {
-			listening = true;
-			waiter = createOAuthTerminalWaiter<AuthorizationResult>({
-				timeoutMs: options?.callbackTimeoutMs,
-				signal: options?.signal,
+			server.removeListener("error", onStartupError);
+			server.on("error", (error) => {
+				waiter.fail(toOAuthLoginError(error, "callback_server_error", "server"));
 			});
 			resolve({
 				server,
-				cancelWait: () => rejectAuthorization?.(loginCancelledError()),
-				waitForAuthorization: () =>
-					authorizationPromise.finally(() => signal?.removeEventListener("abort", onAbort)),
+				waiter,
 			});
 		});
+	});
+}
+
+async function closeServer(server: Server): Promise<void> {
+	if (!server.listening) return;
+	await new Promise<void>((resolve, reject) => {
+		server.close((error) => {
+			if (error) reject(error);
+			else resolve();
+		});
+		server.closeIdleConnections();
 	});
 }
 
@@ -302,31 +332,34 @@ export async function loginAnthropicBrowser(options: {
 	onManualCodeInput?: () => Promise<string>;
 	onProgress?: (message: string) => void;
 	signal?: AbortSignal;
+	callbackTimeoutMs?: number;
 }): Promise<OAuthCredentials> {
 	throwIfAborted(options.signal);
 	const { verifier, challenge } = await generatePKCE();
-	const callbackServer = await startCallbackServer(verifier, options.signal);
+	const callbackServer = await startCallbackServer({
+		expectedState: verifier,
+		callbackTimeoutMs: options.callbackTimeoutMs,
+		signal: options.signal,
+	});
 
 	try {
+		throwIfAborted(options.signal);
 		options.onAuth({
 			url: createAuthorizationUrl(challenge, verifier, BROWSER_REDIRECT_URI),
 			instructions: "Complete sign-in in your browser. The local callback will finish authentication automatically.",
 		});
-		const callbackAuthorization = callbackServer.waitForAuthorization();
-		const manualAuthorization = options
-			.onManualCodeInput?.()
-			.then((input) => parseAuthorizationInput(input, verifier));
-		callbackAuthorization.catch(() => {});
-		manualAuthorization?.catch(() => {});
-		const authorization = manualAuthorization
-			? await Promise.race([callbackAuthorization, manualAuthorization])
-			: await callbackAuthorization;
+		if (options.onManualCodeInput) {
+			connectOAuthManualInput(callbackServer.waiter, options.onManualCodeInput, (input) =>
+				parseAuthorizationInput(input, verifier),
+			);
+		}
+		const authorization = await callbackServer.waiter.wait();
 		throwIfAborted(options.signal);
 		options.onProgress?.("Exchanging authorization code for tokens...");
 		return await exchangeAuthorizationCode(authorization, verifier, BROWSER_REDIRECT_URI, options.signal);
 	} finally {
-		callbackServer.cancelWait();
-		await new Promise<void>((resolve) => callbackServer.server.close(() => resolve()));
+		callbackServer.waiter.fail(new OAuthLoginError("cancelled", "server", "OAuth callback wait closed"));
+		await closeServer(callbackServer.server);
 	}
 }
 
@@ -357,6 +390,7 @@ export const anthropicOAuthProvider: OAuthProviderInterface = {
 				onManualCodeInput: callbacks.onManualCodeInput,
 				onProgress: callbacks.onProgress,
 				signal: callbacks.signal,
+				callbackTimeoutMs: callbacks.callbackTimeoutMs,
 			});
 		}
 		return loginAnthropic({

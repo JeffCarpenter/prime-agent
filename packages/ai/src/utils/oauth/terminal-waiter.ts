@@ -1,6 +1,7 @@
 import { OAuthLoginError, type OAuthLoginErrorCode, type OAuthLoginErrorSource } from "./types.js";
 
 export const DEFAULT_OAUTH_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
+export const MAX_OAUTH_CALLBACK_TIMEOUT_MS = 2_147_483_647;
 
 export interface OAuthTerminalWaiter<T> {
 	wait: () => Promise<T>;
@@ -14,17 +15,32 @@ export function toOAuthLoginError(
 	source: OAuthLoginErrorSource,
 ): OAuthLoginError {
 	if (error instanceof OAuthLoginError) return error;
-	return new OAuthLoginError(code, source, error instanceof Error ? error.message : String(error), { cause: error });
+	const message =
+		error instanceof Error
+			? error.message
+			: typeof error === "string" && error.length > 0
+				? error
+				: code === "cancelled"
+					? "Login cancelled"
+					: String(error);
+	return new OAuthLoginError(code, source, message, { cause: error });
+}
+
+export function validateOAuthCallbackTimeout(timeoutMs?: number): number {
+	const resolvedTimeout = timeoutMs ?? DEFAULT_OAUTH_CALLBACK_TIMEOUT_MS;
+	if (!Number.isFinite(resolvedTimeout) || resolvedTimeout <= 0 || resolvedTimeout > MAX_OAUTH_CALLBACK_TIMEOUT_MS) {
+		throw new RangeError(
+			`OAuth callback timeout must be a finite positive number no greater than ${MAX_OAUTH_CALLBACK_TIMEOUT_MS} ms`,
+		);
+	}
+	return resolvedTimeout;
 }
 
 export function createOAuthTerminalWaiter<T>(options?: {
 	timeoutMs?: number;
 	signal?: AbortSignal;
 }): OAuthTerminalWaiter<T> {
-	const requestedTimeout = options?.timeoutMs ?? DEFAULT_OAUTH_CALLBACK_TIMEOUT_MS;
-	const timeoutMs = Number.isFinite(requestedTimeout)
-		? Math.max(1, requestedTimeout)
-		: DEFAULT_OAUTH_CALLBACK_TIMEOUT_MS;
+	const timeoutMs = validateOAuthCallbackTimeout(options?.timeoutMs);
 	let settled = false;
 	let abortListenerAttached = false;
 	let resolveWait: ((value: T) => void) | undefined;

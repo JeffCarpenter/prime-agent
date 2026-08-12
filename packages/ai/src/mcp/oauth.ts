@@ -1,4 +1,7 @@
-import type { Server } from "node:http";
+// Generic OAuth 2.1 (PKCE + dynamic client registration) for remote MCP servers.
+// One provider per server, registered as `mcp:<server>` so it reuses auth.json. Node-only (callback server).
+
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { oauthErrorHtml, oauthSuccessHtml } from "../utils/oauth/oauth-page.js";
 import { generatePKCE } from "../utils/oauth/pkce.js";
 import {
@@ -6,6 +9,7 @@ import {
 	createOAuthTerminalWaiter,
 	type OAuthTerminalWaiter,
 	toOAuthLoginError,
+	validateOAuthCallbackTimeout,
 } from "../utils/oauth/terminal-waiter.js";
 import {
 	type OAuthCredentials,
@@ -260,45 +264,48 @@ async function startCallbackServer(
 	redirectUri: string;
 	waiter: OAuthTerminalWaiter<CallbackResult>;
 }> {
-	const { createServer } = await import("node:http");
-	let waiter: OAuthTerminalWaiter<CallbackResult> | undefined;
-
-	const handler = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => {
-		const url = new URL(req.url || "", "http://localhost");
-		if (url.pathname !== CALLBACK_PATH) {
-			res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
-			res.end(oauthErrorHtml("Callback route not found."));
-			return;
-		}
-		const error = url.searchParams.get("error");
-		const code = url.searchParams.get("code");
-		const state = url.searchParams.get("state");
-		res.writeHead(error || !code || !state || state !== expectedState ? 400 : 200, {
-			"Content-Type": "text/html; charset=utf-8",
-		});
-		if (error) {
-			res.end(oauthErrorHtml(`${label} authentication failed.`, `Error: ${error}`));
-			waiter?.fail(new OAuthLoginError("authorization_error", "browser", `${label} authorization failed: ${error}`));
-			return;
-		}
-		if (!code || !state) {
-			res.end(oauthErrorHtml("Missing code or state parameter."));
-			waiter?.fail(new OAuthLoginError("invalid_callback", "browser", "Missing code or state parameter"));
-			return;
-		}
-		if (state !== expectedState) {
-			res.end(oauthErrorHtml("State mismatch."));
-			waiter?.fail(new OAuthLoginError("state_mismatch", "browser", "OAuth state mismatch"));
-			return;
-		}
-		res.end(oauthSuccessHtml(`${label} authentication completed. You can close this window.`));
-		waiter?.succeed({ code, state });
-	};
-
+	validateOAuthCallbackTimeout(options?.callbackTimeoutMs);
 	// Try each candidate port with a FRESH server (a server that failed to listen
 	// can't be reused), so a leaked/concurrent login can't block us with EADDRINUSE.
 	let lastError: unknown;
 	for (const port of CALLBACK_PORTS) {
+		if (options?.signal?.aborted) {
+			throw new OAuthLoginError("cancelled", "signal", "Login cancelled");
+		}
+		let waiter: OAuthTerminalWaiter<CallbackResult> | undefined;
+		const handler = (req: IncomingMessage, res: ServerResponse) => {
+			const url = new URL(req.url || "", "http://localhost");
+			if (url.pathname !== CALLBACK_PATH) {
+				res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+				res.end(oauthErrorHtml("Callback route not found."));
+				return;
+			}
+			const error = url.searchParams.get("error");
+			const code = url.searchParams.get("code");
+			const state = url.searchParams.get("state");
+			res.writeHead(error || !code || !state || state !== expectedState ? 400 : 200, {
+				"Content-Type": "text/html; charset=utf-8",
+			});
+			if (error) {
+				res.end(oauthErrorHtml(`${label} authentication failed.`, `Error: ${error}`));
+				waiter?.fail(
+					new OAuthLoginError("authorization_error", "browser", `${label} authorization failed: ${error}`),
+				);
+				return;
+			}
+			if (!code || !state) {
+				res.end(oauthErrorHtml("Missing code or state parameter."));
+				waiter?.fail(new OAuthLoginError("invalid_callback", "browser", "Missing code or state parameter"));
+				return;
+			}
+			if (state !== expectedState) {
+				res.end(oauthErrorHtml("State mismatch."));
+				waiter?.fail(new OAuthLoginError("state_mismatch", "browser", "OAuth state mismatch"));
+				return;
+			}
+			res.end(oauthSuccessHtml(`${label} authentication completed. You can close this window.`));
+			waiter?.succeed({ code, state });
+		};
 		const server = createServer(handler);
 		// Persistent handler so a post-bind 'error' is never an unhandled crash.
 		let bindErr: ((err: unknown) => void) | undefined;
@@ -333,10 +340,8 @@ async function startCallbackServer(
 				};
 			}
 			lastError = bindFailure ?? new Error(`port ${port} in use`);
-			server.close();
 		} catch (err) {
 			lastError = err;
-			server.close();
 		}
 	}
 	throw new OAuthLoginError(
@@ -347,6 +352,17 @@ async function startCallbackServer(
 		} are all in use. Close other login attempts and retry. (${String(lastError)})`,
 		{ cause: lastError },
 	);
+}
+
+async function closeServer(server: Server): Promise<void> {
+	if (!server.listening) return;
+	await new Promise<void>((resolve, reject) => {
+		server.close((error) => {
+			if (error) reject(error);
+			else resolve();
+		});
+		server.closeIdleConnections();
+	});
 }
 
 function parseRedirectInput(input: string, expectedState: string): { code: string; state: string } {
@@ -468,6 +484,9 @@ export function createMcpOAuthProvider(config: McpOAuthConfig): OAuthProviderInt
 		const scope = config.scopes ?? meta.scopes_supported?.join(" ");
 		const cb = await startCallbackServer(label, state, callbacks);
 		try {
+			if (callbacks.signal?.aborted) {
+				throw new OAuthLoginError("cancelled", "signal", "Login cancelled");
+			}
 			const authParams = new URLSearchParams({
 				client_id: clientId,
 				response_type: "code",
@@ -510,7 +529,7 @@ export function createMcpOAuthProvider(config: McpOAuthConfig): OAuthProviderInt
 			return toCredentials(token, meta.token_endpoint, clientId, config.url, discovery.resource, discovery.issuer);
 		} finally {
 			cb.waiter.fail(new OAuthLoginError("cancelled", "server", "OAuth callback wait closed"));
-			cb.server.close();
+			await closeServer(cb.server);
 		}
 	}
 

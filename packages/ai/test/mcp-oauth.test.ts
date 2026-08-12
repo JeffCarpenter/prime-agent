@@ -538,6 +538,37 @@ describe.sequential("MCP OAuth provider", () => {
 		expect((await callbackRequest)?.status).toBe(200);
 	});
 
+	it("closes the callback server when token exchange fails", async () => {
+		let callbackRequest: Promise<Response> | undefined;
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: unknown): Promise<Response> => {
+				const missing = absentPrm(input);
+				if (missing) return missing;
+				const url = urlOf(input);
+				if (url.endsWith("/.well-known/oauth-authorization-server")) return jsonResponse(ORIGIN_META);
+				if (url === ORIGIN_META.token_endpoint) return jsonResponse({ error: "exchange failed" }, 400);
+				throw new Error(`unexpected fetch: ${url}`);
+			}),
+		);
+		const provider = createMcpOAuthProvider({ server: "demo", url: ORIGIN_URL, clientId: "client" });
+		const loginPromise = provider.login({
+			onAuth: ({ url }) => {
+				const authUrl = new URL(url);
+				const state = authUrl.searchParams.get("state") ?? "";
+				const redirectUri = authUrl.searchParams.get("redirect_uri") ?? "";
+				callbackRequest = fetchFromNetwork(`${redirectUri}?code=browser-code&state=${encodeURIComponent(state)}`);
+			},
+			onPrompt: async () => "",
+		});
+
+		await expect(loginPromise).rejects.toThrow("Token request to https://srv.test/token failed: 400");
+		expect((await callbackRequest)?.status).toBe(200);
+		const rebound = await occupyCallbackPort(CALLBACK_PORT_BASE);
+		expect(rebound).toBeDefined();
+		await closeServers([rebound]);
+	});
+
 	it("settles a manual authorization error with a typed error", async () => {
 		vi.stubGlobal(
 			"fetch",
@@ -587,6 +618,45 @@ describe.sequential("MCP OAuth provider", () => {
 
 		await expect(loginPromise).rejects.toMatchObject({ code: "timeout", source: "timeout" });
 		expect(onPrompt).not.toHaveBeenCalled();
+		const rebound = await occupyCallbackPort(CALLBACK_PORT_BASE);
+		expect(rebound).toBeDefined();
+		await closeServers([rebound]);
+	});
+
+	it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
+		"rejects invalid callback timeout %s without opening the browser",
+		async (callbackTimeoutMs) => {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (input: unknown): Promise<Response> => {
+					const missing = absentPrm(input);
+					if (missing) return missing;
+					const url = urlOf(input);
+					if (url.endsWith("/.well-known/oauth-authorization-server")) return jsonResponse(ORIGIN_META);
+					throw new Error(`unexpected fetch: ${url}`);
+				}),
+			);
+			const onAuth = vi.fn();
+			const provider = createMcpOAuthProvider({ server: "demo", url: ORIGIN_URL, clientId: "client" });
+
+			await expect(provider.login({ onAuth, onPrompt: async () => "", callbackTimeoutMs })).rejects.toThrow(
+				"OAuth callback timeout must be a finite positive number",
+			);
+			expect(onAuth).not.toHaveBeenCalled();
+		},
+	);
+
+	it("rejects a pre-aborted login before discovery", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const provider = createMcpOAuthProvider({ server: "demo", url: ORIGIN_URL, clientId: "client" });
+
+		await expect(
+			provider.login({ onAuth: () => {}, onPrompt: async () => "", signal: controller.signal }),
+		).rejects.toMatchObject({ code: "cancelled", source: "signal" });
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("rejects with a typed cancellation when aborted during the callback wait", async () => {

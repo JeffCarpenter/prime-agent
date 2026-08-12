@@ -63,6 +63,8 @@ export interface OAuthLoginCallbacks {
 	/** Show an interactive selector and return the selected option id, or undefined on cancel. */
 	onSelect?: (prompt: OAuthSelectPrompt) => Promise<string | undefined>;
 	signal?: AbortSignal;
+	/** Maximum time to wait for a callback or pasted browser result. */
+	callbackTimeoutMs?: number;
 	/** Preferred environment-specific path for providers that support both. */
 	loginFlow?: "browser" | "headless";
 }

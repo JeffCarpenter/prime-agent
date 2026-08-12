@@ -41,6 +41,28 @@ describe("OAuth terminal waiter", () => {
 		expect(waiter.fail(new OAuthLoginError("authorization_error", "browser", "late browser error"))).toBe(false);
 	});
 
+	it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
+		"rejects invalid timeout override %s before allocating a wait",
+		(timeoutMs) => {
+			expect(() => createOAuthTerminalWaiter({ timeoutMs })).toThrow(
+				"OAuth callback timeout must be a finite positive number no greater than 2147483647 ms",
+			);
+		},
+	);
+
+	it("clears its timeout and abort listener after success", async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+		const waiter = createOAuthTerminalWaiter<string>({ timeoutMs: 25, signal: controller.signal });
+
+		expect(waiter.succeed("code")).toBe(true);
+		await expect(waiter.wait()).resolves.toBe("code");
+		expect(removeListener).toHaveBeenCalledOnce();
+		await vi.advanceTimersByTimeAsync(25);
+		expect(waiter.fail(new OAuthLoginError("timeout", "timeout", "late timeout"))).toBe(false);
+	});
+
 	it("ignores a late manual rejection after the browser settles", async () => {
 		const manual = deferred<string>();
 		const waiter = createOAuthTerminalWaiter<string>();
@@ -74,6 +96,38 @@ describe("OAuth terminal waiter", () => {
 			message: "dialog cancelled",
 		});
 		expect(waiter.succeed("late-browser-code")).toBe(false);
+	});
+
+	it("settles a synchronous manual-input failure once", async () => {
+		const waiter = createOAuthTerminalWaiter<string>();
+		connectOAuthManualInput(
+			waiter,
+			() => {
+				throw new Error("dialog closed");
+			},
+			(input) => input,
+		);
+
+		await expect(waiter.wait()).rejects.toMatchObject({
+			code: "cancelled",
+			source: "manual",
+			message: "dialog closed",
+		});
+	});
+
+	it("preserves the documented cancellation message for an empty rejection", async () => {
+		const waiter = createOAuthTerminalWaiter<string>();
+		connectOAuthManualInput(
+			waiter,
+			() => Promise.reject(undefined),
+			(input) => input,
+		);
+
+		await expect(waiter.wait()).rejects.toMatchObject({
+			code: "cancelled",
+			source: "manual",
+			message: "Login cancelled",
+		});
 	});
 
 	it("preserves a typed manual validation error", async () => {

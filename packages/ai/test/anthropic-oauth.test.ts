@@ -1,6 +1,12 @@
-import { get } from "node:http";
+import { createServer, get, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { anthropicOAuthProvider, loginAnthropic, refreshAnthropicToken } from "../src/utils/oauth/anthropic.js";
+import {
+	anthropicOAuthProvider,
+	loginAnthropic,
+	loginAnthropicBrowser,
+	refreshAnthropicToken,
+} from "../src/utils/oauth/anthropic.js";
+import { OAuthLoginError } from "../src/utils/oauth/types.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -18,14 +24,28 @@ function getJsonBody(init?: RequestInit): Record<string, string> {
 	return JSON.parse(init.body) as Record<string, string>;
 }
 
-function requestCallback(url: string): Promise<void> {
+function requestCallback(url: string): Promise<number> {
 	return new Promise((resolve, reject) => {
 		const request = get(url, (response) => {
 			response.resume();
-			response.once("end", () => resolve());
+			response.once("end", () => resolve(response.statusCode ?? 0));
 		});
 		request.once("error", reject);
 	});
+}
+
+async function occupyCallbackPort(): Promise<Server | undefined> {
+	const server = createServer();
+	const bound = await new Promise<boolean>((resolve) => {
+		server.once("error", () => resolve(false));
+		server.listen(53692, "127.0.0.1", () => resolve(true));
+	});
+	return bound ? server : undefined;
+}
+
+async function closeServer(server: Server | undefined): Promise<void> {
+	if (!server) return;
+	await new Promise<void>((resolve) => server.close(() => resolve()));
 }
 
 describe.sequential("Anthropic OAuth", () => {
@@ -83,7 +103,7 @@ describe.sequential("Anthropic OAuth", () => {
 
 	it("uses Anthropic's localhost callback when browser login is selected", async () => {
 		const onAuth = vi.fn();
-		let callbackPromise: Promise<void> | undefined;
+		let callbackPromise: Promise<number> | undefined;
 		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 			expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
 			const body = getJsonBody(init);
@@ -162,10 +182,137 @@ describe.sequential("Anthropic OAuth", () => {
 		).rejects.toThrow("Invalid Anthropic token exchange response: missing expires_in");
 	});
 
+	it.each([
+		{
+			name: "authorization error",
+			query: (state: string) => `error=access_denied&state=${encodeURIComponent(state)}`,
+			code: "authorization_error",
+		},
+		{
+			name: "missing code",
+			query: (state: string) => `state=${encodeURIComponent(state)}`,
+			code: "invalid_callback",
+		},
+		{
+			name: "state mismatch",
+			query: () => "code=callback-code&state=wrong-state",
+			code: "state_mismatch",
+		},
+	])("settles a browser $name with a typed error", async ({ query, code }) => {
+		let callbackPromise: Promise<number> | undefined;
+		const loginPromise = loginAnthropicBrowser({
+			onAuth: ({ url }) => {
+				const state = new URL(url).searchParams.get("state") ?? "";
+				callbackPromise = requestCallback(`http://127.0.0.1:53692/callback?${query(state)}`);
+			},
+			onManualCodeInput: () => new Promise<string>(() => {}),
+		});
+
+		await expect(loginPromise).rejects.toMatchObject({ name: "OAuthLoginError", code, source: "browser" });
+		expect(await callbackPromise).toBe(400);
+	});
+
+	it("uses a manual result when it settles before the browser callback", async () => {
+		let authUrl = "";
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				jsonResponse({ access_token: "manual-access", refresh_token: "manual-refresh", expires_in: 3600 }),
+			),
+		);
+
+		const credentials = await loginAnthropicBrowser({
+			onAuth: ({ url }) => {
+				authUrl = url;
+			},
+			onManualCodeInput: async () => {
+				const state = new URL(authUrl).searchParams.get("state") ?? "";
+				return `manual-code#${state}`;
+			},
+		});
+
+		expect(credentials).toMatchObject({ access: "manual-access", refresh: "manual-refresh" });
+		const rebound = await occupyCallbackPort();
+		expect(rebound).toBeDefined();
+		await closeServer(rebound);
+	});
+
+	it("ignores a late manual rejection after the browser callback wins", async () => {
+		let rejectManual: (error: Error) => void = () => {};
+		let callbackPromise: Promise<number> | undefined;
+		const manual = new Promise<string>((_resolve, reject) => {
+			rejectManual = reject;
+		});
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				jsonResponse({ access_token: "browser-access", refresh_token: "browser-refresh", expires_in: 3600 }),
+			),
+		);
+
+		const credentials = await loginAnthropicBrowser({
+			onAuth: ({ url }) => {
+				const state = new URL(url).searchParams.get("state") ?? "";
+				callbackPromise = requestCallback(
+					`http://127.0.0.1:53692/callback?code=browser-code&state=${encodeURIComponent(state)}`,
+				);
+			},
+			onManualCodeInput: () => manual,
+		});
+
+		expect(credentials.access).toBe("browser-access");
+		expect(await callbackPromise).toBe(200);
+		rejectManual(new Error("late cancellation"));
+		await Promise.resolve();
+	});
+
+	it("closes the callback server when token exchange fails", async () => {
+		let callbackPromise: Promise<number> | undefined;
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => jsonResponse({ error: "exchange failed" }, 400)),
+		);
+		const loginPromise = loginAnthropicBrowser({
+			onAuth: ({ url }) => {
+				const state = new URL(url).searchParams.get("state") ?? "";
+				callbackPromise = requestCallback(
+					`http://127.0.0.1:53692/callback?code=browser-code&state=${encodeURIComponent(state)}`,
+				);
+			},
+		});
+
+		await expect(loginPromise).rejects.toThrow("Anthropic token exchange failed (400)");
+		expect(await callbackPromise).toBe(200);
+		const rebound = await occupyCallbackPort();
+		expect(rebound).toBeDefined();
+		await closeServer(rebound);
+	});
+
+	it("times out a pending browser callback and releases the port", async () => {
+		await expect(loginAnthropicBrowser({ onAuth: () => {}, callbackTimeoutMs: 5 })).rejects.toMatchObject({
+			code: "timeout",
+			source: "timeout",
+		});
+
+		const rebound = await occupyCallbackPort();
+		expect(rebound).toBeDefined();
+		await closeServer(rebound);
+	});
+
+	it("cancels an active browser wait with a typed error", async () => {
+		const controller = new AbortController();
+		const loginPromise = loginAnthropicBrowser({
+			onAuth: () => controller.abort(),
+			signal: controller.signal,
+		});
+
+		await expect(loginPromise).rejects.toMatchObject({ code: "cancelled", source: "signal" });
+	});
+
 	it("returns a typed callback-server error when the callback port is occupied", async () => {
-		const blocker = await occupyCallbackPort(53692);
+		const blocker = await occupyCallbackPort();
 		try {
-			const error = await loginAnthropic({ onAuth: () => {}, onPrompt: async () => "" }).then(
+			const error = await loginAnthropicBrowser({ onAuth: () => {} }).then(
 				() => undefined,
 				(reason: unknown) => reason,
 			);

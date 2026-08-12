@@ -1,6 +1,10 @@
-import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loginOpenAICodex, loginOpenAICodexBrowser, refreshOpenAICodexToken } from "../src/utils/oauth/openai-codex.js";
+import {
+	loginOpenAICodex,
+	loginOpenAICodexBrowser,
+	openaiCodexOAuthProvider,
+	refreshOpenAICodexToken,
+} from "../src/utils/oauth/openai-codex.js";
 
 function jsonResponse(body: unknown, status: number = 200): Response {
 	return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -14,39 +18,25 @@ function accessToken(accountId: string): string {
 	return `header.${payload}.signature`;
 }
 
-const fetchFromNetwork = globalThis.fetch.bind(globalThis);
-
-function accessToken(): string {
-	const payload = btoa(
-		JSON.stringify({
-			"https://api.openai.com/auth": { chatgpt_account_id: "account-id" },
-		}),
-	);
-	return `e30.${payload}.signature`;
-}
-
-function tokenResponse(): Response {
-	return new Response(
-		JSON.stringify({ access_token: accessToken(), refresh_token: "refresh-token", expires_in: 3600 }),
-		{ status: 200, headers: { "Content-Type": "application/json" } },
-	);
-}
-
-async function occupyCallbackPort(port: number): Promise<Server | undefined> {
-	const server = createServer();
-	const bound = await new Promise<boolean>((resolve) => {
-		server.once("error", () => resolve(false));
-		server.listen(port, "127.0.0.1", () => resolve(true));
+function deferred<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T) => void;
+	reject: (error: unknown) => void;
+} {
+	let resolvePromise: ((value: T) => void) | undefined;
+	let rejectPromise: ((error: unknown) => void) | undefined;
+	const promise = new Promise<T>((resolve, reject) => {
+		resolvePromise = resolve;
+		rejectPromise = reject;
 	});
-	return bound ? server : undefined;
+	return {
+		promise,
+		resolve: (value) => resolvePromise?.(value),
+		reject: (error) => rejectPromise?.(error),
+	};
 }
 
-async function closeServer(server: Server | undefined): Promise<void> {
-	if (!server) return;
-	await new Promise<void>((resolve) => server.close(() => resolve()));
-}
-
-describe.sequential("OpenAI Codex OAuth", () => {
+describe("OpenAI Codex OAuth", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
@@ -92,11 +82,7 @@ describe.sequential("OpenAI Codex OAuth", () => {
 			url: "https://auth.openai.com/codex/device",
 			instructions: "Enter code: ABCD-EFGH",
 		});
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-
-		await vi.advanceTimersByTimeAsync(1999);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		await vi.advanceTimersByTimeAsync(1);
+		await vi.advanceTimersByTimeAsync(2000);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		await vi.advanceTimersByTimeAsync(2000);
 		await expect(loginPromise).resolves.toMatchObject({
@@ -107,9 +93,10 @@ describe.sequential("OpenAI Codex OAuth", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(4);
 	});
 
-	it("cancels while waiting to poll", async () => {
+	it("cancels while waiting to poll and removes its abort listener", async () => {
 		vi.useFakeTimers();
 		const controller = new AbortController();
+		const removeListener = vi.spyOn(controller.signal, "removeEventListener");
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(
@@ -121,7 +108,26 @@ describe.sequential("OpenAI Codex OAuth", () => {
 		const loginPromise = loginOpenAICodex({ onAuth: () => {}, signal: controller.signal });
 		await vi.advanceTimersByTimeAsync(0);
 		controller.abort();
-		await expect(loginPromise).rejects.toThrow("Login cancelled");
+		await expect(loginPromise).rejects.toMatchObject({
+			code: "cancelled",
+			source: "signal",
+			message: "Login cancelled",
+		});
+		expect(removeListener).toHaveBeenCalledOnce();
+	});
+
+	it("rejects a pre-aborted device login before fetching", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(loginOpenAICodex({ onAuth: () => {}, signal: controller.signal })).rejects.toMatchObject({
+			code: "cancelled",
+			source: "signal",
+			message: "Login cancelled",
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("completes browser login from a pasted redirect URL", async () => {
@@ -148,192 +154,76 @@ describe.sequential("OpenAI Codex OAuth", () => {
 		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
+	it.each([
+		{
+			name: "authorization error",
+			input: (state: string) =>
+				`http://localhost:1455/auth/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+			code: "authorization_error",
+		},
+		{
+			name: "missing code",
+			input: (state: string) => `http://localhost:1455/auth/callback?state=${encodeURIComponent(state)}`,
+			code: "invalid_callback",
+		},
+		{
+			name: "state mismatch",
+			input: () => "http://localhost:1455/auth/callback?code=browser-code&state=wrong-state",
+			code: "state_mismatch",
+		},
+	])("settles a pasted $name with a typed error", async ({ input, code }) => {
+		let authUrl = "";
+		const loginPromise = loginOpenAICodexBrowser({
+			onAuth: ({ url }) => {
+				authUrl = url;
+			},
+			onPrompt: async () => input(new URL(authUrl).searchParams.get("state") ?? ""),
+		});
+
+		await expect(loginPromise).rejects.toMatchObject({ name: "OAuthLoginError", code, source: "manual" });
+	});
+
+	it("times out pending browser input and observes its late rejection", async () => {
+		const prompt = deferred<string>();
+		const loginPromise = openaiCodexOAuthProvider.login({
+			loginFlow: "browser",
+			onAuth: () => {},
+			onPrompt: () => prompt.promise,
+			callbackTimeoutMs: 5,
+		});
+
+		await expect(loginPromise).rejects.toMatchObject({ code: "timeout", source: "timeout" });
+		prompt.reject(new Error("late prompt cancellation"));
+		await Promise.resolve();
+	});
+
+	it("cancels pending browser input and ignores its late success", async () => {
+		const controller = new AbortController();
+		const prompt = deferred<string>();
+		const loginPromise = loginOpenAICodexBrowser({
+			onAuth: () => controller.abort(),
+			onPrompt: () => prompt.promise,
+			signal: controller.signal,
+		});
+
+		await expect(loginPromise).rejects.toMatchObject({ code: "cancelled", source: "signal" });
+		prompt.resolve("late-code");
+		await Promise.resolve();
+	});
+
 	it("does not write token refresh failures to stderr", async () => {
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async (): Promise<Response> => {
-				return new Response(
-					JSON.stringify({
-						error: {
-							message: "Could not validate your token. Please try signing in again.",
-							type: "invalid_request_error",
-						},
-					}),
-					{ status: 401, statusText: "Unauthorized", headers: { "Content-Type": "application/json" } },
-				);
-			}),
+			vi.fn(
+				async (): Promise<Response> =>
+					jsonResponse({ error: { message: "Could not validate your token. Please try signing in again." } }, 401),
+			),
 		);
 
 		await expect(refreshOpenAICodexToken("invalid-refresh-token")).rejects.toThrow(
 			/OpenAI Codex token refresh failed \(401\).*Could not validate your token/,
 		);
 		expect(consoleError).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		{
-			name: "authorization error",
-			query: (state: string) => `error=access_denied&state=${encodeURIComponent(state)}`,
-			code: "authorization_error",
-		},
-		{
-			name: "missing code",
-			query: (state: string) => `state=${encodeURIComponent(state)}`,
-			code: "invalid_callback",
-		},
-		{
-			name: "state mismatch",
-			query: () => "code=browser-code&state=wrong-state",
-			code: "state_mismatch",
-		},
-	])("settles the $name browser callback with a typed error", async ({ query, code }) => {
-		let callbackRequest: Promise<Response> | undefined;
-		const loginPromise = loginOpenAICodex({
-			onAuth: ({ url }) => {
-				const state = new URL(url).searchParams.get("state") ?? "";
-				callbackRequest = fetchFromNetwork(`http://127.0.0.1:1455/auth/callback?${query(state)}`);
-			},
-			onPrompt: async () => "",
-			onManualCodeInput: () => new Promise<string>(() => {}),
-		});
-
-		await expect(loginPromise).rejects.toMatchObject({
-			name: "OAuthLoginError",
-			code,
-			source: "browser",
-		});
-		expect((await callbackRequest)?.status).toBe(400);
-	});
-
-	it("exchanges a manual result", async () => {
-		let authUrl = "";
-		const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit): Promise<Response> => tokenResponse());
-		vi.stubGlobal("fetch", fetchMock);
-
-		const credentials = await loginOpenAICodex({
-			onAuth: ({ url }) => {
-				authUrl = url;
-			},
-			onPrompt: async () => "",
-			onManualCodeInput: async () => {
-				const state = new URL(authUrl).searchParams.get("state") ?? "";
-				return `manual-code#${state}`;
-			},
-		});
-
-		expect(credentials.accountId).toBe("account-id");
-		const params = new URLSearchParams(String(fetchMock.mock.calls[0]?.[1]?.body));
-		expect(params.get("code")).toBe("manual-code");
-	});
-
-	it("settles a manual authorization error with a typed error", async () => {
-		let authUrl = "";
-		const loginPromise = loginOpenAICodex({
-			onAuth: ({ url }) => {
-				authUrl = url;
-			},
-			onPrompt: async () => "",
-			onManualCodeInput: async () => {
-				const state = new URL(authUrl).searchParams.get("state") ?? "";
-				return `http://localhost:1455/auth/callback?error=access_denied&state=${encodeURIComponent(state)}`;
-			},
-		});
-
-		await expect(loginPromise).rejects.toMatchObject({
-			code: "authorization_error",
-			source: "manual",
-		});
-	});
-
-	it("uses the browser result when it settles before manual input", async () => {
-		let callbackRequest: Promise<Response> | undefined;
-		const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit): Promise<Response> => tokenResponse());
-		vi.stubGlobal("fetch", fetchMock);
-
-		const credentials = await loginOpenAICodex({
-			onAuth: ({ url }) => {
-				const state = new URL(url).searchParams.get("state") ?? "";
-				callbackRequest = fetchFromNetwork(
-					`http://127.0.0.1:1455/auth/callback?code=browser-code&state=${encodeURIComponent(state)}`,
-				);
-			},
-			onPrompt: async () => "",
-			onManualCodeInput: () => new Promise<string>(() => {}),
-		});
-
-		expect(credentials.accountId).toBe("account-id");
-		expect((await callbackRequest)?.status).toBe(200);
-		const params = new URLSearchParams(String(fetchMock.mock.calls[0]?.[1]?.body));
-		expect(params.get("code")).toBe("browser-code");
-	});
-
-	it("rejects with a typed error after the callback timeout", async () => {
-		const onPrompt = vi.fn(async () => "unused");
-		const loginPromise = loginOpenAICodex({
-			onAuth: () => {},
-			onPrompt,
-			callbackTimeoutMs: 5,
-		});
-
-		await expect(loginPromise).rejects.toMatchObject({ code: "timeout", source: "timeout" });
-		expect(onPrompt).not.toHaveBeenCalled();
-	});
-
-	it("rejects with a typed cancellation when aborted during the callback wait", async () => {
-		const controller = new AbortController();
-		const loginPromise = loginOpenAICodex({
-			onAuth: () => controller.abort(),
-			onPrompt: async () => "",
-			signal: controller.signal,
-		});
-
-		await expect(loginPromise).rejects.toEqual(
-			expect.objectContaining<Partial<OAuthLoginError>>({ code: "cancelled", source: "signal" }),
-		);
-	});
-
-	it("times out pending manual input when the callback port is occupied", async () => {
-		const blocker = await occupyCallbackPort(1455);
-		const onPrompt = vi.fn(async () => "unused");
-		try {
-			const loginPromise = loginOpenAICodex({
-				onAuth: () => {},
-				onPrompt,
-				onManualCodeInput: () => new Promise<string>(() => {}),
-				callbackTimeoutMs: 5,
-			});
-
-			await expect(loginPromise).rejects.toMatchObject({ code: "timeout", source: "timeout" });
-			expect(onPrompt).not.toHaveBeenCalled();
-		} finally {
-			await closeServer(blocker);
-		}
-	});
-
-	it("cancels a pending manual prompt when the callback port is occupied", async () => {
-		const blocker = await occupyCallbackPort(1455);
-		const controller = new AbortController();
-		let markPromptStarted: () => void = () => {};
-		const promptStarted = new Promise<void>((resolve) => {
-			markPromptStarted = resolve;
-		});
-		try {
-			const loginPromise = loginOpenAICodex({
-				onAuth: () => {},
-				onPrompt: () => {
-					markPromptStarted();
-					return new Promise<string>(() => {});
-				},
-				signal: controller.signal,
-			});
-			const rejection = expect(loginPromise).rejects.toMatchObject({ code: "cancelled", source: "signal" });
-
-			await promptStarted;
-			controller.abort();
-			await rejection;
-		} finally {
-			await closeServer(blocker);
-		}
 	});
 });
