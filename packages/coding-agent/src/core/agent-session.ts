@@ -4003,15 +4003,20 @@ export class AgentSession {
 	 * the latest state reaches disk instead of racing process exit.
 	 */
 	async disposeAsync(): Promise<void> {
-		if (this._disposed) {
-			return this._disposeCallbacksPromise;
-		}
 		// Concurrent callers await the same in-flight teardown so none resolves before
 		// the kernel snapshot flush finishes.
 		if (this._disposeAsyncPromise) {
 			return this._disposeAsyncPromise;
 		}
+		if (this._disposed) {
+			return this._disposeCallbacksPromise;
+		}
 		this._asyncTeardownStarted = true;
+		this._sessionInputPumpSuspended = true;
+		this._sessionInputPumpRequested = false;
+		this._sessionInputPumpEpoch++;
+		this._sessionActionCommitDisposeAbortController.abort();
+		this._notifySessionInputCheckpointChange();
 		this._disposeAsyncPromise = (async () => {
 			// Capture both operations before the first await. allSettled observes either
 			// rejection immediately while allowing the independent operation to finish.
@@ -4029,7 +4034,6 @@ export class AgentSession {
 				await this._disposeCallbacksPromise;
 			} else {
 				this._disposing = true;
-				this._sessionActionCommitDisposeAbortController.abort();
 				try {
 					await this._disposeAsyncOnce();
 				} catch (error) {
@@ -4238,10 +4242,15 @@ export class AgentSession {
 		if (this._disposed) {
 			return;
 		}
+		this._asyncTeardownStarted = true;
+		this._sessionInputPumpSuspended = true;
+		this._sessionInputPumpRequested = false;
+		this._sessionInputPumpEpoch++;
 		this._disposed = true;
 		for (const run of this._unsettledRlmChildRuns) run.suppressTerminalNotice = true;
 		for (const controller of this._rlmQuiescenceWaitAborts) controller.abort();
 		this._sessionActionCommitDisposeAbortController.abort();
+		this._notifySessionInputCheckpointChange();
 		try {
 			// Invalidate scheduled timers and abort any in-flight review so a late
 			// resolution cannot write harness state or re-subscribe handlers.
@@ -4660,7 +4669,7 @@ export class AgentSession {
 			!this._sessionInputPumpSuspended &&
 			this._queuedWorkPauses.size === 0 &&
 			!this._disposed &&
-			!this._disposing
+			!this._asyncTeardownStarted
 		);
 	}
 
@@ -4902,6 +4911,9 @@ export class AgentSession {
 		message: CustomMessage,
 		options?: InternalPromptOptions & { executionPolicy?: TurnExecutionPolicy },
 	): Promise<void> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
+		}
 		this._assertProviderQuotaCircuitClosed();
 		if (!this.isStreaming && options?.resumeIfIdle) this._resumeSessionInputAdmission();
 		const admissionEpoch = this._sessionInputPumpEpoch;
@@ -4975,6 +4987,9 @@ export class AgentSession {
 	}
 
 	private async _prompt(text: string, options?: InternalPromptOptions): Promise<void> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
+		}
 		const resumeSuspendedInput = options?.resumeIfIdle !== false;
 		const explicitUserPrompt =
 			options?.automatic !== true && options?.internalPrompt !== true && options?.source !== "extension";
@@ -5244,6 +5259,9 @@ export class AgentSession {
 			resumeIfIdle?: boolean;
 		} = {},
 	): Promise<void> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
+		}
 		const normalized = this._normalizeSubmission(text, images, {
 			parseSessionCommands: false,
 			extensionCommands: "reject",
@@ -5277,6 +5295,9 @@ export class AgentSession {
 			resumeIfIdle?: boolean;
 		} = {},
 	): Promise<boolean> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
+		}
 		const normalized = this._normalizeSubmission(text, images, {
 			parseSessionCommands: false,
 			extensionCommands: "reject",
@@ -5295,6 +5316,9 @@ export class AgentSession {
 	}
 
 	async restoreSessionActions(snapshot: SessionActionRecoverySnapshot): Promise<number> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
+		}
 		if (snapshot.formatVersion !== SESSION_ACTION_RECOVERY_FORMAT_VERSION) {
 			throw new Error(`Unsupported session action recovery format version: ${snapshot.formatVersion}`);
 		}
@@ -5682,7 +5706,7 @@ export class AgentSession {
 	}
 
 	private _assertSessionActionAdmissionAvailable(): void {
-		if (this._disposed || this._disposing) {
+		if (this._asyncTeardownStarted) {
 			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
 		}
 		if (this._sessionInputAdmissionPauses.size > 0) {
@@ -5706,7 +5730,7 @@ export class AgentSession {
 		disposition: "starts_when_admitted" | "queued";
 		ticket?: ActionTicket;
 	} {
-		if (this._disposed || this._disposing) {
+		if (this._asyncTeardownStarted) {
 			throw new Error("Cannot admit a session action because the session is disposing or disposed.");
 		}
 		if (this._sessionInputAdmissionPauses.size > 0) {
@@ -5788,7 +5812,7 @@ export class AgentSession {
 			refinementApply: this._refineInFlight !== undefined,
 			branchMutation: this._branchSummaryOperation !== undefined,
 			schedulerPauseCount: this._queuedWorkPauses.size + (this._sessionInputPumpSuspended ? 1 : 0),
-			disposing: this._disposed || this._disposing,
+			disposing: this._asyncTeardownStarted,
 		};
 	}
 
@@ -5821,7 +5845,7 @@ export class AgentSession {
 
 	private _scheduleSessionInputPump(): void {
 		if (this._sessionInputPumpSuspended || this._queuedWorkPauses.size > 0) return;
-		if (this._disposed || this._disposing || this._sessionInputPumpRequested || !this._hasSelectableSessionInput()) {
+		if (this._asyncTeardownStarted || this._sessionInputPumpRequested || !this._hasSelectableSessionInput()) {
 			return;
 		}
 		this._sessionInputPumpRequested = true;
@@ -5837,7 +5861,7 @@ export class AgentSession {
 	private async _pumpSessionInputs(epoch: number): Promise<void> {
 		let blocked = false;
 		try {
-			while (!this._disposed && !this._disposing && this._hasSelectableSessionInput()) {
+			while (!this._asyncTeardownStarted && this._hasSelectableSessionInput()) {
 				await this.agent.waitForIdle();
 				const preselected = this._actionStore
 					.activeActions()
@@ -6045,8 +6069,7 @@ export class AgentSession {
 		if (point === "pump") {
 			return (
 				externalBusy ||
-				this._disposed ||
-				this._disposing ||
+				this._asyncTeardownStarted ||
 				this._sessionInputPumpSuspended ||
 				this._queuedWorkPauses.size > 0 ||
 				this._branchSummaryOperation !== undefined
@@ -7486,6 +7509,9 @@ export class AgentSession {
 	}
 
 	async compact(customInstructions?: string, options: { skipAbort?: boolean } = {}): Promise<CompactionResult> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot compact a session during disposal.");
+		}
 		this._assertProviderQuotaCircuitClosed();
 		if (options.skipAbort && this.isStreaming) {
 			throw new Error("Cannot compact without aborting while the agent is running.");
@@ -8124,6 +8150,9 @@ export class AgentSession {
 		} = {},
 		internal: { skipAbort?: boolean; trigger?: "manual" | "auto" } = {},
 	): Promise<RefinementResult> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot refine a session during disposal.");
+		}
 		if (!options.rollbackId) this._assertProviderQuotaCircuitClosed();
 		// Queued /refine executes from the session-input pump between turns;
 		// refine never aborts the agent (planning is backgrounded and the apply
@@ -8839,6 +8868,9 @@ export class AgentSession {
 	}
 
 	async bindExtensions(bindings: ExtensionBindings): Promise<void> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot bind extensions during session disposal.");
+		}
 		if (bindings.uiContext !== undefined) {
 			this._extensionUIContext = bindings.uiContext;
 		}
@@ -10700,6 +10732,9 @@ export class AgentSession {
 		spawnCode?: string,
 		signal?: AbortSignal,
 	): Promise<RlmSpawnHandle> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot spawn a subagent after its parent started disposal");
+		}
 		throwIfHostRequestAborted(signal);
 		const { name: rawName, model: rawModel, thinking: rawThinking, cwd: rawCwd, ...unsupported } = kwargs;
 		const unsupportedKwargs = Object.keys(unsupported);
@@ -10748,7 +10783,7 @@ export class AgentSession {
 				);
 			}
 		}
-		if (this._disposed || this._disposing) throw new Error("Cannot spawn a subagent after its parent was disposed");
+		if (this._asyncTeardownStarted) throw new Error("Cannot spawn a subagent after its parent started disposal");
 		const availableThinkingLevels = this._getRlmThinkingLevels(modelSelection.model);
 		const modelSelector = `${modelSelection.model.provider}/${modelSelection.model.id}`;
 		if (availableThinkingLevels.length === 0) {
@@ -11826,6 +11861,9 @@ export class AgentSession {
 		aborted?: boolean;
 		summaryEntry?: BranchSummaryEntry;
 	}> {
+		if (this._asyncTeardownStarted) {
+			throw new Error("Cannot navigate a session during disposal.");
+		}
 		const previous = this._branchNavigationQueue;
 		let release = () => {};
 		this._branchNavigationQueue = new Promise<void>((resolve) => {

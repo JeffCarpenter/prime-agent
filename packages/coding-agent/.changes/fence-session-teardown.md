@@ -1,0 +1,1 @@
+- Changed graceful session disposal to overlap final refinement draining with IPython teardown while fencing new work and preserving final cleanup ([#1265](https://github.com/PrimeIntellect-ai/prime-agent/pull/1265) by [@sethkarten](https://github.com/sethkarten)).

@@ -312,6 +312,71 @@ describe("AgentSession concurrent prompt guard", () => {
 		expect(kernelDispose).toHaveBeenCalledTimes(1);
 	});
 
+	it("fences new session work as soon as async disposal starts", async () => {
+		createSession();
+		let releaseDrain: () => void = () => {};
+		const drainGate = new Promise<void>((resolve) => {
+			releaseDrain = resolve;
+		});
+		const internals = session as unknown as {
+			_drainPendingRefinementForDisposal: () => Promise<void>;
+		};
+		vi.spyOn(internals, "_drainPendingRefinementForDisposal").mockImplementation(async () => drainGate);
+
+		const disposal = session.disposeAsync();
+		const admissionError = "Cannot admit a session action because the session is disposing or disposed.";
+		await expect(session.prompt("late prompt")).rejects.toThrow(admissionError);
+		await expect(session.steer("late steering message")).rejects.toThrow(admissionError);
+		await expect(session.followUp("late follow-up")).rejects.toThrow(admissionError);
+		await expect(session.compact()).rejects.toThrow("Cannot compact a session during disposal.");
+		await expect(session.refine()).rejects.toThrow("Cannot refine a session during disposal.");
+		await expect(session.navigateTree("late branch")).rejects.toThrow("Cannot navigate a session during disposal.");
+		expect(session.unfinishedActionCount).toBe(0);
+
+		releaseDrain();
+		await disposal;
+	});
+
+	it("keeps later async disposal callers joined after synchronous disposal wins", async () => {
+		createSession();
+		const kernelFailure = new Error("kernel disposal failed after synchronous disposal");
+		let rejectKernel: (error: Error) => void = () => {};
+		const kernelGate = new Promise<void>((_resolve, reject) => {
+			rejectKernel = reject;
+		});
+		const internals = session as unknown as {
+			_ipythonKernelProvisioner?: { dispose(): Promise<void> };
+		};
+		internals._ipythonKernelProvisioner = { dispose: vi.fn(async () => kernelGate) };
+
+		const first = session.disposeAsync();
+		session.dispose();
+		const later = session.disposeAsync();
+		let laterSettled = false;
+		void later.then(
+			() => {
+				laterSettled = true;
+			},
+			() => {
+				laterSettled = true;
+			},
+		);
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		expect(laterSettled).toBe(false);
+
+		const firstFailure = expect(first).rejects.toBe(kernelFailure);
+		const laterFailure = expect(later).rejects.toBe(kernelFailure);
+		rejectKernel(kernelFailure);
+		await firstFailure;
+		await laterFailure;
+	});
+
+	it("blocks runtime reload after synchronous disposal", async () => {
+		createSession();
+		session.dispose();
+		await expect(session.reload()).rejects.toThrow("Cannot reload a session during disposal.");
+	});
+
 	it("runs finalizers and aggregates concurrent drain and kernel disposal failures", async () => {
 		createSession();
 		const kernelFailure = new Error("kernel disposal failed");
