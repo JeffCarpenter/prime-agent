@@ -139,6 +139,126 @@ describe("edit tool fuzzy byte preservation", () => {
 		expect(readFileSync(testFile, "utf-8")).toBe(original);
 	});
 
+	it("rejects overlapping duplicate matches after fuzzy normalization", async () => {
+		const harness = await createHarness({ tools: [editTool] });
+		harnesses.push(harness);
+		const testFile = join(harness.tempDir, "overlapping-fuzzy-duplicates.txt");
+		const original = "a\u00A0a\u00A0a\n";
+		writeFileSync(testFile, original);
+
+		harness.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("edit", {
+					path: testFile,
+					edits: [{ oldText: "a a", newText: "replacement" }],
+				}),
+				{ stopReason: "toolUse" },
+			),
+			fauxAssistantMessage("done"),
+		]);
+		await harness.session.prompt("apply the edit");
+
+		const toolResult = harness.session.messages.find((message) => message.role === "toolResult");
+		const errorText =
+			toolResult?.content
+				.filter((part) => part.type === "text")
+				.map((part) => part.text)
+				.join("\n") ?? "";
+		expect(toolResult?.isError).toBe(true);
+		expect(errorText).toMatch(/Found 2 occurrences/);
+		expect(readFileSync(testFile, "utf-8")).toBe(original);
+	});
+
+	it("rejects fuzzy matches that start inside a grapheme cluster", async () => {
+		const harness = await createHarness({ tools: [editTool] });
+		harnesses.push(harness);
+		const testFile = join(harness.tempDir, "grapheme-start-boundary.txt");
+		const original = "a\u0338\u2018x\u2019\n";
+		writeFileSync(testFile, original);
+
+		harness.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("edit", {
+					path: testFile,
+					edits: [{ oldText: "\u0338'x'", newText: "replacement" }],
+				}),
+				{ stopReason: "toolUse" },
+			),
+			fauxAssistantMessage("done"),
+		]);
+		await harness.session.prompt("apply the edit");
+
+		const toolResult = harness.session.messages.find((message) => message.role === "toolResult");
+		const errorText =
+			toolResult?.content
+				.filter((part) => part.type === "text")
+				.map((part) => part.text)
+				.join("\n") ?? "";
+		expect(toolResult?.isError).toBe(true);
+		expect(errorText).toMatch(/Could not find the exact text/);
+		expect(readFileSync(testFile, "utf-8")).toBe(original);
+	});
+
+	it("rejects fuzzy matches that end inside a grapheme cluster", async () => {
+		const harness = await createHarness({ tools: [editTool] });
+		harnesses.push(harness);
+		const testFile = join(harness.tempDir, "grapheme-end-boundary.txt");
+		const original = "\u2018x\u2019a\u0338\n";
+		writeFileSync(testFile, original);
+
+		harness.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("edit", {
+					path: testFile,
+					edits: [{ oldText: "'x'a", newText: "replacement" }],
+				}),
+				{ stopReason: "toolUse" },
+			),
+			fauxAssistantMessage("done"),
+		]);
+		await harness.session.prompt("apply the edit");
+
+		const toolResult = harness.session.messages.find((message) => message.role === "toolResult");
+		const errorText =
+			toolResult?.content
+				.filter((part) => part.type === "text")
+				.map((part) => part.text)
+				.join("\n") ?? "";
+		expect(toolResult?.isError).toBe(true);
+		expect(errorText).toMatch(/Could not find the exact text/);
+		expect(readFileSync(testFile, "utf-8")).toBe(original);
+	});
+
+	it("rejects a fuzzy oldText that normalizes to an empty string", async () => {
+		const harness = await createHarness({ tools: [editTool] });
+		harnesses.push(harness);
+		const testFile = join(harness.tempDir, "empty-normalized-old-text.txt");
+		const original = "no matching whitespace\n";
+		writeFileSync(testFile, original);
+
+		harness.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("edit", {
+					path: testFile,
+					edits: [{ oldText: "   ", newText: "replacement" }],
+				}),
+				{ stopReason: "toolUse" },
+			),
+			fauxAssistantMessage("done"),
+		]);
+		await harness.session.prompt("apply the edit");
+
+		const toolResult = harness.session.messages.find((message) => message.role === "toolResult");
+		const errorText =
+			toolResult?.content
+				.filter((part) => part.type === "text")
+				.map((part) => part.text)
+				.join("\n") ?? "";
+		expect(toolResult?.isError).toBe(true);
+		expect(errorText).toMatch(/Could not find the exact text/);
+		expect(readFileSync(testFile, "utf-8")).toBe(original);
+	});
+
 	it("consumes stripped trailing whitespace at a fuzzy match end boundary", async () => {
 		const harness = await createHarness({ tools: [editTool] });
 		harnesses.push(harness);

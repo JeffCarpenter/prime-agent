@@ -67,6 +67,8 @@ export interface FuzzyMatchResult {
 	index: number;
 	/** Length of the matched span in the original content */
 	matchLength: number;
+	/** Whether the returned span was found through fuzzy normalization */
+	usedFuzzyMatch: boolean;
 }
 
 export interface Edit {
@@ -115,6 +117,16 @@ function isCodePointBoundary(text: string, offset: number): boolean {
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
+function isGraphemeBoundary(text: string, offset: number): boolean {
+	if (!isCodePointBoundary(text, offset)) return false;
+	if (offset <= 0 || offset >= text.length) return true;
+	for (const { index } of graphemeSegmenter.segment(text)) {
+		if (index === offset) return true;
+		if (index > offset) return false;
+	}
+	return false;
+}
+
 function mapNormalizedBoundaryToOriginal(
 	originalLines: string[],
 	normalizedLines: string[],
@@ -127,7 +139,7 @@ function mapNormalizedBoundaryToOriginal(
 
 	const originalLine = originalLines[boundary.lineIndex];
 	const normalizedLine = normalizedLines[boundary.lineIndex];
-	if (!isCodePointBoundary(normalizedLine, boundary.column)) return undefined;
+	if (!isGraphemeBoundary(normalizedLine, boundary.column)) return undefined;
 
 	// Trailing whitespace adjacent to a span edge stays outside the span: a span
 	// STARTING at a normalized line end starts at the actual newline (past the
@@ -141,13 +153,13 @@ function mapNormalizedBoundaryToOriginal(
 	// (e.g. indentation) would never satisfy equality against the trimmed form.
 	const normalizedPrefix = normalizedLine.slice(0, boundary.column);
 	const matchesPrefixAt = (column: number): boolean =>
-		isCodePointBoundary(originalLine, column) &&
 		substituteCompatibilityChars(originalLine.slice(0, column).normalize("NFKC")) === normalizedPrefix;
 
 	// Fast path: when line normalization is 1:1 (no NFKC expansions), columns align.
 	if (
 		substituteCompatibilityChars(originalLine.normalize("NFKC")).length === originalLine.length &&
 		boundary.column <= originalLine.length &&
+		isGraphemeBoundary(originalLine, boundary.column) &&
 		matchesPrefixAt(boundary.column)
 	) {
 		return originalLineStarts[boundary.lineIndex] + boundary.column;
@@ -173,13 +185,17 @@ function mapNormalizedBoundaryToOriginal(
 		return originalLineStarts[boundary.lineIndex] + originalLine.length;
 	}
 
-	// Exhaustive scan is quadratic, so it is reserved for short lines; longer lines
-	// reject the fuzzy match instead of risking a multi-second stall.
+	// Exhaustive prefix comparison is quadratic, so it is reserved for short lines
+	// and only considers grapheme boundaries. Longer lines reject the fuzzy match
+	// instead of risking a multi-second stall or splitting a user-perceived character.
 	if (originalLine.length <= 2048) {
-		for (let scanColumn = 0; scanColumn <= originalLine.length; scanColumn++) {
-			if (matchesPrefixAt(scanColumn)) {
-				return originalLineStarts[boundary.lineIndex] + scanColumn;
+		for (const { index } of graphemeSegmenter.segment(originalLine)) {
+			if (matchesPrefixAt(index)) {
+				return originalLineStarts[boundary.lineIndex] + index;
 			}
+		}
+		if (matchesPrefixAt(originalLine.length)) {
+			return originalLineStarts[boundary.lineIndex] + originalLine.length;
 		}
 	}
 	return undefined;
@@ -197,17 +213,27 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 			found: true,
 			index: exactIndex,
 			matchLength: oldText.length,
+			usedFuzzyMatch: false,
 		};
 	}
 
 	const fuzzyContent = normalizeForFuzzyMatch(content);
 	const fuzzyOldText = normalizeForFuzzyMatch(oldText);
+	if (fuzzyOldText.length === 0) {
+		return {
+			found: false,
+			index: -1,
+			matchLength: 0,
+			usedFuzzyMatch: false,
+		};
+	}
 	const fuzzyIndex = fuzzyContent.indexOf(fuzzyOldText);
 	if (fuzzyIndex === -1) {
 		return {
 			found: false,
 			index: -1,
 			matchLength: 0,
+			usedFuzzyMatch: false,
 		};
 	}
 
@@ -218,6 +244,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 			found: false,
 			index: -1,
 			matchLength: 0,
+			usedFuzzyMatch: false,
 		};
 	}
 
@@ -251,6 +278,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 			found: false,
 			index: -1,
 			matchLength: 0,
+			usedFuzzyMatch: false,
 		};
 	}
 
@@ -258,6 +286,7 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 		found: true,
 		index: originalStart,
 		matchLength: originalEnd - originalStart,
+		usedFuzzyMatch: true,
 	};
 }
 
@@ -266,10 +295,20 @@ export function stripBom(content: string): { bom: string; text: string } {
 	return content.startsWith("\uFEFF") ? { bom: "\uFEFF", text: content.slice(1) } : { bom: "", text: content };
 }
 
-function countOccurrences(content: string, oldText: string): number {
+function countOccurrences(content: string, oldText: string, allowOverlaps: boolean): number {
 	const fuzzyContent = normalizeForFuzzyMatch(content);
 	const fuzzyOldText = normalizeForFuzzyMatch(oldText);
-	return fuzzyContent.split(fuzzyOldText).length - 1;
+	if (!allowOverlaps) return fuzzyContent.split(fuzzyOldText).length - 1;
+
+	let occurrences = 0;
+	let searchIndex = 0;
+	while (searchIndex <= fuzzyContent.length - fuzzyOldText.length) {
+		const matchIndex = fuzzyContent.indexOf(fuzzyOldText, searchIndex);
+		if (matchIndex === -1) break;
+		occurrences++;
+		searchIndex = matchIndex + 1;
+	}
+	return occurrences;
 }
 
 function getNotFoundError(path: string, editIndex: number, totalEdits: number): Error {
@@ -341,7 +380,7 @@ export function applyEditsToNormalizedContent(
 			throw getNotFoundError(path, i, normalizedEdits.length);
 		}
 
-		const occurrences = countOccurrences(normalizedContent, edit.oldText);
+		const occurrences = countOccurrences(normalizedContent, edit.oldText, matchResult.usedFuzzyMatch);
 		if (occurrences > 1) {
 			throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
 		}
