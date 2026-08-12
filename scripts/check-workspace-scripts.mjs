@@ -15,7 +15,19 @@ const manifests = new Map(
 	manifestPaths.map((path) => [path, JSON.parse(readFileSync(resolve(root, path), "utf8"))]),
 );
 const rootScripts = manifests.get("package.json").scripts;
-const recursiveRootScripts = ["clean", "test", "publish", "publish:dry"];
+const recursiveRootScripts = ["clean", "test"];
+const releaseTombstoneScripts = [
+	"version:patch",
+	"version:minor",
+	"version:major",
+	"version:set",
+	"prepublishOnly",
+	"publish",
+	"publish:dry",
+	"release:patch",
+	"release:minor",
+	"release:major",
+];
 
 for (const scriptName of recursiveRootScripts) {
 	const command = rootScripts[scriptName];
@@ -23,6 +35,13 @@ for (const scriptName of recursiveRootScripts) {
 	assert(
 		command.includes("--filter '!prime-agent'"),
 		`root script ${scriptName} must exclude prime-agent from recursive execution: ${command}`,
+	);
+}
+
+for (const scriptName of releaseTombstoneScripts) {
+	assert(
+		rootScripts[scriptName] === "node scripts/release.mjs",
+		`root script ${scriptName} must use the non-mutating release tombstone: ${rootScripts[scriptName]}`,
 	);
 }
 

@@ -20,7 +20,7 @@ function readArgs(args) {
 			continue;
 		}
 		if (argument === "--help" || argument === "-h") {
-			console.log("Usage: npm run release:prepare -- <patch|minor|0.x.y> [--date YYYY-MM-DD]");
+			console.log("Usage: pnpm run release:prepare -- <patch|minor|0.x.y> [--date YYYY-MM-DD]");
 			process.exit(0);
 		}
 		if (target) throw new Error(`Unexpected argument: ${argument}`);
@@ -46,7 +46,7 @@ try {
 	const changed = prepareRelease(root, target, { date });
 	console.log("Prepared release metadata without staging, committing, tagging, pushing, or publishing:");
 	for (const path of changed) console.log(`- ${path}`);
-	console.log("Review the diff, run `npm run release:dry-run`, and open a release-preparation pull request.");
+	console.log("Review the diff, run `pnpm run release:dry-run`, and open a release-preparation pull request.");
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));
 	process.exit(1);

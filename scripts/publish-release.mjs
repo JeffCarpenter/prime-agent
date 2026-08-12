@@ -14,7 +14,7 @@ import {
 	promoteChannel,
 	publishImmutableArtifacts,
 	publishInstallers,
-	validatePromotion,
+	shouldPromoteStable,
 	verifyRemoteRelease,
 } from "./lib/release-publication.mjs";
 import {
@@ -431,10 +431,17 @@ function prepareProductionGitHub(options, github, baseUrl) {
 
 function publishProductionR2Immutable(options, store, baseUrl) {
 	const { artifactsDir, version } = validatePhaseArtifacts(options, baseUrl, "stable");
-	validatePromotion(artifactsDir, "stable", store);
 	const result = publishImmutableArtifacts(artifactsDir, version, store);
 	verifyRemoteRelease(artifactsDir, version, store);
 	console.log(`Published production immutable objects: ${result.created} created, ${result.reused} reused.`);
+}
+
+function shouldPromoteProduction(options, artifactsDir, store) {
+	const result = shouldPromoteStable(artifactsDir, store, { historicalRetry: options.trigger === "retry" });
+	if (!result) {
+		console.log("Historical retry repaired immutable surfaces without regressing stable pointers or installers.");
+	}
+	return result;
 }
 
 function publishProductionGitHubAssets(options, github, baseUrl) {
@@ -446,7 +453,7 @@ function publishProductionGitHubAssets(options, github, baseUrl) {
 
 function promoteProductionR2(options, store, baseUrl) {
 	const { artifactsDir, version } = validatePhaseArtifacts(options, baseUrl, "stable");
-	validatePromotion(artifactsDir, "stable", store);
+	if (!shouldPromoteProduction(options, artifactsDir, store)) return;
 	verifyRemoteRelease(artifactsDir, version, store);
 	promoteChannel(artifactsDir, "stable", store);
 	console.log(`Promoted production v${version}.`);
@@ -471,6 +478,7 @@ function publishBetaGitHub(options, github, baseUrl) {
 function publishR2Installers(options, store, baseUrl, channel) {
 	const { artifactsDir, buildRef, version } = validatePhaseArtifacts(options, baseUrl, channel);
 	verifyRemoteRelease(artifactsDir, version, store);
+	if (channel === "stable" && !shouldPromoteProduction(options, artifactsDir, store)) return;
 	publishInstallers(installers(options), store, {
 		beforeWrite: channel === "beta" ? () => assertLatestDefaultBranch(options, buildRef) : undefined,
 	});

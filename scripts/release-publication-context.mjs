@@ -15,7 +15,9 @@ const contextKeys = [
 	"productionVersion",
 	"publishBeta",
 	"publishProduction",
+	"releaseRunAttempt",
 	"releaseRunId",
+	"releaseTrigger",
 	"schemaVersion",
 	"toolingSha",
 ];
@@ -40,6 +42,11 @@ function requireRunId(value, label) {
 	const normalized = String(value);
 	if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`${label} must be a positive integer`);
 	return normalized;
+}
+
+function requireReleaseTrigger(value) {
+	if (value !== "main" && value !== "retry") throw new Error("releaseTrigger must be main or retry");
+	return value;
 }
 
 function requireExactKeys(value) {
@@ -75,15 +82,17 @@ export function createPublicationContext(input) {
 		productionVersion,
 		publishBeta,
 		publishProduction,
+		releaseTrigger: requireReleaseTrigger(input.releaseTrigger),
+		releaseRunAttempt: requireRunId(input.releaseRunAttempt, "releaseRunAttempt"),
 		releaseRunId: requireRunId(input.releaseRunId, "releaseRunId"),
-		schemaVersion: 1,
+		schemaVersion: 2,
 		toolingSha: requireSha(input.toolingSha, "toolingSha"),
 	};
 }
 
 export function validatePublicationContext(context, upstream) {
 	requireExactKeys(context);
-	if (context.schemaVersion !== 1) throw new Error("Unsupported publication context schema");
+	if (context.schemaVersion !== 2) throw new Error("Unsupported publication context schema");
 	const expectedRepository = requireString(upstream.repository, "repository");
 	const expectedDefaultBranch = requireString(upstream.defaultBranch, "defaultBranch");
 	if (upstream.conclusion !== "success") throw new Error("Release workflow conclusion must be success");
@@ -95,9 +104,13 @@ export function validatePublicationContext(context, upstream) {
 	if (upstream.headRepository !== expectedRepository) throw new Error("Release workflow repository does not match");
 	if (upstream.headBranch !== expectedDefaultBranch) throw new Error("Release workflow branch does not match");
 	const expectedRunId = requireRunId(upstream.runId, "upstream run ID");
+	const expectedRunAttempt = requireRunId(upstream.runAttempt, "upstream run attempt");
 	const expectedToolingSha = requireSha(upstream.headSha, "upstream SHA");
 	const normalized = createPublicationContext(context);
 	if (normalized.releaseRunId !== expectedRunId) throw new Error("Publication context run ID does not match");
+	if (normalized.releaseRunAttempt !== expectedRunAttempt) {
+		throw new Error("Publication context run attempt does not match");
+	}
 	if (normalized.toolingSha !== expectedToolingSha) throw new Error("Publication context tooling SHA does not match");
 	if (normalized.defaultBranch !== expectedDefaultBranch) throw new Error("Publication context branch does not match");
 	return normalized;
@@ -111,7 +124,9 @@ function environmentContext() {
 		productionVersion: process.env.PRODUCTION_VERSION ?? "",
 		publishBeta: process.env.PUBLISH_BETA,
 		publishProduction: process.env.PUBLISH_PRODUCTION,
+		releaseTrigger: process.env.RELEASE_TRIGGER,
 		releaseRunId: process.env.RELEASE_RUN_ID,
+		releaseRunAttempt: process.env.RELEASE_RUN_ATTEMPT,
 		toolingSha: process.env.TOOLING_SHA,
 	};
 }
@@ -128,6 +143,7 @@ function upstreamEnvironment() {
 		path: process.env.UPSTREAM_WORKFLOW_PATH,
 		repository: process.env.GITHUB_REPOSITORY,
 		runId: process.env.UPSTREAM_RUN_ID,
+		runAttempt: process.env.UPSTREAM_RUN_ATTEMPT,
 	};
 }
 
@@ -142,7 +158,9 @@ function writeOutputs(context) {
 			`production_version=${context.productionVersion}`,
 			`publish_beta=${context.publishBeta}`,
 			`publish_production=${context.publishProduction}`,
+			`release_trigger=${context.releaseTrigger}`,
 			`source_run_id=${context.releaseRunId}`,
+			`source_run_attempt=${context.releaseRunAttempt}`,
 			`tooling_sha=${context.toolingSha}`,
 			"",
 		].join("\n"),

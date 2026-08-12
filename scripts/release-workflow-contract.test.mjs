@@ -47,6 +47,9 @@ test("release authority is successful canonical CI or an authorized immutable re
 	assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/ci\.yml/);
 	assert.match(releaseWorkflow, /publication-context:[\s\S]*needs: release-gate/);
 	assert.match(releaseWorkflow, /name: prime-agent-publication-context/);
+	assert.match(releaseWorkflow, /prime-agent-publication-context-\$\{\{ github\.run_attempt \}\}/);
+	assert.match(releaseWorkflow, /prime-agent-production-\$\{\{ env\.BUILD_SHA \}\}-\$\{\{ github\.run_attempt \}\}/);
+	assert.match(releaseWorkflow, /prime-agent-beta-\$\{\{ env\.BUILD_SHA \}\}-\$\{\{ github\.run_attempt \}\}/);
 	assert.match(publicationWorkflow, /workflow_run:\n\s+workflows: \[Release Prime Agent\]/);
 
 	const authorizationStart = publicationWorkflow.indexOf("  authorize-publication:");
@@ -63,9 +66,17 @@ test("release authority is successful canonical CI or an authorized immutable re
 	assert.match(authorization, /prime-agent-publication-context/);
 	assert.match(authorization, /release-publication-context\.mjs validate/);
 	assert.match(authorization, /UPSTREAM_RUN_ID: \$\{\{ github\.event\.workflow_run\.id \}\}/);
+	assert.match(authorization, /UPSTREAM_RUN_ATTEMPT: \$\{\{ github\.event\.workflow_run\.run_attempt \}\}/);
 	assert.match(authorization, /UPSTREAM_HEAD_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
 	assert.doesNotMatch(authorization, /environment: production|group: release-prime-agent|secrets\.R2_/);
 	assert.match(publicationWorkflow.slice(0, authorizationStart), /group:[\s\S]*release-prime-agent/);
+});
+
+test("maintainer authorization uses the exact repository role instead of legacy push permission", () => {
+	assert.match(releaseWorkflow, /--jq \.role_name/);
+	assert.match(rollbackWorkflow, /--jq \.role_name/);
+	assert.doesNotMatch(releaseWorkflow, /--jq \.permission/);
+	assert.doesNotMatch(rollbackWorkflow, /--jq \.permission/);
 });
 
 test("release artifacts, verification, and publication use one exact source SHA", () => {

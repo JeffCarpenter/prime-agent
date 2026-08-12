@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -220,7 +221,9 @@ function validPublicationContext(overrides = {}) {
 		productionVersion: "0.7.1",
 		publishBeta: true,
 		publishProduction: true,
+		releaseRunAttempt: "2",
 		releaseRunId: "321",
+		releaseTrigger: "main",
 		toolingSha: buildSha,
 		...overrides,
 	});
@@ -238,6 +241,7 @@ function validPublicationUpstream(overrides = {}) {
 		path: ".github/workflows/build-binaries.yml",
 		repository: "PrimeIntellect-ai/prime-agent",
 		runId: "321",
+		runAttempt: "2",
 		...overrides,
 	};
 }
@@ -257,6 +261,7 @@ describe("publication context gate", () => {
 			{ headRepository: "attacker/prime-agent" },
 			{ path: ".github/workflows/other.yml" },
 			{ runId: "999" },
+			{ runAttempt: "3" },
 			{ headSha: otherSha },
 		]) {
 			assert.throws(() => validatePublicationContext(validPublicationContext(), validPublicationUpstream(invalid)));
@@ -266,6 +271,10 @@ describe("publication context gate", () => {
 	it("rejects malformed, mismatched, or disabled publication artifacts", () => {
 		assert.throws(() => validatePublicationContext({ ...validPublicationContext(), unexpected: true }, validPublicationUpstream()));
 		assert.throws(() => validatePublicationContext({ ...validPublicationContext(), releaseRunId: "999" }, validPublicationUpstream()));
+		assert.throws(() =>
+			validatePublicationContext({ ...validPublicationContext(), releaseRunAttempt: "3" }, validPublicationUpstream()),
+		);
+		assert.throws(() => validatePublicationContext({ ...validPublicationContext(), releaseTrigger: "manual" }, validPublicationUpstream()));
 		assert.throws(() => validatePublicationContext({ ...validPublicationContext(), toolingSha: otherSha }, validPublicationUpstream()));
 		assert.throws(() =>
 			createPublicationContext({
@@ -296,9 +305,15 @@ function createArtifactFixture(channel = "stable") {
 		["prime-agent-tui", "prime-agent-tui"],
 	].map(([name, prefix]) => ({ file: `${prefix}-${version}.tgz`, name }));
 	const tarballs = definitions.map((entry) => {
-		const content = `content:${entry.file}`;
-		writeFileSync(join(directory, entry.file), content);
-		return { ...entry, sha256: checksum(content) };
+		const staging = mkdtempSync(join(tmpdir(), "prime-agent-workflow-artifact-"));
+		mkdirSync(join(staging, "package"));
+		writeFileSync(join(staging, "package", "package.json"), `${JSON.stringify({ name: entry.name, version })}\n`);
+		const artifactPath = join(directory, entry.file);
+		const result = spawnSync("tar", ["-czf", artifactPath, "-C", staging, "package"], { encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+		rmSync(staging, { force: true, recursive: true });
+		const content = readFileSync(artifactPath);
+		return { ...entry, sha256: checksum(content), size: content.byteLength };
 	});
 	writeFileSync(
 		join(directory, "SHA256SUMS"),

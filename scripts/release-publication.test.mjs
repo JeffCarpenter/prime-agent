@@ -9,6 +9,7 @@ import {
 	publishChannel,
 	publishImmutableArtifacts,
 	publishInstallers,
+	shouldPromoteStable,
 	verifyRemoteRelease,
 } from "./lib/release-publication.mjs";
 
@@ -208,6 +209,24 @@ test("stable promotion is monotonic unless an explicit rollback allows regressio
 		promoteChannel(artifactsDir, "stable", store, { allowRegression: true });
 		assert.equal(store.objects.get("stable").toString(), "v0.7.2\n");
 		assert.match(store.objects.get("latest.json").toString(), /v0\.7\.2/);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("historical retry repairs immutable surfaces without regressing stable mutable state", () => {
+	const { artifactsDir, root } = createPublicationFixture();
+	const store = new MemoryStore({
+		"latest.json": `${JSON.stringify({ version: "v0.7.3" })}\n`,
+		stable: "v0.7.3\n",
+	});
+	try {
+		assert.equal(shouldPromoteStable(artifactsDir, store, { historicalRetry: true }), false);
+		assert.throws(() => shouldPromoteStable(artifactsDir, store), /would regress.*0\.7\.3/i);
+		const immutable = publishImmutableArtifacts(artifactsDir, "0.7.2", store);
+		assert.equal(immutable.created, 4);
+		assert.equal(store.objects.get("stable").toString(), "v0.7.3\n");
+		assert.match(store.objects.get("latest.json").toString(), /v0\.7\.3/);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

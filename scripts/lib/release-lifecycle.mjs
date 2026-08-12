@@ -4,6 +4,7 @@ import {
 	constants as fsConstants,
 	copyFileSync,
 	existsSync,
+	lstatSync,
 	readFileSync,
 	readdirSync,
 	renameSync,
@@ -12,6 +13,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { fileURLToPath } from "node:url";
 import { buildReleaseSection } from "./changelog-fragments.mjs";
 
 export const RELEASE_PACKAGES = [
@@ -36,6 +38,8 @@ const EXPECTED_INTERNAL_DEPENDENCIES = new Map([
 ]);
 const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const BETA_VERSION_PATTERN = /^0\.\d+\.\d+-beta\.\d+\.\d+\.[0-9a-f]{7}$/;
+const MAX_RELEASE_FILE_BYTES = 512 * 1024 * 1024;
+const archiveInspector = fileURLToPath(new URL("../safe-release-archive.py", import.meta.url));
 export const RELEASE_ARTIFACTS = [
 	{ filePrefix: "prime-agent-ai", packageName: "prime-agent-ai", sourceName: "@earendil-works/pi-ai" },
 	{ filePrefix: "prime-agent-core", packageName: "prime-agent-core", sourceName: "@earendil-works/pi-agent-core" },
@@ -137,21 +141,6 @@ export function validateReleaseRepository(root, options = {}) {
 	}
 	validateInternalRanges("package.json", rootPackage, version, errors);
 
-	const lockPath = join(root, "package-lock.json");
-	const lock = readJson(lockPath);
-	if (lock.version !== version) {
-		errors.push(`package-lock.json version is ${lock.version}; expected ${version}`);
-	}
-	const lockRoot = lock.packages?.[""];
-	if (!lockRoot) {
-		errors.push("package-lock.json is missing its root package metadata");
-	} else {
-		if (lockRoot.version !== version) {
-			errors.push(`package-lock.json root package version is ${lockRoot.version}; expected ${version}`);
-		}
-		validateInternalRanges("package-lock.json root package", lockRoot, version, errors, "package.json");
-	}
-
 	for (const releasePackage of RELEASE_PACKAGES) {
 		const packagePath = `${releasePackage.dir}/package.json`;
 		const packageJson = readJson(join(root, packagePath));
@@ -162,22 +151,6 @@ export function validateReleaseRepository(root, options = {}) {
 			errors.push(`${releasePackage.dir} version is ${packageJson.version}; expected ${version}`);
 		}
 		validateInternalRanges(packagePath, packageJson, version, errors);
-
-		const lockPackage = lock.packages?.[releasePackage.dir];
-		if (!lockPackage) {
-			errors.push(`package-lock.json is missing ${releasePackage.dir}`);
-		} else {
-			if (lockPackage.version !== version) {
-				errors.push(`package-lock.json ${releasePackage.dir} version is ${lockPackage.version}; expected ${version}`);
-			}
-			validateInternalRanges(
-				`package-lock.json ${releasePackage.dir}`,
-				lockPackage,
-				version,
-				errors,
-				`${releasePackage.dir}/package.json`,
-			);
-		}
 
 		if (options.requireChangelogs) {
 			validateChangelog(root, releasePackage.dir, version, errors);
@@ -199,6 +172,18 @@ function updateInternalRanges(packageJson, version) {
 			}
 		}
 	}
+}
+
+function updatePnpmLock(content, version) {
+	let updated = content;
+	for (const packageName of INTERNAL_PACKAGE_NAMES) {
+		const escapedName = packageName.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		updated = updated.replaceAll(
+			new RegExp(`(['\"]?${escapedName}['\"]?:\\n\\s+specifier: )\\^[^\\n]+`, "g"),
+			`$1^${version}`,
+		);
+	}
+	return updated;
 }
 
 function releaseChangelog(content, fragments, version, date, path) {
@@ -321,17 +306,8 @@ export function prepareRelease(root, target, options = {}) {
 		files.set(changelogPath, releaseChangelog(changelog, fragments, version, date, changelogPath));
 		consumedFragments.push(...fragments.map((fragment) => fragment.path));
 	}
-
-	const lock = readJson(join(root, "package-lock.json"));
-	lock.version = version;
-	lock.packages[""].version = version;
-	updateInternalRanges(lock.packages[""], version);
-	for (const releasePackage of RELEASE_PACKAGES) {
-		const lockPackage = lock.packages[releasePackage.dir];
-		lockPackage.version = version;
-		updateInternalRanges(lockPackage, version);
-	}
-	files.set("package-lock.json", formatJson(lock));
+	const pnpmLockPath = "pnpm-lock.yaml";
+	files.set(pnpmLockPath, updatePnpmLock(readFileSync(join(root, pnpmLockPath), "utf8"), version));
 
 	writePreparedFiles(root, [...files.entries()], {
 		removePaths: consumedFragments,
@@ -472,6 +448,7 @@ function parseChecksums(content) {
 }
 
 function readPackedPackageJson(tarballPath) {
+	inspectReleaseTarball(tarballPath);
 	const result = spawnSync("tar", ["-xOf", tarballPath, "package/package.json"], {
 		encoding: "utf8",
 		stdio: "pipe",
@@ -483,6 +460,20 @@ function readPackedPackageJson(tarballPath) {
 		return JSON.parse(result.stdout);
 	} catch (error) {
 		throw new Error(`Invalid packed package.json in ${tarballPath}: ${String(error)}`);
+	}
+}
+
+export function inspectReleaseTarball(tarballPath) {
+	const file = lstatSync(tarballPath);
+	if (!file.isFile() || file.size > MAX_RELEASE_FILE_BYTES) {
+		throw new Error(`${tarballPath} must be a regular file no larger than ${MAX_RELEASE_FILE_BYTES} bytes`);
+	}
+	const result = spawnSync("python3", [archiveInspector, "inspect-tar", tarballPath], {
+		encoding: "utf8",
+		stdio: "pipe",
+	});
+	if (result.status !== 0) {
+		throw new Error(`Unsafe release tarball ${tarballPath}: ${result.stderr.trim() || result.stdout.trim()}`);
 	}
 }
 
@@ -561,6 +552,13 @@ export function verifyReleaseArtifacts(artifactsDir, options) {
 	if (hasProvenance || !options.allowMissingProvenance) expectedFiles.push("release-provenance.json");
 	expectedFiles.sort();
 	assertSameFiles(readdirSync(artifactsDir).sort(), expectedFiles);
+	for (const file of expectedFiles) {
+		const path = join(artifactsDir, file);
+		const metadata = lstatSync(path);
+		if (!metadata.isFile() || metadata.size > MAX_RELEASE_FILE_BYTES) {
+			throw new Error(`${file} must be a regular file no larger than ${MAX_RELEASE_FILE_BYTES} bytes`);
+		}
+	}
 
 	const checksums = parseChecksums(readFileSync(join(artifactsDir, "SHA256SUMS"), "utf8"));
 	if (checksums.size !== RELEASE_ARTIFACTS.length) {
@@ -576,7 +574,12 @@ export function verifyReleaseArtifacts(artifactsDir, options) {
 		}
 		const packageJson = readPackedPackageJson(artifactPath);
 		validatePackedPackage(packageJson, releaseArtifact, version, baseUrl, artifactFiles);
-		tarballs.push({ file: releaseArtifact.file, package: releaseArtifact.packageName, sha256: actualSha256 });
+		tarballs.push({
+			file: releaseArtifact.file,
+			package: releaseArtifact.packageName,
+			sha256: actualSha256,
+			size: lstatSync(artifactPath).size,
+		});
 	}
 	tarballs.sort((left, right) => left.file.localeCompare(right.file));
 

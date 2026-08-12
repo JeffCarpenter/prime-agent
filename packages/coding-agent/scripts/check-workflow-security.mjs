@@ -210,9 +210,9 @@ test("publication accepts only a successful gated default-branch release run", a
 
 	assert.equal(callerDocument.jobs["publication-context"].needs, "release-gate");
 	assert.match(callerDocument.jobs["publication-context"].steps.at(-1).uses, /^actions\/upload-artifact@[0-9a-f]{40}$/);
-	assert.equal(
+	assert.match(
 		callerDocument.jobs["publication-context"].steps.at(-1).with.name,
-		"prime-agent-publication-context",
+		/^prime-agent-publication-context-\$\{\{ github\.run_attempt \}\}$/,
 	);
 	const releaseRunName = callerDocument["run-name"];
 	assert.equal(typeof releaseRunName, "string");
@@ -239,6 +239,7 @@ test("publication accepts only a successful gated default-branch release run", a
 	assert.ok(downloadStep);
 	assert.match(downloadStep.run, /actions\/runs\/\$\{SOURCE_RUN_ID\}\/artifacts/);
 	assert.match(downloadStep.run, /prime-agent-publication-context/);
+	assert.match(downloadStep.run, /safe-release-archive\.py extract-zip/);
 	const authorizationStep = authorization.steps.find((step) => step.name === "Authorize completed release gate");
 	assert.ok(authorizationStep);
 	assert.equal(authorizationStep.name, "Authorize completed release gate");
@@ -251,6 +252,7 @@ test("publication accepts only a successful gated default-branch release run", a
 		"UPSTREAM_HEAD_REPOSITORY",
 		"UPSTREAM_HEAD_SHA",
 		"UPSTREAM_RUN_ID",
+		"UPSTREAM_RUN_ATTEMPT",
 		"UPSTREAM_WORKFLOW_PATH",
 	]) {
 		assert.ok(Object.hasOwn(authorizationStep.env, name), `authorization must bind ${name}`);

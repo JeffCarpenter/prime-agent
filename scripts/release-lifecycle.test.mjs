@@ -72,6 +72,34 @@ function createRepositoryFixture(version = "0.7.1") {
 		lockfileVersion: 3,
 		packages: lockPackages,
 	});
+	writeFileSync(
+		join(root, "pnpm-lock.yaml"),
+		`lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: ^${version}
+        version: link:packages/coding-agent
+  packages/agent:
+    dependencies:
+      '@earendil-works/pi-ai':
+        specifier: ^${version}
+        version: link:../ai
+  packages/coding-agent:
+    dependencies:
+      '@earendil-works/pi-agent-core':
+        specifier: ^${version}
+        version: link:../agent
+      '@earendil-works/pi-ai':
+        specifier: ^${version}
+        version: link:../ai
+      '@earendil-works/pi-tui':
+        specifier: ^${version}
+        version: link:../tui
+`,
+	);
 	return root;
 }
 
@@ -111,7 +139,12 @@ function createArtifactFixture(version = "0.7.2", channel = "stable", options = 
 		const artifactPath = join(artifactsDir, packageFixture.file);
 		const tar = spawnSync("tar", ["-czf", artifactPath, "-C", dirname(staging), "package"], { encoding: "utf8" });
 		assert.equal(tar.status, 0, tar.stderr);
-		tarballs.push({ package: packageFixture.name, file: packageFixture.file, sha256: fileSha256(artifactPath) });
+		tarballs.push({
+			package: packageFixture.name,
+			file: packageFixture.file,
+			sha256: fileSha256(artifactPath),
+			size: readFileSync(artifactPath).byteLength,
+		});
 	}
 	tarballs.sort((left, right) => left.file.localeCompare(right.file));
 	writeFileSync(join(artifactsDir, "SHA256SUMS"), tarballs.map(({ file, sha256 }) => `${sha256}  ${file}`).join("\n") + "\n");
@@ -177,8 +210,8 @@ test("release preparation updates only release metadata and preserves private wo
 		assert.deepEqual(
 			changed.sort(),
 			[
-				"package-lock.json",
 				"package.json",
+				"pnpm-lock.yaml",
 				...RELEASE_PACKAGE_DIRS.flatMap((packageDir) => [
 					`${packageDir}/CHANGELOG.md`,
 					`${packageDir}/package.json`,
@@ -186,6 +219,7 @@ test("release preparation updates only release metadata and preserves private wo
 			].sort(),
 		);
 		assert.equal(readFileSync(join(root, "packages/private-example/package.json"), "utf8"), privateBefore);
+		assert.doesNotMatch(readFileSync(join(root, "pnpm-lock.yaml"), "utf8"), /specifier: \^0\.7\.1/);
 		for (const packageDir of RELEASE_PACKAGE_DIRS) {
 			const changelog = readFileSync(join(root, packageDir, "CHANGELOG.md"), "utf8");
 			assert.match(changelog, /^## \[Unreleased\]\n\n## \[0\.7\.2\] - 2026-08-08\n\n- Changed fixture\./m);
@@ -200,7 +234,7 @@ test("release preparation restores every file when a replacement fails mid-trans
 	const root = createRepositoryFixture();
 	const releaseFiles = [
 		"package.json",
-		"package-lock.json",
+		"pnpm-lock.yaml",
 		...RELEASE_PACKAGE_DIRS.flatMap((packageDir) => [
 			`${packageDir}/package.json`,
 			`${packageDir}/CHANGELOG.md`,

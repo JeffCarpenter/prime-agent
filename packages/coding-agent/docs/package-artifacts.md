@@ -70,7 +70,7 @@ sha256sum -c SHA256SUMS.selected
 npm install "./$artifact"
 ```
 
-On macOS, replace the verification command with `shasum -a 256 -c SHA256SUMS.selected`. On PowerShell, compare `(Get-FileHash -Algorithm SHA256 $Artifact).Hash.ToLower()` with the package's `sha256` value from `latest.json` or `beta.json` before installation.
+On macOS, replace the verification command with `shasum -a 256 -c SHA256SUMS.selected`. On PowerShell, compare `(Get-FileHash -Algorithm SHA256 $Artifact).Hash.ToLower()` with the package's `sha256` value from `latest.json` or `beta.json` before installation. Each manifest entry also records the exact artifact byte length in `size`; reject a download whose length differs before installation.
 
 npm records the resolved URL and integrity in `package-lock.json`. Commit the lockfile so CI and collaborators use the same release.
 

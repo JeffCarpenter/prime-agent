@@ -154,7 +154,7 @@ function packageJsonPath(packageDir) {
 function requireBuiltPackage(packageDir) {
 	const dist = join(packagePath(packageDir), "dist");
 	if (!existsSync(dist)) {
-		throw new Error(`Missing ${dist}. Run npm run build before packing a release.`);
+		throw new Error(`Missing ${dist}. Run pnpm run build before packing a release.`);
 	}
 }
 
@@ -331,6 +331,7 @@ function main() {
 			name: packageName,
 			file: artifactFile,
 			sha256: sha256File(artifactPath),
+			size: statSync(artifactPath).size,
 		});
 	}
 
@@ -349,6 +350,7 @@ function main() {
 			package: tarball.name,
 			file: tarball.file,
 			sha256: tarball.sha256,
+			size: tarball.size,
 		})),
 	});
 	writeJson(join(artifactsDir, "release-provenance.json"), {
@@ -361,6 +363,7 @@ function main() {
 			package: tarball.name,
 			file: tarball.file,
 			sha256: tarball.sha256,
+			size: tarball.size,
 		})),
 	});
 

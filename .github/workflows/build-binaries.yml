@@ -57,12 +57,12 @@ jobs:
           ACTOR: ${{ github.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq .permission)
-          case "$permission" in
+          role=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq .role_name)
+          case "$role" in
             admin|maintain) ;;
             *) echo "Release commands require admin or maintain permission." >&2; exit 1 ;;
           esac
-          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+          echo "permission=$role" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -142,19 +142,21 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+
+      - name: Enable pnpm
+        run: corepack enable
 
       - name: Install dependencies
         working-directory: release-source
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         working-directory: release-source
-        run: npm run build
+        run: pnpm run build
 
       - name: Check
         working-directory: release-source
-        run: npm run check
+        run: pnpm run check
 
       - name: Test protected release tooling
         working-directory: release-source
@@ -233,7 +235,7 @@ jobs:
         if: env.PUBLISH_PRODUCTION == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: prime-agent-production-${{ env.BUILD_SHA }}
+          name: prime-agent-production-${{ env.BUILD_SHA }}-${{ github.run_attempt }}
           path: release-source/packages/coding-agent/release/production/artifacts/*
           if-no-files-found: error
           overwrite: true
@@ -242,7 +244,7 @@ jobs:
         if: env.PUBLISH_BETA == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: prime-agent-beta-${{ env.BUILD_SHA }}
+          name: prime-agent-beta-${{ env.BUILD_SHA }}-${{ github.run_attempt }}
           path: release-source/packages/coding-agent/release/beta/artifacts/*
           if-no-files-found: error
           overwrite: true
@@ -259,6 +261,7 @@ jobs:
       production_version: ${{ needs.release-context.outputs.production_version }}
       publish_beta: ${{ needs.release-context.outputs.publish_beta }}
       publish_production: ${{ needs.release-context.outputs.publish_production }}
+      trigger: ${{ needs.release-context.outputs.trigger }}
     steps:
       - name: Checkout protected release tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -299,14 +302,16 @@ jobs:
           PRODUCTION_VERSION: ${{ needs.release-gate.outputs.production_version }}
           PUBLISH_BETA: ${{ needs.release-gate.outputs.publish_beta }}
           PUBLISH_PRODUCTION: ${{ needs.release-gate.outputs.publish_production }}
+          RELEASE_TRIGGER: ${{ needs.release-gate.outputs.trigger }}
           RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
           TOOLING_SHA: ${{ github.workflow_sha }}
         run: node scripts/release-publication-context.mjs create publication-context.json
 
       - name: Upload gated publication context
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: prime-agent-publication-context
+          name: prime-agent-publication-context-${{ github.run_attempt }}
           path: publication-context.json
           if-no-files-found: error
           overwrite: false

@@ -23,7 +23,7 @@ function parseArgs(args) {
 		const argument = args[index];
 		if (argument === "--help" || argument === "-h") {
 			console.log(
-				"Usage: npm run release:dry-run -- [--channel stable|beta] [--version version] [--source-sha sha] [--base-url url] [--artifacts-dir path]",
+				"Usage: pnpm run release:dry-run -- [--channel stable|beta] [--version version] [--source-sha sha] [--base-url url] [--artifacts-dir path]",
 			);
 			process.exit(0);
 		}

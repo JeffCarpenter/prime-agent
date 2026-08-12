@@ -28,7 +28,9 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
+
+      - name: Enable pnpm
+        run: corepack enable
 
       - name: Install system dependencies
         run: |
@@ -37,10 +39,10 @@ jobs:
           sudo ln -s $(which fdfind) /usr/local/bin/fd
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Install uv
         run: |
@@ -51,4 +53,4 @@ jobs:
         working-directory: packages/coding-agent
         env:
           PRIME_AGENT_STRESS_WORKERS: "10"
-        run: npm run test:process-stress
+        run: pnpm run test:process-stress

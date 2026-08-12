@@ -85,6 +85,16 @@ export function validatePromotion(artifactsDir, channel, store, options = {}) {
 	return { manifestKey, pointerKey };
 }
 
+export function shouldPromoteStable(artifactsDir, store, options = {}) {
+	try {
+		validatePromotion(artifactsDir, "stable", store);
+		return true;
+	} catch (error) {
+		if (options.historicalRetry && error instanceof Error && /would regress/.test(error.message)) return false;
+		throw error;
+	}
+}
+
 export function promoteChannel(artifactsDir, channel, store, options = {}) {
 	const { manifestKey, pointerKey } = validatePromotion(artifactsDir, channel, store, options);
 	const pointerPath = join(artifactsDir, pointerKey);

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { RELEASE_ARTIFACTS } from "./lib/release-lifecycle.mjs";
+import { RELEASE_ARTIFACTS, inspectReleaseTarball } from "./lib/release-lifecycle.mjs";
 import { runCommand } from "./lib/release-command.mjs";
 
 const commitShaPattern = /^[0-9a-f]{40}$/;
@@ -58,7 +58,8 @@ function verifyManifest({ channel, checksums, manifest, manifestName, sourceSha,
 		if (
 			actual?.package !== expected.name ||
 			actual.file !== expected.file ||
-			actual.sha256 !== checksums.get(expected.file)
+			actual.sha256 !== checksums.get(expected.file) ||
+			actual.size !== expected.size
 		) {
 			throw new Error(`${manifestName} tarball metadata is invalid for ${expected.file}`);
 		}
@@ -87,8 +88,11 @@ export function verifyReleaseArtifacts({ channel, directory, remoteChecksums, re
 	const checksumsPath = join(directory, "SHA256SUMS");
 	const checksums = readChecksums(checksumsPath, expectedFiles);
 	for (const tarball of tarballs) {
-		const actual = sha256File(join(directory, tarball.file));
+		const tarballPath = join(directory, tarball.file);
+		const actual = sha256File(tarballPath);
 		if (checksums.get(tarball.file) !== actual) throw new Error(`Checksum mismatch: ${tarball.file}`);
+		inspectReleaseTarball(tarballPath);
+		tarball.size = statSync(tarballPath).size;
 	}
 
 	if (remoteChecksums) {

@@ -31,12 +31,12 @@ jobs:
           ACTOR: ${{ github.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq .permission)
-          case "$permission" in
+          role=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${ACTOR}/permission" --jq .role_name)
+          case "$role" in
             admin|maintain) ;;
             *) echo "Release commands require admin or maintain permission." >&2; exit 1 ;;
           esac
-          echo "permission=$permission" >> "$GITHUB_OUTPUT"
+          echo "permission=$role" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

@@ -30,9 +30,9 @@ Private and example workspaces are not release packages and must remain untouche
 Start from a clean feature branch after reviewing every affected package's changelog fragments under `packages/<pkg>/.changes/`. Run one of:
 
 ```bash
-npm run release:prepare -- patch
-npm run release:prepare -- minor
-npm run release:prepare -- 0.8.1
+pnpm run release:prepare -- patch
+pnpm run release:prepare -- minor
+pnpm run release:prepare -- 0.8.1
 ```
 
 The command updates only the root release-control manifest, the four packaged manifests, internal dependency ranges, corresponding lockfile metadata, and those four changelogs. It folds non-empty fragments into the dated release sections, removes the consumed fragment files, and restores the original files if any replacement or fragment removal fails. It does not stage or commit the result.
@@ -42,9 +42,9 @@ Review the complete diff. Confirm that each changelog release section contains t
 Build the candidate using the normal repository build process, then run the non-publishing validation:
 
 ```bash
-npm run release:dry-run
-npm run release:test
-npm run check
+pnpm run release:dry-run
+pnpm run release:test
+pnpm run check
 ```
 
 `release:dry-run` packages into a temporary directory, validates tarball names, compatibility manifests, and the source-SHA provenance manifest, verifies every SHA-256 digest and internal R2 URL, and removes its output. It has no npm, GitHub Release, Git tag, Git push, or R2 publication path.
