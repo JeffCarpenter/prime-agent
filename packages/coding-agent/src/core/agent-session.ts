@@ -1239,6 +1239,8 @@ export class AgentSession {
 	// Set at the start of async teardown so a child finishing mid-disposeAsync doesn't
 	// re-populate the retained map after it's been cleared.
 	private _disposing = false;
+	/** Set before async teardown awaits so runtime rebuilds cannot replace its owned kernel. */
+	private _asyncTeardownStarted = false;
 	private _disposeAsyncPromise?: Promise<void>;
 	private _ipythonKernelProvisioner?: IpythonKernelProvisioner;
 	/** Artifact dir backing the current provisioner's kernel snapshot, if any. */
@@ -4009,6 +4011,7 @@ export class AgentSession {
 		if (this._disposeAsyncPromise) {
 			return this._disposeAsyncPromise;
 		}
+		this._asyncTeardownStarted = true;
 		this._disposeAsyncPromise = (async () => {
 			// Capture both operations before the first await. allSettled observes either
 			// rejection immediately while allowing the independent operation to finish.
@@ -9149,6 +9152,7 @@ export class AgentSession {
 		flagValues?: Map<string, boolean | string>;
 		includeAllExtensionTools?: boolean;
 	}): void {
+		if (this._asyncTeardownStarted) throw new Error("Cannot rebuild a session during disposal.");
 		const pythonSkills = getPythonSkillRuntimeInfo(this._modelVisibleSkills());
 		let configuredBaseToolDefinitions: Record<string, ToolDefinition>;
 		if (this._baseToolsOverride) {
@@ -9407,6 +9411,7 @@ export class AgentSession {
 	}
 
 	async reload(): Promise<void> {
+		if (this._asyncTeardownStarted) throw new Error("Cannot reload a session during disposal.");
 		const previousFlagValues = this._extensionRunner.getFlagValues();
 		await emitSessionShutdownEvent(this._extensionRunner, {
 			type: "session_shutdown",
