@@ -1,0 +1,1 @@
+- Fixed interactive OAuth provider selection rejecting malformed menu choices without starting authentication ([#1287](https://github.com/PrimeIntellect-ai/prime-agent/pull/1287) by [@MJ-CJM](https://github.com/MJ-CJM)).
