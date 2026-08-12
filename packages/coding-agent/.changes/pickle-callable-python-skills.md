@@ -1,0 +1,1 @@
+- Fixed the kernel state snapshot silently dropping Python skills that expose `run()` and user variables referencing them ([#1278](https://github.com/PrimeIntellect-ai/prime-agent/pull/1278) by [@15297839035](https://github.com/15297839035)).
