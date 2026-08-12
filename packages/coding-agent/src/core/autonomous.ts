@@ -5,7 +5,7 @@ import { lstat, readlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { AssistantMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
 import { waitForChildProcess } from "../utils/child-process.js";
-import { killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../utils/shell.js";
+import { getShellConfig, killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../utils/shell.js";
 
 export interface AgentAutonomousConfig {
 	enabled?: boolean;
@@ -309,13 +309,26 @@ async function runAutonomousQualityGates(
 			};
 			return attempt > state.gates.maxRetries ? "retry_exhausted" : "failed";
 		}
-		const result = await runChildProcess(command, [], {
-			cwd,
-			shell: true,
-			timeoutMs: state.gates.timeoutMs,
-			maxOutputChars: MAX_GATE_OUTPUT_CHARS,
-			signal,
-		});
+		let result: ChildProcessResult;
+		try {
+			const gate = resolveGateInvocation(command);
+			result = await runChildProcess(gate.command, gate.args, {
+				cwd,
+				shell: gate.shell,
+				timeoutMs: state.gates.timeoutMs,
+				maxOutputChars: MAX_GATE_OUTPUT_CHARS,
+				signal,
+			});
+		} catch (error) {
+			result = {
+				status: null,
+				signal: null,
+				stdout: "",
+				stderr: "",
+				error: error instanceof Error ? error : new Error(String(error)),
+				outputTruncated: false,
+			};
+		}
 		signal?.throwIfAborted();
 		const postRunSnapshot = await captureGitWorktreeSnapshot(cwd, signal);
 		signal?.throwIfAborted();
@@ -476,6 +489,16 @@ interface ChildProcessResult {
 	error?: Error;
 	timedOut?: boolean;
 	outputTruncated: boolean;
+}
+
+export function resolveGateInvocation(
+	command: string,
+	platformName: NodeJS.Platform = process.platform,
+	resolveShell: () => { shell: string; args: string[] } = getShellConfig,
+): { command: string; args: string[]; shell: boolean } {
+	if (platformName !== "win32") return { command, args: [], shell: true };
+	const shell = resolveShell();
+	return { command: shell.shell, args: [...shell.args, command], shell: false };
 }
 
 function runChildProcess(

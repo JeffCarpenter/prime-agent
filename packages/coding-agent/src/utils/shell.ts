@@ -9,6 +9,28 @@ export interface ShellConfig {
 	args: string[];
 }
 
+const BASH_PROBE_TIMEOUT_MS = 5000;
+
+export function isBashUsable(shellPath: string): boolean {
+	try {
+		const result = spawnSync(shellPath, ["-c", "exit 0"], {
+			stdio: "ignore",
+			timeout: BASH_PROBE_TIMEOUT_MS,
+			windowsHide: true,
+		});
+		return result.status === 0 && !result.error;
+	} catch {
+		return false;
+	}
+}
+
+export function isWslBashLauncher(shellPath: string): boolean {
+	const systemRoot = process.env.SystemRoot ?? process.env.windir ?? "C:\\Windows";
+	const normalized = shellPath.toLowerCase().replace(/\//g, "\\");
+	const launcher = `${systemRoot.toLowerCase().replace(/\//g, "\\")}\\system32\\bash.exe`;
+	return normalized === launcher;
+}
+
 /**
  * Find bash executable on PATH (cross-platform)
  */
@@ -18,9 +40,13 @@ function findBashOnPath(): string | null {
 		try {
 			const result = spawnSync("where", ["bash.exe"], { encoding: "utf-8", timeout: 5000, windowsHide: true });
 			if (result.status === 0 && result.stdout) {
-				const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-				if (firstMatch && existsSync(firstMatch)) {
-					return firstMatch;
+				const usable = result.stdout
+					.trim()
+					.split(/\r?\n/)
+					.map((match) => match.trim())
+					.filter((candidate) => candidate && existsSync(candidate) && isBashUsable(candidate));
+				if (usable.length > 0) {
+					return usable.find((candidate) => !isWslBashLauncher(candidate)) ?? usable[0] ?? null;
 				}
 			}
 		} catch {
@@ -34,7 +60,7 @@ function findBashOnPath(): string | null {
 		const result = spawnSync("which", ["bash"], { encoding: "utf-8", timeout: 5000, windowsHide: true });
 		if (result.status === 0 && result.stdout) {
 			const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
-			if (firstMatch) {
+			if (firstMatch && isBashUsable(firstMatch)) {
 				return firstMatch;
 			}
 		}
@@ -58,6 +84,10 @@ function findGitBashCandidates(): string[] {
 	const programFilesX86 = process.env["ProgramFiles(x86)"];
 	if (programFilesX86) {
 		paths.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
+	}
+	const localAppData = process.env.LOCALAPPDATA;
+	if (localAppData) {
+		paths.push(`${localAppData}\\Programs\\Git\\bin\\bash.exe`);
 	}
 
 	try {
@@ -88,9 +118,10 @@ function findGitBashCandidates(): string[] {
 export function getShellConfig(customShellPath?: string): ShellConfig {
 	// 1. Check user-specified shell path
 	if (customShellPath) {
-		if (existsSync(customShellPath)) {
+		if (existsSync(customShellPath) && isBashUsable(customShellPath)) {
 			return { shell: customShellPath, args: ["-c"] };
 		}
+		if (existsSync(customShellPath)) throw new Error(`Custom shell path cannot execute bash: ${customShellPath}`);
 		throw new Error(`Custom shell path not found: ${customShellPath}`);
 	}
 
@@ -99,7 +130,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 		const paths = findGitBashCandidates();
 
 		for (const path of paths) {
-			if (existsSync(path)) {
+			if (existsSync(path) && isBashUsable(path)) {
 				return { shell: path, args: ["-c"] };
 			}
 		}
@@ -178,19 +209,20 @@ let cachedWindowsIpythonBashScriptPath: string | null | undefined;
  * Returns undefined off Windows or when no usable Git Bash is found (the caller
  * then leaves bare `%%bash` cells untouched). Memoized per process.
  */
-export function getWindowsIpythonBashScriptPath(): string | undefined {
+export function getWindowsIpythonBashScriptPath(customShellPath?: string): string | undefined {
 	if (process.platform !== "win32") {
 		return undefined;
 	}
+	if (customShellPath) {
+		return toIpythonScriptPath(getShellConfig(customShellPath).shell);
+	}
 	if (cachedWindowsIpythonBashScriptPath === undefined) {
 		cachedWindowsIpythonBashScriptPath = null;
-		for (const candidate of findGitBashCandidates()) {
-			if (!existsSync(candidate)) continue;
-			const scriptPath = toIpythonScriptPath(candidate);
-			if (scriptPath) {
-				cachedWindowsIpythonBashScriptPath = scriptPath;
-				break;
-			}
+		try {
+			const scriptPath = toIpythonScriptPath(getShellConfig().shell);
+			if (scriptPath) cachedWindowsIpythonBashScriptPath = scriptPath;
+		} catch {
+			// The caller leaves bare %%bash cells unchanged when no usable bash exists.
 		}
 	}
 	return cachedWindowsIpythonBashScriptPath ?? undefined;

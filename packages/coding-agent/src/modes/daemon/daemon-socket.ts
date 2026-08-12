@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import lockfile from "proper-lockfile";
 
 export { normalizeSocketPath } from "../../utils/daemon-socket-path.js";
@@ -40,6 +41,19 @@ export function defaultDaemonSocketPath(): string {
 		return "\\\\.\\pipe\\prime-agent-daemon";
 	}
 	return join(defaultDaemonSocketDir(), "daemon.sock");
+}
+
+export function isWindowsPipePath(socketPath: string): boolean {
+	return /^\\\\[.?]\\pipe\\/i.test(socketPath);
+}
+
+/** Map a stable daemon identity to the endpoint accepted by node:net. */
+export function daemonSocketEndpoint(socketPath: string, platform: NodeJS.Platform = process.platform): string {
+	if (platform !== "win32" || isWindowsPipePath(socketPath)) {
+		return socketPath;
+	}
+	const key = createHash("sha256").update(resolve(socketPath).toLowerCase()).digest("hex").slice(0, 32);
+	return `\\\\.\\pipe\\prime-agent-${key}`;
 }
 
 export async function acquireDaemonSocketPathLease(socketPath: string): Promise<DaemonSocketPathLease | undefined> {
@@ -259,7 +273,7 @@ function ensureDefaultDaemonSocketDir(socketPath: string): void {
 
 function canConnectToUnixSocket(socketPath: string): Promise<boolean> {
 	return new Promise((resolveConnect) => {
-		const socket = createConnection(socketPath);
+		const socket = createConnection(daemonSocketEndpoint(socketPath));
 		let settled = false;
 		let timeoutId: ReturnType<typeof setTimeout> | undefined;
 

@@ -11,7 +11,7 @@ import {
 	SESSION_LEASE_OWNER_ID_ENV,
 	SESSION_LEASES_ENABLED_ENV,
 } from "../core/session-lease.js";
-import { defaultDaemonSocketDir, defaultDaemonSocketPath, normalizeSocketPath } from "../modes/daemon/daemon-socket.js";
+import { defaultDaemonSocketDir, defaultDaemonSocketPath, isWindowsPipePath } from "../modes/daemon/daemon-socket.js";
 import {
 	DAEMON_WORKER_ACTIVE_SESSION_ID_ENV,
 	DAEMON_WORKER_RECOVERY_JOURNAL_ENV,
@@ -100,7 +100,8 @@ export interface AcquireDaemonUpdateRestartCoordinatorOptions {
 }
 
 export function resolveDaemonUpdateRestartSocketPath(socketPath?: string): string {
-	return normalizeSocketPath(socketPath ?? defaultDaemonSocketPath());
+	const selectedSocketPath = socketPath ?? defaultDaemonSocketPath();
+	return isWindowsPipePath(selectedSocketPath) ? selectedSocketPath : resolve(selectedSocketPath);
 }
 
 const TERMINAL_PHASES: ReadonlySet<DaemonUpdateRestartPhase> = new Set(["complete", "skipped", "failed"]);
@@ -157,7 +158,9 @@ function statusLivenessId(status: DaemonUpdateRestartStatus): string {
 }
 
 function socketKey(socketPath: string): string {
-	return createHash("sha256").update(normalizeSocketPath(socketPath)).digest("hex");
+	const canonical = isWindowsPipePath(socketPath) ? socketPath : resolve(socketPath);
+	const normalized = process.platform === "win32" ? canonical.toLowerCase() : canonical;
+	return createHash("sha256").update(normalized).digest("hex");
 }
 
 function writeJsonAtomically(path: string, value: unknown): void {

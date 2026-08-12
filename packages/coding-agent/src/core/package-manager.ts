@@ -229,8 +229,16 @@ function toPosixPath(p: string): string {
 	return p.split(sep).join("/");
 }
 
+export function resolveHomeDirectory(
+	platformName: NodeJS.Platform = process.platform,
+	environmentHome = process.env.HOME,
+	osHome = homedir(),
+): string {
+	return platformName === "win32" ? osHome : environmentHome || osHome;
+}
+
 function getHomeDir(): string {
-	return process.env.HOME || homedir();
+	return resolveHomeDirectory();
 }
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
@@ -448,6 +456,10 @@ function findGitRepoRoot(startDir: string): string | null {
 	}
 }
 
+export function isSamePath(left: string, right: string, platformName: NodeJS.Platform = process.platform): boolean {
+	return platformName === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
 function collectAncestorAgentsSkillDirs(startDir: string): string[] {
 	const skillDirs: string[] = [];
 	const resolvedStartDir = resolve(startDir);
@@ -458,11 +470,11 @@ function collectAncestorAgentsSkillDirs(startDir: string): string[] {
 	while (true) {
 		// Stop before reaching the home directory: ~/.agents/skills is user-scope,
 		// not project-scope, and is added separately by the caller.
-		if (dir === homeDir) {
+		if (isSamePath(dir, homeDir)) {
 			break;
 		}
 		skillDirs.push(join(dir, ".agents", "skills"));
-		if (gitRepoRoot && dir === gitRepoRoot) {
+		if (gitRepoRoot && isSamePath(dir, gitRepoRoot)) {
 			break;
 		}
 		const parent = dirname(dir);

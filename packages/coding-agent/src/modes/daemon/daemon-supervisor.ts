@@ -120,6 +120,7 @@ import {
 	cleanupDaemonSocketPath,
 	type DaemonSocketIdentity,
 	type DaemonSocketPathLease,
+	daemonSocketEndpoint,
 	defaultDaemonSocketDir,
 	defaultDaemonSocketPath,
 	getDaemonSocketIdentity,
@@ -892,7 +893,7 @@ export class DaemonSupervisor {
 			};
 			this.server?.once("error", onError);
 			this.server?.once("listening", onListening);
-			this.server?.listen(this.socketPath);
+			this.server?.listen(daemonSocketEndpoint(this.socketPath));
 		});
 	}
 

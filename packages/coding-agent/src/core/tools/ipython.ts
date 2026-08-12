@@ -316,7 +316,9 @@ function applyShellSettingsToBashMagicCell(
 	const commandPrefix = options?.commandPrefix;
 	// On Windows, default bare %%bash cells to Git Bash; a bare "bash" would
 	// resolve to WSL's System32\bash.exe (see getWindowsIpythonBashScriptPath).
-	const shellPath = options?.shellPath?.trim() || getWindowsIpythonBashScriptPath();
+	const explicitShellPath = options?.shellPath?.trim() || undefined;
+	const shellPath =
+		process.platform === "win32" ? getWindowsIpythonBashScriptPath(explicitShellPath) : explicitShellPath;
 	if (!commandPrefix && !shellPath) return code;
 
 	const firstLine =

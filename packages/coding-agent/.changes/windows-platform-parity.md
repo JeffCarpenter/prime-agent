@@ -1,0 +1,1 @@
+- Fixed Windows daemon transports, owned-worker shutdown, shell execution, and Python kernel bootstrap behavior ([#1053](https://github.com/PrimeIntellect-ai/prime-agent/pull/1053) by [@SandroHub013](https://github.com/SandroHub013)).

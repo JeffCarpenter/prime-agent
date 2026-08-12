@@ -13,6 +13,7 @@ import {
 } from "../core/orphan-process-journal.js";
 import { SESSION_LEASE_OWNER_ID_ENV, SESSION_LEASES_ENABLED_ENV } from "../core/session-lease.js";
 import { attachJsonlLineReader, serializeJsonLine } from "../modes/rpc/jsonl.js";
+import { requestSelfShutdown, signalProcessGroupOrProcess } from "../utils/child-process.js";
 import { isHelpCommandRequest, PUBLIC_COMMAND_NAMES, REMOVED_COMMAND_NAMES } from "./command-registry.js";
 import { type CliSubprocessLaunchSpec, createCliSubprocessLaunchSpec } from "./subprocess-launch.js";
 
@@ -289,27 +290,12 @@ export async function runOwnedSessionWorkerFrontend(
 		if (!workerPid) {
 			return;
 		}
-		if (process.platform !== "win32") {
-			try {
-				process.kill(-workerPid, "SIGKILL");
-			} catch {
-				// The worker process group may already be fully reaped.
-			}
-		}
+		signalProcessGroupOrProcess(workerPid, "SIGKILL");
 		for (const orphan of readActiveOrphanProcesses(orphanProcessJournalPath, workerPid)) {
 			if (!isOrphanProcessIdentityCurrent(orphan)) {
 				continue;
 			}
-			const { pid } = orphan;
-			try {
-				process.kill(process.platform === "win32" ? pid : -pid, "SIGKILL");
-			} catch {
-				try {
-					process.kill(pid, "SIGKILL");
-				} catch {
-					// The detached resource may already have exited.
-				}
-			}
+			signalProcessGroupOrProcess(orphan.pid, "SIGKILL");
 		}
 		clearOrphanProcessJournal(orphanProcessJournalPath);
 	};
@@ -502,33 +488,40 @@ export function installOwnedSessionWorkerOwnerWatch(): void {
 	}
 
 	let ownerGone = false;
+	let ownerPoll: ReturnType<typeof setInterval> | undefined;
 	const terminate = () => {
 		if (ownerGone) {
 			return;
 		}
 		ownerGone = true;
 		closeOwnerWatch = undefined;
+		if (ownerPoll) clearInterval(ownerPoll);
 		const forceTimer = setTimeout(() => {
-			if (process.platform !== "win32") {
-				try {
-					process.kill(-process.pid, "SIGKILL");
-					return;
-				} catch {
-					// Fall through to terminating only this process.
-				}
-			}
+			signalProcessGroupOrProcess(process.pid, "SIGKILL");
 			process.exit(143);
 		}, 5000);
 		forceTimer.unref();
-		process.kill(process.pid, "SIGTERM");
+		requestSelfShutdown();
 	};
 	process.once("disconnect", terminate);
 	process.channel.unref();
+	if (process.platform === "win32") {
+		const ownerPid = process.ppid;
+		ownerPoll = setInterval(() => {
+			try {
+				process.kill(ownerPid, 0);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "EPERM") terminate();
+			}
+		}, 250);
+		ownerPoll.unref();
+	}
 	closeOwnerWatch = () => {
 		if (ownerGone) {
 			return;
 		}
 		ownerGone = true;
+		if (ownerPoll) clearInterval(ownerPoll);
 		process.off("disconnect", terminate);
 		if (process.connected) {
 			process.disconnect();

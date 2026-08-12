@@ -5,12 +5,32 @@ import { basename } from "node:path";
 
 const EXIT_STDIO_GRACE_MS = 100;
 
-const WINDOWS_SHELL_COMMANDS = new Set(["npm", "npx", "pnpm", "yarn", "yarnpkg", "corepack"]);
+const WINDOWS_SHELL_COMMANDS = new Set(["npm", "npx", "pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx", "corepack"]);
 
 export function shouldUseWindowsShell(command: string): boolean {
 	if (process.platform !== "win32") return false;
 	const commandName = basename(command).toLowerCase();
 	return commandName.endsWith(".cmd") || commandName.endsWith(".bat") || WINDOWS_SHELL_COMMANDS.has(commandName);
+}
+
+/** Quote one argument for Node's `shell: true` Windows spawn path. */
+export function quoteWindowsShellArg(value: string): string {
+	if (value.length > 0 && !/[\s"&|<>^()]/.test(value)) {
+		return value;
+	}
+	const escaped = value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1");
+	return `"${escaped}"`;
+}
+
+/** Run this process's graceful SIGTERM handlers on platforms without signal delivery. */
+export function requestSelfShutdown(exitCode = 143): void {
+	if (process.platform !== "win32") {
+		process.kill(process.pid, "SIGTERM");
+		return;
+	}
+	if (!process.emit("SIGTERM" as never)) {
+		process.exit(exitCode);
+	}
 }
 
 /** Cheap kill(0) existence probe; counts zombies as existing. */

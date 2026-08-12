@@ -9,6 +9,7 @@ import { createInterface } from "node:readline/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { getPackageDir } from "../../config.js";
+import { quoteWindowsShellArg, shouldUseWindowsShell } from "../../utils/child-process.js";
 import type { PythonSkillRuntimeInfo } from "../skills.js";
 
 const BOOTSTRAP_SCHEMA = 8;
@@ -36,6 +37,7 @@ export const DEFAULT_RLM_EXTRA_UV_ARGS = DEFAULT_RLM_EXTRA_PACKAGES.map((pkg) =>
 export const DEFAULT_RLM_EXTRA_IMPORT_NAMES = DEFAULT_RLM_EXTRA_PACKAGES.map((pkg) => pkg.importName);
 export const DEFAULT_RLM_EXTRA_IMPORT_LABELS = DEFAULT_RLM_EXTRA_PACKAGES.map((pkg) => pkg.promptLabel);
 const UV_INSTALL_COMMAND = "curl -LsSf https://astral.sh/uv/install.sh | sh";
+const UV_INSTALL_WINDOWS_COMMAND = "irm https://astral.sh/uv/install.ps1 | iex";
 const REQUIRED_HARNESS_METHODS = [
 	"create_memory",
 	"update_memory",
@@ -59,6 +61,22 @@ const BOOTSTRAP_LOCK_RETRY_MS = 100;
 const BOOTSTRAP_LOCK_STALE_WITHOUT_PID_MS = 30_000;
 
 let inFlightEnsureKernelPython: { key: string; promise: Promise<string> } | null = null;
+
+export function getUvInstallCommand(platformName: NodeJS.Platform = process.platform): {
+	command: string;
+	args: string[];
+} {
+	return platformName === "win32"
+		? {
+				command: "powershell.exe",
+				args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", UV_INSTALL_WINDOWS_COMMAND],
+			}
+		: { command: "sh", args: ["-c", UV_INSTALL_COMMAND] };
+}
+
+function formatCommand(command: { command: string; args: readonly string[] }): string {
+	return [command.command, ...command.args].join(" ");
+}
 
 export type KernelPythonSkill = PythonSkillRuntimeInfo;
 export type KernelBootstrapProgressHandler = (message: string) => void;
@@ -345,8 +363,8 @@ export function getKernelVenvDir(): string {
 
 // Python venvs place the interpreter at Scripts/python.exe on Windows and at
 // bin/python on POSIX; the platform layout is baked in by the venv tool.
-export function kernelVenvPythonPath(venv: string): string {
-	return process.platform === "win32" ? path.join(venv, "Scripts", "python.exe") : path.join(venv, "bin", "python");
+export function kernelVenvPythonPath(venv: string, platformName: NodeJS.Platform = process.platform): string {
+	return platformName === "win32" ? path.join(venv, "Scripts", "python.exe") : path.join(venv, "bin", "python");
 }
 
 function getXdgKernelVenvDir(): string {
@@ -380,10 +398,17 @@ async function resolveWritableKernelVenvDir(): Promise<string> {
 
 function run(command: string, args: string[], options: { stdio?: "ignore" | "inherit" } = {}): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, {
-			env: process.env,
-			stdio: options.stdio ?? "ignore",
-		});
+		const useShell = shouldUseWindowsShell(command);
+		const child = spawn(
+			useShell ? quoteWindowsShellArg(command) : command,
+			useShell ? args.map(quoteWindowsShellArg) : args,
+			{
+				env: process.env,
+				stdio: options.stdio ?? "ignore",
+				shell: useShell,
+				windowsHide: true,
+			},
+		);
 		child.on("error", reject);
 		child.on("exit", (code, signal) => {
 			if (code === 0) {
@@ -504,10 +529,18 @@ async function acquireBootstrapLock(venv: string): Promise<() => Promise<void>> 
 	}
 }
 
+export function windowsExecutableCandidates(name: string, pathExt = process.env.PATHEXT): string[] {
+	const extensions = (pathExt ?? ".COM;.EXE;.BAT;.CMD")
+		.split(";")
+		.map((extension) => extension.trim().toLowerCase())
+		.filter((extension) => extension.startsWith("."));
+	return [name, ...extensions.map((extension) => `${name}${extension}`)];
+}
+
 async function findExecutable(name: string): Promise<string | null> {
 	const pathValue = process.env.PATH;
 	if (!pathValue) return null;
-	const candidates = process.platform === "win32" ? [name, `${name}.exe`] : [name];
+	const candidates = process.platform === "win32" ? windowsExecutableCandidates(name) : [name];
 	for (const dir of pathValue.split(path.delimiter)) {
 		if (!dir) continue;
 		for (const candidate of candidates) {
@@ -528,25 +561,29 @@ async function ensureUv(options: EnsureKernelPythonOptions): Promise<string> {
 	const shouldInstallUv =
 		process.env.PRIME_AGENT_INSTALL_UV === "1" || (!options.onProgress && (await confirmUvInstall()));
 	if (!shouldInstallUv) {
+		const installCommand = getUvInstallCommand();
 		throw new Error(
-			`uv is required to set up the Python kernel. Install uv yourself: ${UV_INSTALL_COMMAND}, ` +
+			`uv is required to set up the Python kernel. Install uv yourself: ${formatCommand(installCommand)}, ` +
 				"or set PRIME_AGENT_INSTALL_UV=1 to let prime-agent run that installer.",
 		);
 	}
 
 	reportProgress(options, "› installing uv (one-time)…");
+	const installCommand = getUvInstallCommand();
 	try {
-		await run("sh", ["-c", UV_INSTALL_COMMAND], { stdio: options.onProgress ? "ignore" : "inherit" });
+		await run(installCommand.command, installCommand.args, {
+			stdio: options.onProgress ? "ignore" : "inherit",
+		});
 	} catch (error) {
 		throw new Error(
-			`couldn't install uv from astral.sh; install it yourself: ${UV_INSTALL_COMMAND}, then re-run prime-agent. ${errorMessage(error)}`,
+			`couldn't install uv from astral.sh; install it yourself: ${formatCommand(installCommand)}, then re-run prime-agent. ${errorMessage(error)}`,
 		);
 	}
 
 	if (await isExecutable(localUv)) return localUv;
 	const installedFromPath = await findExecutable("uv");
 	if (installedFromPath) return installedFromPath;
-	throw new Error("uv install completed but binary not found at ~/.local/bin/uv");
+	throw new Error(`uv install completed but binary not found at ${localUv}`);
 }
 
 async function confirmUvInstall(): Promise<boolean> {

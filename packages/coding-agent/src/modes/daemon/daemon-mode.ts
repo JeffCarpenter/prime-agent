@@ -179,6 +179,7 @@ import { DaemonSessionSummarizer } from "./daemon-session-summarizer.js";
 import {
 	cleanupDaemonSocketPath,
 	type DaemonSocketIdentity,
+	daemonSocketEndpoint,
 	defaultDaemonSocketPath,
 	getDaemonSocketIdentity,
 	normalizeSocketPath,
@@ -656,7 +657,7 @@ export class AgentDaemon {
 				};
 				this.server?.once("error", onError);
 				this.server?.once("listening", onListening);
-				this.server?.listen(this.socketPath);
+				this.server?.listen(daemonSocketEndpoint(this.socketPath));
 			});
 		} catch (error) {
 			this.cleanupSocketPath();
@@ -810,7 +811,7 @@ export class AgentDaemon {
 
 	private canConnectToSupervisor(socketPath: string): Promise<boolean> {
 		return new Promise((resolveConnect) => {
-			const socket = createConnection(socketPath);
+			const socket = createConnection(daemonSocketEndpoint(socketPath));
 			let settled = false;
 			const finish = (connected: boolean) => {
 				if (settled) {
