@@ -17,6 +17,7 @@ from rlm import harness as package_harness
 from rlm import rlm as callable_rlm
 from rlm.harness import (
     HarnessState,
+    _compare_process_start_ids,
     _fsync_directory,
     _get_process_start_id,
     _read_lock_observation,
@@ -163,9 +164,10 @@ class HarnessStateTest(unittest.TestCase):
                 real_fsync(descriptor)
                 if stole_lock:
                     return
-                stole_lock = True
                 observation = _read_lock_observation(lock_path)
-                self.assertIsNotNone(observation)
+                if observation is None:
+                    return
+                stole_lock = True
                 self.assertTrue(_remove_observed_lock(lock_path, observation))
                 lock_path.mkdir()
                 (lock_path / "owner.json").write_text(
@@ -345,8 +347,67 @@ class HarnessStateTest(unittest.TestCase):
         linux = _get_process_start_id(42, platform="linux", read_text=lambda path: linux_stat)
 
         self.assertEqual(windows, "win:638902080000000000")
-        self.assertEqual(darwin, "ps:Mon Aug  4 12:34:56 2026")
+        self.assertEqual(darwin, "ps2:Mon Aug  4 12:34:56 2026")
         self.assertEqual(linux, "proc:22")
+
+    def test_process_start_format_migrations_are_unverifiable(self) -> None:
+        self.assertEqual(_compare_process_start_ids("ps:legacy", "ps2:stable"), "unverifiable")
+        self.assertEqual(_compare_process_start_ids("proc:10", "proc:11"), "mismatch")
+        self.assertEqual(_compare_process_start_ids("proc:10", "proc:10"), "match")
+
+    def test_fresh_empty_legacy_lock_is_not_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "harness_state.json"
+            lock_path = Path(f"{state_path}.lock")
+            lock_path.mkdir()
+            state = HarnessState(
+                state_path,
+                lock_timeout_seconds=0.02,
+                stale_lock_seconds=60,
+            )
+
+            with self.assertRaisesRegex(TimeoutError, "Timed out waiting for harness-state lock"):
+                state.create_memory("Blocked", "must not persist", id="blocked")
+
+            self.assertTrue(lock_path.is_dir())
+            self.assertEqual(list(lock_path.iterdir()), [])
+
+    def test_failed_mutation_restores_in_memory_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "harness_state.json"
+            state = HarnessState(state_path)
+            state.create_memory("Baseline", "preserve", id="baseline")
+
+            with mock.patch.object(state, "_write_atomic", side_effect=OSError(errno.EIO, "simulated write failure")):
+                with self.assertRaisesRegex(OSError, "simulated write failure"):
+                    state.create_memory("Blocked", "must roll back", id="blocked")
+
+            self.assertNotIn("blocked", state.entries["memory"])
+            self.assertEqual(state.revision, 1)
+            self.assertNotIn("blocked", json.loads(state_path.read_text(encoding="utf-8"))["entries"]["memory"])
+
+    def test_rejects_exhausted_revision_and_invalid_lock_durations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = Path(temp_dir) / "harness_state.json"
+            document = {
+                "schema": 1,
+                "revision": (1 << 53) - 1,
+                "entries": {kind: {} for kind in ("prompt", "memory", "skill", "subagent")},
+                "refinements": [],
+            }
+            state_path.write_text(json.dumps(document), encoding="utf-8")
+            state = HarnessState(state_path)
+            before = state_path.read_text(encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "revision.*exhausted"):
+                state.save()
+            for value in (0, -1, float("nan"), float("inf")):
+                with self.assertRaisesRegex(ValueError, "lock_timeout_seconds"):
+                    HarnessState(state_path, lock_timeout_seconds=value)
+            for value in (-1, float("nan"), float("inf")):
+                with self.assertRaisesRegex(ValueError, "stale_lock_seconds"):
+                    HarnessState(state_path, stale_lock_seconds=value)
+            self.assertEqual(state_path.read_text(encoding="utf-8"), before)
 
     def test_directory_fsync_propagates_eio_and_closes_descriptor(self) -> None:
         closed: list[int] = []

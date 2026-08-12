@@ -48,20 +48,34 @@ import {
 import { getProcessStartId } from "../src/core/session-lease.js";
 import type { CustomEntry } from "../src/core/session-manager.js";
 
-const { completeSimpleMock, lockOwnerReadFailure } = vi.hoisted(() => ({
+const { completeSimpleMock, fsyncCallback, lockOwnerReadFailure } = vi.hoisted(() => ({
 	completeSimpleMock: vi.fn(),
-	lockOwnerReadFailure: { path: undefined, error: undefined } as { path?: string; error?: Error },
+	fsyncCallback: { current: undefined } as { current?: () => void },
+	lockOwnerReadFailure: { path: undefined, pathIncludes: undefined, error: undefined } as {
+		path?: string;
+		pathIncludes?: string;
+		error?: Error;
+	},
 }));
 
 vi.mock("node:fs", async (importOriginal) => {
 	const actual = await importOriginal<typeof NodeFs>();
 	const readFileSyncWithFailure = ((path: unknown, ...args: unknown[]): unknown => {
-		if (path === lockOwnerReadFailure.path && lockOwnerReadFailure.error) {
+		if (
+			lockOwnerReadFailure.error &&
+			(path === lockOwnerReadFailure.path ||
+				(lockOwnerReadFailure.pathIncludes !== undefined &&
+					String(path).includes(lockOwnerReadFailure.pathIncludes)))
+		) {
 			throw lockOwnerReadFailure.error;
 		}
 		return Reflect.apply(actual.readFileSync, undefined, [path, ...args]);
 	}) as typeof actual.readFileSync;
-	return { ...actual, readFileSync: readFileSyncWithFailure };
+	const fsyncSyncWithCallback = ((descriptor: number): void => {
+		actual.fsyncSync(descriptor);
+		fsyncCallback.current?.();
+	}) as typeof actual.fsyncSync;
+	return { ...actual, fsyncSync: fsyncSyncWithCallback, readFileSync: readFileSyncWithFailure };
 });
 
 vi.mock("@earendil-works/pi-ai", async (importOriginal) => {
@@ -76,6 +90,7 @@ let tempDir: string | undefined;
 
 beforeEach(() => {
 	completeSimpleMock.mockReset();
+	fsyncCallback.current = undefined;
 });
 
 afterEach(() => {
@@ -1583,6 +1598,19 @@ describe("transactional harness-state persistence", () => {
 		expect(existsSync(lockPath)).toBe(false);
 	});
 
+	it("does not replace a fresh empty legacy lock during installation", () => {
+		const root = makeTempDir();
+		const lockPath = getHarnessStateLockPath(root);
+		mkdirSync(lockPath);
+
+		const state = loadHarnessState(root, "local");
+		expect(() => saveHarnessState(root, state, { lockTimeoutMs: 20, staleLockMs: 60_000 })).toThrow(
+			/Timed out waiting for harness-state lock/,
+		);
+		expect(statSync(lockPath).isDirectory()).toBe(true);
+		expect(readdirSync(lockPath)).toEqual([]);
+	});
+
 	it("does not reclaim or mutate state when owner metadata fails with EIO", () => {
 		const root = makeTempDir();
 		const statePath = getHarnessStatePath(root);
@@ -1610,9 +1638,35 @@ describe("transactional harness-state persistence", () => {
 			);
 		} finally {
 			lockOwnerReadFailure.path = undefined;
+			lockOwnerReadFailure.pathIncludes = undefined;
 			lockOwnerReadFailure.error = undefined;
 		}
 		expect(readFileSync(statePath, "utf8")).toBe(persistedBefore);
+		expect(readFileSync(ownerPath, "utf8")).toBe(ownerBefore);
+		expect(readdirSync(root).filter((name) => name.startsWith("harness_state.json.lock"))).toEqual([
+			"harness_state.json.lock",
+		]);
+	});
+
+	it("restores a moved lock when its owner becomes unreadable", () => {
+		const root = makeTempDir();
+		const lockPath = getHarnessStateLockPath(root);
+		const ownerPath = join(lockPath, "owner.json");
+		const ownerBefore = "malformed-owner";
+		mkdirSync(lockPath);
+		writeFileSync(ownerPath, ownerBefore, "utf8");
+		utimesSync(lockPath, 0, 0);
+		lockOwnerReadFailure.pathIncludes = ".moved.";
+		lockOwnerReadFailure.error = Object.assign(new Error("simulated moved-owner read failure"), { code: "EIO" });
+
+		try {
+			expect(() => saveHarnessState(root, loadHarnessState(root), { lockTimeoutMs: 20, staleLockMs: 0 })).toThrow(
+				/Cannot inspect harness-state lock owner.*refusing to reclaim.*simulated moved-owner read failure/,
+			);
+		} finally {
+			lockOwnerReadFailure.pathIncludes = undefined;
+			lockOwnerReadFailure.error = undefined;
+		}
 		expect(readFileSync(ownerPath, "utf8")).toBe(ownerBefore);
 		expect(readdirSync(root).filter((name) => name.startsWith("harness_state.json.lock"))).toEqual([
 			"harness_state.json.lock",
@@ -1637,6 +1691,112 @@ describe("transactional harness-state persistence", () => {
 		const state = loadHarnessState(root, "local");
 		expect(() => saveHarnessState(root, state, { lockTimeoutMs: 100 })).not.toThrow();
 		expect(existsSync(lockPath)).toBe(false);
+	});
+
+	it("does not reclaim a live lock across process-start token format migrations", () => {
+		const root = makeTempDir();
+		const lockPath = getHarnessStateLockPath(root);
+		mkdirSync(lockPath);
+		writeFileSync(
+			join(lockPath, "owner.json"),
+			JSON.stringify({
+				pid: process.pid,
+				hostname: hostname(),
+				token: "legacy-process-token",
+				process_start_id: "ps:legacy-locale-dependent-token",
+				created_at: new Date().toISOString(),
+			}),
+		);
+
+		expect(() => saveHarnessState(root, loadHarnessState(root), { lockTimeoutMs: 20, staleLockMs: 0 })).toThrow(
+			/Timed out waiting for harness-state lock/,
+		);
+		expect(existsSync(lockPath)).toBe(true);
+	});
+
+	it("aborts before replace after losing lock ownership", () => {
+		const root = makeTempDir();
+		const statePath = getHarnessStatePath(root);
+		const lockPath = getHarnessStateLockPath(root);
+		const state = loadHarnessState(root, "local");
+		state.entries.memory.blocked = transactionMemoryEntry("blocked", "must not persist");
+		let fsyncCount = 0;
+		fsyncCallback.current = () => {
+			fsyncCount += 1;
+			if (fsyncCount !== 2) return;
+			rmSync(lockPath, { force: true });
+			mkdirSync(lockPath);
+			writeFileSync(
+				join(lockPath, "owner.json"),
+				JSON.stringify({ pid: process.pid, hostname: hostname(), token: "successor-owner" }),
+				"utf8",
+			);
+		};
+
+		try {
+			expect(() => saveHarnessState(root, state)).toThrow(/Lost harness-state lock ownership/);
+		} finally {
+			fsyncCallback.current = undefined;
+		}
+		expect(existsSync(statePath)).toBe(false);
+		expect(JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8")).token).toBe("successor-owner");
+	});
+
+	it("rejects exhausted revisions and invalid lock durations without changing state", () => {
+		const root = makeTempDir();
+		const statePath = getHarnessStatePath(root);
+		writeFileSync(
+			statePath,
+			JSON.stringify({ ...loadHarnessState(root), revision: Number.MAX_SAFE_INTEGER }),
+			"utf8",
+		);
+		const state = loadHarnessState(root);
+		const before = readFileSync(statePath, "utf8");
+
+		expect(() => saveHarnessState(root, state)).toThrow(/revision.*exhausted/);
+		for (const lockTimeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+			expect(() => saveHarnessState(root, state, { lockTimeoutMs })).toThrow(/lockTimeoutMs/);
+		}
+		for (const staleLockMs of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+			expect(() => saveHarnessState(root, state, { staleLockMs })).toThrow(/staleLockMs/);
+		}
+		expect(readFileSync(statePath, "utf8")).toBe(before);
+	});
+
+	it("never exposes a partial TypeScript document to a concurrent reader", async () => {
+		const root = makeTempDir();
+		const statePath = getHarnessStatePath(root);
+		const readyPath = join(root, "reader-ready");
+		const stopPath = join(root, "stop-reader");
+		const state = loadHarnessState(root, "local");
+		state.entries.memory.large = transactionMemoryEntry("large", "x".repeat(500_000));
+		saveHarnessState(root, state);
+		const reader = runChild(
+			process.execPath,
+			[
+				"-e",
+				[
+					'import { existsSync, readFileSync, writeFileSync } from "node:fs";',
+					"const [statePath, readyPath, stopPath] = process.argv.slice(1);",
+					"writeFileSync(readyPath, 'ready');",
+					"while (!existsSync(stopPath)) {",
+					"  JSON.parse(readFileSync(statePath, 'utf8'));",
+					"  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1);",
+					"}",
+				].join("\n"),
+				statePath,
+				readyPath,
+				stopPath,
+			],
+			{},
+		);
+		await waitForFile(readyPath);
+		for (let iteration = 0; iteration < 12; iteration++) {
+			state.entries.memory.large.content = `${iteration}:${"x".repeat(500_000)}`;
+			saveHarnessState(root, state);
+		}
+		writeFileSync(stopPath, "stop", "utf8");
+		await reader;
 	});
 
 	it.each([

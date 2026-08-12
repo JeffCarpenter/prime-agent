@@ -23,6 +23,7 @@ import ctypes
 import errno
 import hashlib
 import json
+import math
 import os
 import shutil
 import socket
@@ -49,6 +50,8 @@ _DEFAULT_LOCK_TIMEOUT_SECONDS = 10.0
 _DEFAULT_STALE_LOCK_SECONDS = 60.0
 _LOCK_POLL_SECONDS = 0.01
 _LOCK_OWNER_FILE_NAME = "owner.json"
+_MAX_LOCK_DURATION_SECONDS = 2_147_483.647
+_MAX_HARNESS_REVISION = (1 << 53) - 1
 _state_cache: dict[tuple[Path, HarnessScope], "HarnessState"] = {}
 _MutationResult = TypeVar("_MutationResult")
 
@@ -94,11 +97,19 @@ def _pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     except OSError:
-        return False
+        # An unexpected probe failure is not proof that the process is gone.
+        return True
 
 
 def _run_process_query(command: list[str]) -> str:
-    result = subprocess.run(command, capture_output=True, check=True, text=True, timeout=2)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=2,
+        env={**os.environ, "TZ": "UTC", "LC_ALL": "C"},
+    )
     return result.stdout.strip()
 
 
@@ -122,7 +133,7 @@ def _get_process_start_id(
             fields_after_name = contents.rsplit(")", 1)[1].strip().split()
             return f"proc:{fields_after_name[19]}" if len(fields_after_name) > 19 else None
         value = query(["ps", "-p", str(pid), "-o", "lstart="])
-        return f"ps:{value}" if value else None
+        return f"ps2:{value}" if value else None
     except (IndexError, OSError, subprocess.SubprocessError):
         return None
 
@@ -137,15 +148,41 @@ def _lock_fingerprint(contents: str) -> str:
     return hashlib.sha256(contents.encode("utf-8")).hexdigest()
 
 
+def _compare_process_start_ids(recorded: str | None, observed: str | None) -> Literal["match", "mismatch", "unverifiable"]:
+    if recorded is None or observed is None:
+        return "unverifiable"
+    if recorded == observed:
+        return "match"
+    recorded_prefix, recorded_separator, _ = recorded.partition(":")
+    observed_prefix, observed_separator, _ = observed.partition(":")
+    if not recorded_prefix or not recorded_separator or not observed_prefix or not observed_separator:
+        return "mismatch"
+    return "mismatch" if recorded_prefix == observed_prefix else "unverifiable"
+
+
 def _read_lock_observation(lock_path: Path) -> _LockObservation | None:
     try:
-        raw_owner = (lock_path / _LOCK_OWNER_FILE_NAME).read_text(encoding="utf-8")
+        stat = lock_path.stat()
     except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise OSError(
+            error.errno,
+            f"Cannot inspect harness-state lock at {lock_path}; refusing to reclaim the lock",
+        ) from error
+    owner_path = lock_path / _LOCK_OWNER_FILE_NAME if lock_path.is_dir() else lock_path
+    try:
+        raw_owner = owner_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        if not lock_path.is_dir():
+            return None
         try:
-            stat = lock_path.stat()
+            missing_owner_stat = lock_path.stat()
         except FileNotFoundError:
             return None
-        fingerprint = _lock_fingerprint(f"missing:{stat.st_dev}:{stat.st_ino}:{stat.st_mtime_ns}")
+        fingerprint = _lock_fingerprint(
+            f"missing:{missing_owner_stat.st_dev}:{missing_owner_stat.st_ino}:{missing_owner_stat.st_mtime_ns}"
+        )
         return _LockObservation(owner=None, fingerprint=fingerprint)
     except OSError as error:
         raise OSError(
@@ -162,8 +199,13 @@ def _read_lock_observation(lock_path: Path) -> _LockObservation | None:
         type(owner.get("pid")) is not int
         or owner["pid"] <= 0
         or not isinstance(owner.get("hostname"), str)
+        or not owner["hostname"]
         or not isinstance(owner.get("token"), str)
-        or ("process_start_id" in owner and not isinstance(owner["process_start_id"], str))
+        or not owner["token"]
+        or (
+            "process_start_id" in owner
+            and (not isinstance(owner["process_start_id"], str) or not owner["process_start_id"])
+        )
     ):
         owner = None
     return _LockObservation(owner=owner, fingerprint=_lock_fingerprint(raw_owner))
@@ -182,7 +224,7 @@ def _lock_is_stale(
             return True
         if process_start_id := owner.get("process_start_id"):
             current_start_id = _get_process_start_id(owner["pid"])
-            return current_start_id is not None and current_start_id != process_start_id
+            return _compare_process_start_ids(process_start_id, current_start_id) == "mismatch"
         return False
     try:
         return time.time() - lock_path.stat().st_mtime >= stale_lock_seconds
@@ -202,12 +244,25 @@ def _lock_timeout_error(lock_path: Path, observation: _LockObservation | None) -
     return TimeoutError(f"Timed out waiting for harness-state lock {lock_path}")
 
 
+def _is_target_exists_error(error: OSError, *, platform: str = os.name) -> bool:
+    if error.errno in (errno.EEXIST, errno.ENOTEMPTY):
+        return True
+    return platform == "nt" and error.errno in (errno.EACCES, errno.EPERM)
+
+
 def _restore_moved_lock(moved_path: Path, lock_path: Path) -> None:
     try:
         moved_path.rename(lock_path)
     except OSError as error:
-        if error.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+        if not _is_target_exists_error(error):
             raise
+
+
+def _remove_lock_path(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
 
 
 def _remove_observed_lock(lock_path: Path, observed: _LockObservation) -> bool:
@@ -224,8 +279,24 @@ def _remove_observed_lock(lock_path: Path, observed: _LockObservation) -> bool:
     if moved is None or moved.fingerprint != observed.fingerprint:
         _restore_moved_lock(moved_path, lock_path)
         return False
-    shutil.rmtree(moved_path)
+    _remove_lock_path(moved_path)
     return True
+
+
+def _validate_lock_duration(value: float, name: str, *, allow_zero: bool) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < (0 if allow_zero else 0.001)
+        or value > _MAX_LOCK_DURATION_SECONDS
+    ):
+        qualifier = "non-negative" if allow_zero else "positive"
+        raise ValueError(
+            f"{name} must be a finite {qualifier} duration no greater than "
+            f"{_MAX_LOCK_DURATION_SECONDS} seconds"
+        )
+    return float(value)
 
 
 @contextmanager
@@ -235,6 +306,8 @@ def _state_lock(
     timeout_seconds: float = _DEFAULT_LOCK_TIMEOUT_SECONDS,
     stale_lock_seconds: float = _DEFAULT_STALE_LOCK_SECONDS,
 ) -> Iterator[Callable[[], None]]:
+    timeout_seconds = _validate_lock_duration(timeout_seconds, "timeout_seconds", allow_zero=False)
+    stale_lock_seconds = _validate_lock_duration(stale_lock_seconds, "stale_lock_seconds", allow_zero=True)
     lock_path = _lock_path(file_path)
     token = str(uuid.uuid4())
     owner = {
@@ -252,19 +325,30 @@ def _state_lock(
     while True:
         candidate_path = Path(f"{lock_path}.candidate.{os.getpid()}.{uuid.uuid4()}")
         try:
-            candidate_path.mkdir(mode=0o700)
+            descriptor: int | None = None
             try:
-                (candidate_path / _LOCK_OWNER_FILE_NAME).write_text(
-                    owner_contents,
-                    encoding="utf-8",
-                )
-                candidate_path.rename(lock_path)
-            except OSError:
-                shutil.rmtree(candidate_path, ignore_errors=True)
-                raise
+                descriptor = os.open(candidate_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as candidate:
+                    descriptor = None
+                    candidate.write(owner_contents)
+                    candidate.flush()
+                    os.fsync(candidate.fileno())
+                # Hard-link installation is atomic and no-replace. Directory
+                # rename may overwrite a fresh empty destination on POSIX.
+                os.link(candidate_path, lock_path)
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+                try:
+                    candidate_path.unlink()
+                except OSError:
+                    # A private candidate is recoverable and cannot grant ownership.
+                    pass
             break
         except OSError as error:
-            if error.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+            if not _is_target_exists_error(error) or (
+                error.errno in (errno.EACCES, errno.EPERM) and not lock_path.exists()
+            ):
                 raise
         observation = _read_lock_observation(lock_path)
         if observation and _lock_is_stale(lock_path, observation, stale_lock_seconds):
@@ -471,8 +555,16 @@ class HarnessState:
         # When set, local mutations raise instead of vanishing into a volatile
         # store; reads and global_=True delegation keep working.
         self._local_write_error = local_write_error
-        self._lock_timeout_seconds = lock_timeout_seconds
-        self._stale_lock_seconds = stale_lock_seconds
+        self._lock_timeout_seconds = _validate_lock_duration(
+            lock_timeout_seconds,
+            "lock_timeout_seconds",
+            allow_zero=False,
+        )
+        self._stale_lock_seconds = _validate_lock_duration(
+            stale_lock_seconds,
+            "stale_lock_seconds",
+            allow_zero=True,
+        )
         self.revision = 0
         self.entries: dict[HarnessKind, dict[str, HarnessEntry]] = {kind: {} for kind in _KINDS}
         self.refinements: list[RefinementEvent] = []
@@ -529,7 +621,11 @@ class HarnessState:
             data = {}
 
         revision = data.get("revision", 0)
-        self.revision = revision if type(revision) is int and revision >= 0 else 0
+        self.revision = (
+            revision
+            if type(revision) is int and 0 <= revision <= _MAX_HARNESS_REVISION
+            else 0
+        )
 
         entries: dict[HarnessKind, dict[str, HarnessEntry]] = {kind: {} for kind in _KINDS}
         raw_entries = data.get("entries", {})
@@ -631,7 +727,7 @@ class HarnessState:
         if not isinstance(data, dict):
             raise RuntimeError(f"Harness state at {self.file_path} is invalid; refusing to overwrite it")
         revision = data.get("revision", 0)
-        if type(revision) is not int or revision < 0:
+        if type(revision) is not int or revision < 0 or revision > _MAX_HARNESS_REVISION:
             raise RuntimeError(
                 f"Harness state at {self.file_path} has an invalid revision; refusing to overwrite it"
             )
@@ -664,10 +760,23 @@ class HarnessState:
                 pass
 
     def _save_locked(self, assert_lock_owned: Callable[[], None]) -> "HarnessState":
+        if self.revision >= _MAX_HARNESS_REVISION:
+            raise RuntimeError(
+                f"Harness-state revision at {self.file_path} is exhausted; refusing to overwrite it"
+            )
         next_revision = self.revision + 1
-        self._write_atomic(self._document(next_revision), assert_lock_owned)
-        self.revision = next_revision
-        self._loaded_mtime = self._disk_mtime()
+        try:
+            self._write_atomic(self._document(next_revision), assert_lock_owned)
+            self.revision = next_revision
+            self._loaded_mtime = self._disk_mtime()
+        except Exception:
+            # Replacement may already be visible when directory fsync fails.
+            # Reload so the in-memory view matches whichever document won.
+            try:
+                self.load()
+            except Exception:
+                pass
+            raise
         return self
 
     def _mutate(self, mutation: Callable[[], _MutationResult]) -> _MutationResult:
@@ -683,10 +792,17 @@ class HarnessState:
             assert_lock_owned()
             self._disk_revision()
             self.load()
-            result = mutation()
-            if result is not False:
-                self._save_locked(assert_lock_owned)
-            return result
+            try:
+                result = mutation()
+                if result is not False:
+                    self._save_locked(assert_lock_owned)
+                return result
+            except Exception:
+                try:
+                    self.load()
+                except Exception:
+                    pass
+                raise
 
     def save(self) -> "HarnessState":
         if self.file_path is None:
@@ -920,6 +1036,7 @@ class HarnessState:
                 path=path,
                 reference=reference,
                 arguments=arguments,
+                thinking=thinking,
                 metadata=metadata,
                 source=source,
             )
@@ -935,6 +1052,7 @@ class HarnessState:
         path: str,
         reference: dict[str, Any] | None,
         arguments: dict[str, Any] | None,
+        thinking: ThinkingLevel | None,
         metadata: dict[str, Any] | None,
         source: str,
     ) -> HarnessEntry:
@@ -996,6 +1114,7 @@ class HarnessState:
                 path=path,
                 reference=reference,
                 arguments=arguments,
+                thinking=thinking,
                 metadata=metadata,
                 source=source,
             )
@@ -1011,6 +1130,7 @@ class HarnessState:
         path: str | None,
         reference: dict[str, Any] | None,
         arguments: dict[str, Any] | None,
+        thinking: ThinkingLevel | None,
         metadata: dict[str, Any] | None,
         source: str,
     ) -> HarnessEntry:
