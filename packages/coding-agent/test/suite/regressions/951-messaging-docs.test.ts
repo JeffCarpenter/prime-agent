@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHarness, type Harness } from "../harness.js";
 
@@ -10,6 +9,7 @@ const longRunningAgentsPath = resolve(packageRoot, "docs/long-running-agents.md"
 const rpcDocsPath = resolve(packageRoot, "docs/rpc.md");
 const rpcTypesPath = resolve(packageRoot, "src/modes/rpc/rpc-types.ts");
 const agentMessageSkillPath = resolve(packageRoot, "skills/agent-message/src/agent_message/__init__.py");
+const typescriptCliPath = resolve(packageRoot, "../../node_modules/typescript/bin/tsc");
 
 function extractSection(markdown: string, heading: string): string {
 	const start = markdown.indexOf(heading);
@@ -76,14 +76,6 @@ function resolvePython(): string {
 		if (probe.status === 0) return candidate;
 	}
 	throw new Error("No Python interpreter is available for the documented agent_message example");
-}
-
-function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string {
-	return ts.formatDiagnostics(diagnostics, {
-		getCanonicalFileName: (fileName) => fileName,
-		getCurrentDirectory: () => packageRoot,
-		getNewLine: () => "\n",
-	});
 }
 
 describe("issue #951 messaging documentation contracts", () => {
@@ -170,16 +162,23 @@ print("CALLS=" + json.dumps(calls))
 			typeCheckPath,
 			`type SendMessageCommand = ${contract};\nconst command = ${JSON.stringify(documentedCommand)} satisfies SendMessageCommand;\nvoid command;\n`,
 		);
-		const program = ts.createProgram([typeCheckPath], {
-			lib: ["lib.es2022.d.ts"],
-			noEmit: true,
-			strict: true,
-			target: ts.ScriptTarget.ES2022,
-			types: [],
-		});
-		const diagnostics = ts.getPreEmitDiagnostics(program);
+		const result = spawnSync(
+			process.execPath,
+			[
+				typescriptCliPath,
+				"--ignoreConfig",
+				"--noEmit",
+				"--strict",
+				"--target",
+				"ES2022",
+				"--lib",
+				"ES2022",
+				typeCheckPath,
+			],
+			{ cwd: packageRoot, encoding: "utf8" },
+		);
 
-		expect(formatDiagnostics(diagnostics)).toBe("");
+		expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
 		expect(documentedTableFieldNames(markdown, "send_message")).toEqual(contractFieldNames(contract));
 	});
 
