@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -270,10 +270,69 @@ describe("defaultDaemonSocketPath", () => {
 
 			lease = await acquireDaemonSocketPathLease(socketPath);
 
-			expect(existsSync(missingParent)).toBe(true);
+			const parentStat = statSync(missingParent);
+			expect(parentStat.isDirectory()).toBe(true);
+			expect(parentStat.mode & 0o077).toBe(0);
 			expect(lease?.socketPath).toBe(socketPath);
 		} finally {
 			await lease?.release();
+			rmSync(outer, { recursive: true, force: true });
+		}
+	});
+
+	it("creates a custom socket parent when preparing without a lease", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		const outer = mkdtempSync(join(tmpdir(), "pa-socket-custom-prepare-"));
+		const missingParent = join(outer, "missing");
+		try {
+			await prepareDaemonSocketPath(join(missingParent, "daemon.sock"));
+
+			expect(statSync(missingParent).isDirectory()).toBe(true);
+			expect(statSync(missingParent).mode & 0o077).toBe(0);
+		} finally {
+			rmSync(outer, { recursive: true, force: true });
+		}
+	});
+
+	it("preserves permissions on an existing custom socket parent", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		const outer = mkdtempSync(join(tmpdir(), "pa-socket-custom-existing-"));
+		const customParent = join(outer, "existing");
+		const socketPath = join(customParent, "daemon.sock");
+		let lease: Awaited<ReturnType<typeof acquireDaemonSocketPathLease>>;
+		try {
+			mkdirSync(customParent, { mode: 0o751 });
+			chmodSync(customParent, 0o751);
+
+			lease = await acquireDaemonSocketPathLease(socketPath);
+
+			expect(statSync(customParent).mode & 0o777).toBe(0o751);
+			expect(lease?.socketPath).toBe(socketPath);
+		} finally {
+			await lease?.release();
+			rmSync(outer, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects a custom socket path with a file parent component", async () => {
+		if (process.platform === "win32") {
+			return;
+		}
+
+		const outer = mkdtempSync(join(tmpdir(), "pa-socket-custom-file-parent-"));
+		const fileParent = join(outer, "file");
+		writeFileSync(fileParent, "not a directory");
+		try {
+			await expect(acquireDaemonSocketPathLease(join(fileParent, "nested", "daemon.sock"))).rejects.toMatchObject({
+				code: "ENOTDIR",
+			});
+		} finally {
 			rmSync(outer, { recursive: true, force: true });
 		}
 	});
@@ -285,13 +344,14 @@ describe("defaultDaemonSocketPath", () => {
 
 		// Unique socket name: a live daemon on the dev machine holds the lock on
 		// daemon.sock itself, which would make this test flaky there.
-		const socketPath = join(defaultDaemonSocketDir(), "test-daemon.sock");
+		const socketPath = join(defaultDaemonSocketDir(), `test-daemon-${process.pid}.sock`);
 		const dir = dirname(socketPath);
 		let lease: Awaited<ReturnType<typeof acquireDaemonSocketPathLease>>;
 		try {
 			lease = await acquireDaemonSocketPathLease(socketPath);
 
 			expect(existsSync(dir)).toBe(true);
+			expect(statSync(dir).mode & 0o777).toBe(0o700);
 			expect(lease?.socketPath).toBe(socketPath);
 		} finally {
 			await lease?.release();

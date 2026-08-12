@@ -244,7 +244,7 @@ export function defaultDaemonSocketDir(): string {
 		// worker socket paths past the sun_path limit; bind then fails and
 		// session creation times out after 30s (#669). Fall back to /tmp — the
 		// per-uid directory name and the 0700 ownership checks in
-		// ensureDefaultDaemonSocketDir apply to it unchanged.
+		// ensureDaemonSocketDir apply to it unchanged.
 		return join("/tmp", dirName);
 	}
 	return candidate;

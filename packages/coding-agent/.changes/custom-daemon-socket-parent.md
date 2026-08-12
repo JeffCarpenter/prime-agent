@@ -1,0 +1,1 @@
+- Fixed custom Unix daemon socket paths failing when their parent directory does not exist ([#1292](https://github.com/PrimeIntellect-ai/prime-agent/pull/1292) by [@Slimydog21](https://github.com/Slimydog21)).
