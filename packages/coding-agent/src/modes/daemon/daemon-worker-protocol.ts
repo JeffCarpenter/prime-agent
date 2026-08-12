@@ -17,7 +17,24 @@ export const DAEMON_WORKER_SUPERVISOR_SOCKET_ENV = "PRIME_AGENT_INTERNAL_DAEMON_
 export const DAEMON_WORKER_RECOVERY_JOURNAL_ENV = "PRIME_AGENT_INTERNAL_DAEMON_WORKER_RECOVERY_JOURNAL";
 export const DAEMON_WORKER_STARTUP_GATE_FD_ENV = "PRIME_AGENT_INTERNAL_DAEMON_WORKER_STARTUP_GATE_FD";
 export const DAEMON_WORKER_STARTUP_GATE_COMMIT = "start\n";
-export type DaemonWorkerLifecycle = "starting" | "ready" | "recovering" | "stopping" | "failed";
+/**
+ * `passivated` descriptors retain routing metadata without a worker process.
+ * This lifecycle is internal to the supervisor/worker implementation.
+ */
+export const DAEMON_WORKER_LIFECYCLES = [
+	"starting",
+	"ready",
+	"recovering",
+	"stopping",
+	"failed",
+	"passivated",
+] as const;
+export type DaemonWorkerLifecycle = (typeof DAEMON_WORKER_LIFECYCLES)[number];
+
+/** Durable descriptor states are untrusted input when read from disk. */
+export function isDaemonWorkerLifecycle(value: unknown): value is DaemonWorkerLifecycle {
+	return typeof value === "string" && (DAEMON_WORKER_LIFECYCLES as readonly string[]).includes(value);
+}
 
 export type DaemonWorkerFrameHeader =
 	| {

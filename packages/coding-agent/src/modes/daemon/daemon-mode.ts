@@ -6960,6 +6960,7 @@ export class AgentDaemon {
 				operation,
 			});
 		} catch (error) {
+			if (busy) throw error;
 			this.log(`could not checkpoint worker operation state: ${String(error)}`);
 		}
 	}

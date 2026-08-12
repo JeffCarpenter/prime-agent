@@ -83,6 +83,50 @@ export function readActiveOrphanProcesses(path: string, ownerPid: number): Activ
 		.map((record) => ({ pid: record.pid, processStartId: record.processStartId }));
 }
 
+/**
+ * Strict journal read used before passivation and processless recovery. Unlike
+ * the legacy cleanup reader, malformed durable state is not treated as idle.
+ */
+export function readActiveOrphanProcessesStrict(path: string, ownerPid?: number): ActiveOrphanProcess[] {
+	let contents: string;
+	try {
+		contents = readFileSync(path, "utf8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+		throw error;
+	}
+	const latest = new Map<string, OrphanProcessRecord>();
+	for (const line of contents.split("\n")) {
+		if (!line) continue;
+		const parsed: unknown = JSON.parse(line);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			throw new Error("Invalid orphan process journal record");
+		}
+		const record = parsed as Partial<OrphanProcessRecord>;
+		if (
+			record.version !== 1 ||
+			!Number.isInteger(record.pid) ||
+			(record.pid ?? 0) <= 0 ||
+			!Number.isInteger(record.ownerPid) ||
+			(record.ownerPid ?? 0) <= 0 ||
+			typeof record.active !== "boolean" ||
+			typeof record.recordedAt !== "string" ||
+			(record.active && typeof record.processStartId !== "string")
+		) {
+			throw new Error("Invalid orphan process journal record");
+		}
+		if (ownerPid === undefined || record.ownerPid === ownerPid) {
+			latest.set(`${record.ownerPid}:${record.pid}`, record as OrphanProcessRecord);
+		}
+	}
+	return [...latest.values()]
+		.filter(
+			(record): record is OrphanProcessRecord & { processStartId: string } =>
+				record.active && typeof record.processStartId === "string",
+		)
+		.map((record) => ({ pid: record.pid, processStartId: record.processStartId }));
+}
+
 export function isOrphanProcessIdentityCurrent(orphan: ActiveOrphanProcess): boolean {
 	return compareProcessStartIds(orphan.processStartId, getProcessStartId(orphan.pid)) === "match";
 }

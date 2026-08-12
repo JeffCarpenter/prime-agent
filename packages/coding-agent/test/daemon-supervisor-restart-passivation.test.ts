@@ -68,6 +68,7 @@ interface SupervisorInternals {
 	stopWorkerOnce: ReturnType<typeof vi.fn>;
 	recoverWorker: ReturnType<typeof vi.fn>;
 	passivatedSummaryForDescriptor(descriptor: DaemonWorkerDescriptor): Promise<unknown>;
+	publicSummary(worker: WorkerFixture, summary: Record<string, unknown>): Record<string, unknown>;
 	catalog: { archive(sessionFile: string, sessionId: string): Promise<void> };
 }
 
@@ -274,8 +275,9 @@ describe("daemon supervisor restart passivation", () => {
 
 		expect(supervisor.workers.get(pausedEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
 		expect(supervisor.workers.get(unreadableEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
-		// A paused non-heartbeat schedule has never required a runtime snapshot.
-		expect(supervisor.workers.get(pausedCronEntry.workerId)?.descriptor.lifecycle).toBe("passivated");
+		// Global list/cancel routes through resident workers, so paused schedules
+		// remain resident until artifact-backed routing exists.
+		expect(supervisor.workers.get(pausedCronEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
 	});
 
 	it("prepares only ready residents and retains processless roots for the replacement supervisor", async () => {
@@ -507,7 +509,7 @@ describe("daemon supervisor restart passivation", () => {
 		expect(supervisor.workers.get("busy")?.descriptor.lifecycle).toBe("recovering");
 	});
 
-	it("recovers orphan and completed-recurring cron dispatches but passivates a matched completed one-shot", async () => {
+	it("recovers every outstanding cron dispatch, including a terminal one-shot", async () => {
 		const fixture = fixtureRoot();
 		const orphan = persistSession(fixture.sessionDir, fixture.root, "completed");
 		const completed = persistSession(fixture.sessionDir, fixture.root, "completed");
@@ -599,8 +601,66 @@ describe("daemon supervisor restart passivation", () => {
 		}) as unknown as SupervisorInternals;
 		await supervisor.loadWorkerDescriptors();
 		expect(supervisor.workers.get(orphanEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
-		expect(supervisor.workers.get(completedEntry.workerId)?.descriptor.lifecycle).toBe("passivated");
+		expect(supervisor.workers.get(completedEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
 		expect(supervisor.workers.get(completedRecurringEntry.workerId)?.descriptor.lifecycle).toBe("recovering");
+	});
+
+	it("fails closed on active or malformed orphan-process journals", async () => {
+		const fixture = fixtureRoot();
+		const activeSession = persistSession(fixture.sessionDir, fixture.root, "completed");
+		const malformedSession = persistSession(fixture.sessionDir, fixture.root, "completed");
+		const active = descriptor(fixture, "active-orphan", activeSession);
+		const malformed = descriptor(fixture, "malformed-orphan", malformedSession);
+		active.orphanProcessJournalPath = join(fixture.descriptorDir, "active-orphan.orphans.jsonl");
+		malformed.orphanProcessJournalPath = join(fixture.descriptorDir, "malformed-orphan.orphans.jsonl");
+		writeFileSync(
+			active.orphanProcessJournalPath,
+			`${JSON.stringify({
+				version: 1,
+				pid: 424242,
+				ownerPid: active.pid,
+				processStartId: "verified-child",
+				active: true,
+				recordedAt: new Date(0).toISOString(),
+			})}\n`,
+		);
+		writeFileSync(malformed.orphanProcessJournalPath, '{"version":1');
+		for (const entry of [active, malformed]) {
+			writeFileSync(join(fixture.descriptorDir, `${entry.workerId}.json`), JSON.stringify(entry));
+		}
+		const supervisor = new DaemonSupervisor(fixture.socketPath, {
+			defaultSessionConfig: { agentDir: fixture.agentDir, cwd: fixture.root, sessionDir: fixture.sessionDir },
+			descriptorDir: fixture.descriptorDir,
+		}) as unknown as SupervisorInternals;
+
+		await supervisor.loadWorkerDescriptors();
+
+		expect(supervisor.workers.get(active.workerId)?.descriptor.lifecycle).toBe("recovering");
+		expect(supervisor.workers.get(malformed.workerId)?.descriptor.lifecycle).toBe("recovering");
+	});
+
+	it("keeps passivation internal to the public session summary wire shape", () => {
+		const fixture = fixtureRoot();
+		const session = persistSession(fixture.sessionDir, fixture.root, "completed");
+		const passive = {
+			descriptor: { ...descriptor(fixture, "wire-shape", session), lifecycle: "passivated" as const },
+			descriptorPath: join(fixture.descriptorDir, "wire-shape.json"),
+			summaries: new Map(),
+		};
+		delete passive.descriptor.pid;
+		delete passive.descriptor.processStartId;
+		const supervisor = new DaemonSupervisor(fixture.socketPath, {
+			defaultSessionConfig: { agentDir: fixture.agentDir, cwd: fixture.root, sessionDir: fixture.sessionDir },
+			descriptorDir: fixture.descriptorDir,
+		}) as unknown as SupervisorInternals;
+
+		const summary = supervisor.publicSummary(passive, {
+			id: passive.descriptor.rootActiveSessionId,
+			activeSessionId: passive.descriptor.rootActiveSessionId,
+		});
+
+		expect(summary).not.toHaveProperty("workerState");
+		expect(summary).not.toHaveProperty("workerPid");
 	});
 
 	it("does not recover a saved processless client-owned passive root until its owner attaches with env", async () => {

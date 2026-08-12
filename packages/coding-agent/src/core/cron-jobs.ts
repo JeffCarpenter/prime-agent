@@ -272,23 +272,10 @@ export class AgentCronJobStore {
 			if (jobsById.has(job.id)) return true;
 			jobsById.set(job.id, job);
 		}
-		for (const dispatch of (file.dispatches as AgentCronDispatchRecord[] | undefined) ?? []) {
-			const job = jobsById.get(dispatch.jobId);
-			// Dispatches are not independently meaningful. An orphan, cross-session,
-			// or terminal-state mismatch may represent work whose result was lost. A
-			// completed one-shot dispatch is safe: its durable terminal job proves there
-			// is no schedule left to revive. A recurring job can become completed only
-			// after an interrupted state transition, so its outstanding dispatch is
-			// recoverable rather than evidence that passivation is safe.
-			if (
-				!job ||
-				job.sessionId !== sessionId ||
-				(job.status !== "active" && (job.status !== "completed" || job.schedule.kind !== "once"))
-			) {
-				return true;
-			}
-		}
-		return jobs.some((job) => job.status === "active" || (isHeartbeatCronJob(job) && job.status === "paused"));
+		// Any surviving dispatch is an unjudged transition. A clean completion
+		// removes it atomically, so even a terminal one-shot must recover.
+		if (((file.dispatches as AgentCronDispatchRecord[] | undefined) ?? []).length > 0) return true;
+		return jobs.some((job) => job.status === "active" || job.status === "paused");
 	}
 
 	create(input: CreateAgentCronJobInput): AgentCronJob {

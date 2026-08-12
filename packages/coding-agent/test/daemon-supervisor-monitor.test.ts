@@ -1435,8 +1435,7 @@ describe("daemon worker supervisor monitoring", () => {
 		const recoverWorker = vi.fn();
 		const supervisor = Object.assign(Object.create(DaemonSupervisor.prototype), {
 			workers: new Map([[worker.descriptor.workerId, worker]]),
-			workerStopCounts: new Map(),
-			stopWorkerUntracked: vi.fn(async () => {
+			stopWorkerOnce: vi.fn(async () => {
 				stopStarted.resolve();
 				await releaseStop.promise;
 			}),

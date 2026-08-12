@@ -57,6 +57,28 @@ import { DAEMON_WORKER_SUPERVISOR_SOCKET_ENV } from "../src/modes/daemon/daemon-
 import { RlmSpawnLedger } from "../src/modes/daemon/rlm-ledger.js";
 
 describe("daemon mode helpers", () => {
+	it("rejects acknowledged busy work when its recovery checkpoint cannot persist", () => {
+		const daemon = new AgentDaemon("/tmp/unused-daemon.sock", {
+			defaultSessionConfig: { agentDir: "/tmp", cwd: "/tmp" },
+			createRuntime: vi.fn(),
+		});
+		const state = makeState("active");
+		state.runtime = {
+			...state.runtime,
+			session: { sessionId: "session-active", sessionFile: "/tmp/session-active.jsonl" },
+		} as ActiveSessionState["runtime"];
+		const record = vi.fn(() => {
+			throw new Error("journal unavailable");
+		});
+		const internals = daemon as unknown as {
+			recoveryJournal?: { record: typeof record };
+			recordWorkerRecoveryState(state: ActiveSessionState, operation: string, busyOverride?: boolean): void;
+		};
+		internals.recoveryJournal = { record };
+
+		expect(() => internals.recordWorkerRecoveryState(state, "prompt_accepted", true)).toThrow("journal unavailable");
+	});
+
 	it("preserves envelope client identity while registering prompt admission", () => {
 		const daemon = new AgentDaemon("/tmp/unused-daemon.sock", {
 			defaultSessionConfig: { agentDir: "/tmp", cwd: "/tmp" },

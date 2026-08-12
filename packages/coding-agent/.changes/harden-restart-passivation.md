@@ -1,0 +1,1 @@
+- Changed daemon restarts to keep cleanly idle session roots processless until an explicit operation wakes them ([#1107](https://github.com/PrimeIntellect-ai/prime-agent/pull/1107) by [@sethkarten](https://github.com/sethkarten)).

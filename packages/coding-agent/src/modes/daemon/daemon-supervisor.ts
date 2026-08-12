@@ -48,6 +48,7 @@ import {
 	isOrphanProcessIdentityCurrent,
 	ORPHAN_PROCESS_JOURNAL_ENV,
 	readActiveOrphanProcesses,
+	readActiveOrphanProcessesStrict,
 } from "../../core/orphan-process-journal.js";
 import { PromptAdmissionCancelledError, waitForPromptAdmission } from "../../core/prompt-admission.js";
 import {
@@ -61,7 +62,12 @@ import {
 	getProcessStartId,
 	SessionAlreadyActiveError,
 } from "../../core/session-lease.js";
-import { getSessionArtifactPathForFile, readSessionInfo, type SessionInfo } from "../../core/session-manager.js";
+import {
+	getSessionArtifactPathForFile,
+	isAgentTaskState,
+	readSessionInfo,
+	type SessionInfo,
+} from "../../core/session-manager.js";
 import { SettingsManager } from "../../core/settings-manager.js";
 import { isProcessAlive, processIdExists, signalProcessGroupOrProcess } from "../../utils/child-process.js";
 import type { AgentConnectionHeartbeat } from "../agent-connection/types.js";
@@ -141,6 +147,7 @@ import {
 	type DaemonWorkerLifecycle,
 	durableDaemonCreateCommand,
 	durableDaemonWorkerDescriptor,
+	isDaemonWorkerLifecycle,
 	SESSION_LEASE_OWNER_ID_ENV,
 	SESSION_LEASES_ENABLED_ENV,
 } from "./daemon-worker-protocol.js";
@@ -1194,6 +1201,12 @@ export class DaemonSupervisor {
 		try {
 			const journal = new WorkerRecoveryJournal(descriptor.recoveryJournalPath);
 			if (journal.hasUnreadableRecords() || journal.getLatest().some((record) => record.busy)) return true;
+			if (
+				descriptor.orphanProcessJournalPath &&
+				readActiveOrphanProcessesStrict(descriptor.orphanProcessJournalPath, descriptor.pid).length > 0
+			) {
+				return true;
+			}
 			const artifactDir = join(dirname(dirname(info.path)), "session-artifacts", info.id);
 			const cronStore = AgentCronJobStore.forSessionArtifacts();
 			cronStore.registerSessionArtifact(info.id, artifactDir);
@@ -2014,9 +2027,20 @@ export class DaemonSupervisor {
 				);
 				const worker = direct ?? (await this.findWorkerForClient(client, command.activeSessionId)).worker;
 				this.assertWorkerAccessibleToClient(client, worker, command.activeSessionId);
-				if ((this.workerStopCounts?.get(worker) ?? 0) > 0) {
+				if ((worker.stopFinalizations?.size ?? 0) > 0 || (this.workerStopCounts?.get(worker) ?? 0) > 0) {
 					throw new Error("Session worker is stopping; retry after it finishes");
 				}
+				if (worker.stopFinalized) throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
+				const pid = worker.descriptor.pid;
+				if (
+					worker.descriptor.lifecycle !== "passivated" &&
+					pid !== undefined &&
+					this.processIdentity(pid, worker.descriptor.processStartId) === "current"
+				) {
+					throw new Error(`Session worker ${worker.descriptor.workerId} is still running; cannot retry its stop`);
+				}
+				worker.stopFailure = undefined;
+				worker.archiveFinalization = undefined;
 				worker.intentionalStop = false;
 				worker.descriptor.stopRequestedAt = undefined;
 				worker.descriptor.archiveOnStop = undefined;
@@ -2497,16 +2521,13 @@ export class DaemonSupervisor {
 		const ownerClientId = command.lifecycle === "client_owned" ? clientId : undefined;
 		if (command.sessionPath) {
 			const activeMatches = this.matchWorkers(command.sessionPath);
-			if (
-				activeMatches.length === 1 &&
-				!(await this.reclaimStaleWorkerRegistration(activeMatches[0]!.worker, command.launchEnv !== undefined))
-			) {
-				return this.reuseWorkerForCreate(
-					activeMatches[0]!.worker,
-					ownerClientId,
-					command.sessionPath,
-					command.launchEnv,
-				);
+			if (activeMatches.length === 1) {
+				const existing = activeMatches[0]!.worker;
+				if (!(await this.reclaimStaleWorkerRegistration(existing, command.launchEnv !== undefined))) {
+					this.reuseWorkerForCreate(existing, ownerClientId, command.sessionPath, command.launchEnv);
+					await this.wakePassivatedWorker(existing);
+					return existing;
+				}
 			}
 			if (activeMatches.length > 1) {
 				throw new Error(`Ambiguous active session "${command.sessionPath}"`);
@@ -2518,7 +2539,9 @@ export class DaemonSupervisor {
 			createCommand = { ...createCommand, sessionPath };
 			const existing = this.findWorkerBySessionFile(sessionPath);
 			if (existing && !(await this.reclaimStaleWorkerRegistration(existing, command.launchEnv !== undefined))) {
-				return this.reuseWorkerForCreate(existing, ownerClientId, sessionPath, command.launchEnv);
+				this.reuseWorkerForCreate(existing, ownerClientId, sessionPath, command.launchEnv);
+				await this.wakePassivatedWorker(existing);
+				return existing;
 			}
 		}
 		const key = createCommand.sessionPath
@@ -2667,6 +2690,9 @@ export class DaemonSupervisor {
 			this.deleteWorkerDescriptor(worker);
 			await this.syncAgentPeers().catch(() => undefined);
 			return true;
+		}
+		if (worker.descriptor.pid === undefined || worker.descriptor.lifecycle === "passivated") {
+			return false;
 		}
 		// Fail fast before waiting on anything: only a confirmed-dead process is
 		// reclaimable. A live, unknown, or still-stopping worker is left alone
@@ -3456,8 +3482,9 @@ export class DaemonSupervisor {
 				}
 				try {
 					await this.assertRecoveryAllowed();
-					const processAlive = isProcessAlive(worker.descriptor.pid);
-					const observedProcessStartId = processAlive ? getProcessStartId(worker.descriptor.pid) : undefined;
+					const pid = worker.descriptor.pid;
+					const processAlive = pid !== undefined && isProcessAlive(pid);
+					const observedProcessStartId = pid !== undefined && processAlive ? getProcessStartId(pid) : undefined;
 					const processIdentityComparison = compareProcessStartIds(
 						worker.descriptor.processStartId,
 						observedProcessStartId,
@@ -3580,15 +3607,20 @@ export class DaemonSupervisor {
 			// still-recoverable worker until that dependency is ready.
 			await this.catalog.start();
 			await this.assertRecoveryAllowed();
-			signalProcessGroupOrProcess(worker.descriptor.pid, "SIGKILL");
+			const pid = worker.descriptor.pid;
+			if (pid !== undefined && this.processIdentity(pid, worker.descriptor.processStartId) === "current") {
+				signalProcessGroupOrProcess(pid, "SIGKILL");
+			}
 		}
 		const orphanProcessJournalPath = worker.descriptor.orphanProcessJournalPath;
 		const pid = worker.descriptor.pid;
-		// A processless passive record intentionally has no parent identity. Do
-		// not use a legacy/stale parent PID to reap anything while waking it.
-		if (orphanProcessJournalPath && pid !== undefined) {
+		if (orphanProcessJournalPath) {
 			try {
-				for (const orphan of readActiveOrphanProcesses(orphanProcessJournalPath, pid)) {
+				const orphans =
+					pid === undefined
+						? readActiveOrphanProcessesStrict(orphanProcessJournalPath)
+						: readActiveOrphanProcesses(orphanProcessJournalPath, pid);
+				for (const orphan of orphans) {
 					if (!isOrphanProcessIdentityCurrent(orphan)) {
 						continue;
 					}
@@ -3600,6 +3632,7 @@ export class DaemonSupervisor {
 				clearOrphanProcessJournal(orphanProcessJournalPath);
 			} catch (error) {
 				this.log(`Could not reap orphaned worker resources: ${String(error)}`);
+				if (pid === undefined) throw error;
 			}
 		}
 		const journal = new WorkerRecoveryJournal(worker.descriptor.recoveryJournalPath);
@@ -4058,12 +4091,13 @@ export class DaemonSupervisor {
 
 	private publicSummary(worker: ResidentWorker, summary: SessionSummary): SessionSummary {
 		const activeSessionId = summary.activeSessionId ?? summary.id;
+		const workerState = this.effectiveWorkerState(worker);
 		return {
 			...summary,
 			attachedClients: [...this.clients].filter((client) => client.attachedActiveSessionIds.has(activeSessionId))
 				.length,
-			workerState: this.effectiveWorkerState(worker),
-			workerPid: worker.descriptor.pid,
+			// Passivation is internal metadata, not a public daemon-protocol state.
+			...(workerState === "passivated" ? {} : { workerState, workerPid: worker.descriptor.pid }),
 		};
 	}
 
@@ -4251,6 +4285,9 @@ export class DaemonSupervisor {
 		command: DaemonCommand,
 		timeoutMs = WORKER_REQUEST_TIMEOUT_MS,
 	): Promise<DaemonResponse> {
+		if (this.commandExplicitlyWakesWorker(command)) {
+			await this.wakePassivatedWorker(worker);
+		}
 		const client = this.requireAvailableWorkerClient(worker, command.type === "kill");
 		const response = await client.request(withoutCommandId(command), timeoutMs);
 		if (command.type === "get_state" && response.success && isSessionSummary(response.data)) {
@@ -4295,19 +4332,24 @@ export class DaemonSupervisor {
 				if (!ownedWorker.launchEnv) {
 					throw new Error("Client-owned session recovery requires the owning client environment");
 				}
-				ownedWorker.intentionalStop = false;
-				ownedWorker.descriptor.stopRequestedAt = undefined;
-				ownedWorker.descriptor.archiveOnStop = undefined;
-				ownedWorker.descriptor.lifecycle = "recovering";
-				ownedWorker.descriptor.consecutiveFailures = 0;
-				this.persistWorker(ownedWorker);
-				await this.recoverWorker(ownedWorker);
+				if (ownedWorker.descriptor.lifecycle === "passivated") {
+					await this.wakePassivatedWorker(ownedWorker);
+				} else {
+					ownedWorker.intentionalStop = false;
+					ownedWorker.descriptor.stopRequestedAt = undefined;
+					ownedWorker.descriptor.archiveOnStop = undefined;
+					ownedWorker.descriptor.lifecycle = "recovering";
+					ownedWorker.descriptor.consecutiveFailures = 0;
+					this.persistWorker(ownedWorker);
+					await this.recoverWorker(ownedWorker);
+				}
 			}
 		}
 		const match = await this.findWorkerForClient(client, command.activeSessionId);
 		// The descriptor retains the creation telemetry policy while passivated, so
 		// reject an incompatible attach before it can launch a worker process.
 		this.assertTelemetryAttachAllowed(match.worker, command.telemetryDisabled);
+		await this.wakePassivatedWorker(match.worker);
 		this.requireAvailableWorkerClient(match.worker);
 		const activeSessionId = match.summary.activeSessionId ?? match.summary.id;
 		const duplicateValidation = this.currentSnapshotGeneration(match.worker, activeSessionId)?.validation;
@@ -5762,15 +5804,50 @@ export class DaemonSupervisor {
 		recoveryCleanup = false,
 		directChild?: { child: ChildProcess; closed: Promise<void> },
 	): Promise<void> {
+		if (worker.stopFinalized && !(removeDescriptor && archiveSession)) {
+			throw new Error(`Session worker ${worker.descriptor.workerId} was stopped`);
+		}
 		const releaseStopOwnership = this.acquireWorkerStopOwnership(worker);
+		const stop = Promise.resolve().then(() =>
+			this.stopWorkerOnce(worker, removeDescriptor, force, archiveSession, recoveryCleanup, directChild),
+		);
+		let finalizations = worker.stopFinalizations;
+		if (!finalizations) {
+			finalizations = new Set();
+			worker.stopFinalizations = finalizations;
+		}
+		finalizations.add(stop);
 		try {
-			await this.stopWorkerUntracked(worker, removeDescriptor, force, archiveSession, recoveryCleanup, directChild);
+			await stop;
+		} catch (error) {
+			const failure = error instanceof Error ? error : new Error(String(error));
+			if (!worker.stopFinalized) {
+				this.workers.set(worker.descriptor.workerId, worker);
+				worker.stopFailure = failure;
+				worker.intentionalStop = true;
+				try {
+					if (removeDescriptor) {
+						this.persistWorkerStopTombstone(worker, archiveSession);
+					} else {
+						worker.descriptor.lifecycle = "failed";
+						worker.descriptor.lastError = failure.message;
+						this.persistWorker(worker);
+					}
+				} catch (persistError) {
+					this.reportCleanupFailure(`worker stop failure fence ${worker.descriptor.workerId}`, persistError);
+				}
+			}
+			throw error;
 		} finally {
+			finalizations.delete(stop);
+			if (finalizations.size === 0 && worker.stopFinalizations === finalizations) {
+				worker.stopFinalizations = undefined;
+			}
 			releaseStopOwnership();
 		}
 	}
 
-	private async stopWorkerUntracked(
+	private async stopWorkerOnce(
 		worker: ResidentWorker,
 		removeDescriptor: boolean,
 		force = false,
@@ -5778,6 +5855,19 @@ export class DaemonSupervisor {
 		recoveryCleanup = false,
 		directChild?: { child: ChildProcess; closed: Promise<void> },
 	): Promise<void> {
+		if (worker.stopFinalized) {
+			if (removeDescriptor && archiveSession) {
+				if (existsSync(worker.descriptorPath)) {
+					this.persistWorkerStopTombstone(worker, true);
+				}
+				await this.finalizeArchivedWorkerStopOnce(worker);
+				this.workers.delete(worker.descriptor.workerId);
+				this.deleteWorkerDescriptor(worker);
+			}
+			return;
+		}
+		const entryPid = worker.descriptor.pid;
+		const processless = worker.descriptor.lifecycle === "passivated" || entryPid === undefined;
 		if (worker.ownerCleanupTimer) {
 			clearTimeout(worker.ownerCleanupTimer);
 			worker.ownerCleanupTimer = undefined;
@@ -5790,7 +5880,6 @@ export class DaemonSupervisor {
 		// entered with, and abort cleanup once the stop no longer applies: the
 		// pid changed (relaunched) or a removeDescriptor stop lost its tombstone
 		// (rescinded, even before the successor pid lands).
-		const entryPid = worker.descriptor.pid;
 		const entryStartId = worker.descriptor.processStartId;
 		const assertStopStillApplies = () => {
 			if (directChild) {
@@ -5851,8 +5940,8 @@ export class DaemonSupervisor {
 			worker.client = undefined;
 		} else if (directChild) {
 			directChild.child.kill("SIGTERM");
-		} else if (this.processIdentity(entryPid, entryStartId) === "current") {
-			signalProcessGroupOrProcess(entryPid, "SIGTERM");
+		} else if (!processless && this.processIdentity(entryPid!, entryStartId) === "current") {
+			signalProcessGroupOrProcess(entryPid!, "SIGTERM");
 		}
 		// Identity-aware in both directions: a replaced pid counts as gone (never
 		// signal a recycled pid) while an unknown identity counts as alive (never
@@ -5861,16 +5950,19 @@ export class DaemonSupervisor {
 		let identityVerdict: "current" | "replaced" | "gone" | "unknown" = "current";
 		let identityCheckedAt = 0;
 		const isWorkerProcessAlive = () => {
+			if (processless) {
+				return false;
+			}
 			if (directChild) {
 				return directChild.child.exitCode === null && directChild.child.signalCode === null;
 			}
-			if (!processIdExists(entryPid)) {
+			if (!processIdExists(entryPid!)) {
 				return false;
 			}
 			const now = Date.now();
 			if (now - identityCheckedAt >= LIVENESS_IDENTITY_RECHECK_MS) {
 				identityCheckedAt = now;
-				identityVerdict = this.processIdentity(entryPid, entryStartId);
+				identityVerdict = this.processIdentity(entryPid!, entryStartId);
 			}
 			return identityVerdict !== "replaced" && identityVerdict !== "gone";
 		};
@@ -5882,10 +5974,10 @@ export class DaemonSupervisor {
 		if (force && isWorkerProcessAlive()) {
 			if (directChild) {
 				sigkillSent = directChild.child.kill("SIGKILL");
-			} else if (this.processIdentity(entryPid, entryStartId) === "current") {
+			} else if (!processless && this.processIdentity(entryPid!, entryStartId) === "current") {
 				// Fresh, unthrottled check: the cached verdict may be up to 500ms
 				// old, long enough for the pid to be recycled.
-				signalProcessGroupOrProcess(entryPid, "SIGKILL");
+				signalProcessGroupOrProcess(entryPid!, "SIGKILL");
 				sigkillSent = true;
 			}
 			const forceDeadline = Date.now() + 1000;
@@ -5910,7 +6002,7 @@ export class DaemonSupervisor {
 			if (force) {
 				this.reclaimStoppedWorkerCronLock(worker);
 			}
-			await this.finalizeArchivedWorkerStop(worker);
+			await this.finalizeArchivedWorkerStopOnce(worker);
 			assertStopStillApplies();
 		}
 		this.invalidateWorkerSessionInputPauses(worker, "Session worker stopped while input was paused");
@@ -5950,6 +6042,9 @@ export class DaemonSupervisor {
 		// the stop and relaunch with a new pid, and the OS can recycle the old
 		// pid. The finalizer must never follow either successor.
 		const pid = worker.descriptor.pid;
+		if (pid === undefined) {
+			return;
+		}
 		const processStartId = worker.descriptor.processStartId;
 		const stopRevision = worker.stopRevision;
 		const isStopGenerationCurrent = () =>
@@ -6027,6 +6122,22 @@ export class DaemonSupervisor {
 				this.reportCleanupFailure(`timed-out worker stop ${worker.descriptor.workerId}`, error);
 				await unrefDelay(STOP_FINALIZATION_RETRY_MS);
 			}
+		}
+	}
+
+	private async finalizeArchivedWorkerStopOnce(worker: ResidentWorker): Promise<void> {
+		let archiveFinalization = worker.archiveFinalization;
+		if (!archiveFinalization) {
+			archiveFinalization = this.finalizeArchivedWorkerStop(worker);
+			worker.archiveFinalization = archiveFinalization;
+		}
+		try {
+			await archiveFinalization;
+		} catch (error) {
+			if (worker.archiveFinalization === archiveFinalization) {
+				worker.archiveFinalization = undefined;
+			}
+			throw error;
 		}
 	}
 
