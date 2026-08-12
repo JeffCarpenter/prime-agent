@@ -1,0 +1,1 @@
+- Fixed admitted RLM children continuing after their IPython kernel host is disposed ([#1253](https://github.com/PrimeIntellect-ai/prime-agent/pull/1253) by [@sethkarten](https://github.com/sethkarten)).
