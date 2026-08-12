@@ -207,7 +207,7 @@ describe("InteractiveMode refinement status", () => {
 			updateWorkingPulse: vi.fn(),
 			activityTracker: new AgentActivityTracker(),
 			updateWorkingLoaderMessage: vi.fn(),
-			updatePendingMessagesDisplay: vi.fn(),
+			replaceConnectionQueue: vi.fn(),
 			syncWorkingLoader,
 			ui: { requestRender: vi.fn() },
 		} as unknown as InteractiveMode;
