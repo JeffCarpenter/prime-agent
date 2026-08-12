@@ -132,7 +132,7 @@ function stageDeclaredDependencyClosure(rootNames: string[], targetRoot: string)
 	};
 
 	for (const name of rootNames) {
-		stageDependency(name, installedRepositoryRoot, targetRoot, new Map(), false);
+		stageDependency(name, packageRoot, targetRoot, new Map(), false);
 	}
 }
 
