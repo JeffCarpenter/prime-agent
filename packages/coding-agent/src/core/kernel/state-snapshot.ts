@@ -69,6 +69,36 @@ export function buildSnapshotCode(
 	return `
 def _prime_agent_snapshot_state():
     import builtins as _b, io, json, os, stat, sys, datetime
+
+    def _private_dir(path):
+        absolute = os.path.abspath(path)
+        missing = []
+        current = absolute
+        while not os.path.lexists(current):
+            parent = os.path.dirname(current)
+            if parent == current:
+                raise OSError("snapshot path has no existing ancestor")
+            missing.append(current)
+            current = parent
+        while True:
+            info = os.lstat(current)
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                raise OSError("unsafe snapshot directory")
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+        for directory in reversed(missing):
+            try:
+                os.mkdir(directory, 0o700)
+            except FileExistsError:
+                pass
+            info = os.lstat(directory)
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                raise OSError("unsafe snapshot directory")
+        if hasattr(os, "chmod"):
+            os.chmod(absolute, 0o700)
+
     try:
         import dill
     except _b.Exception as _err:
@@ -136,13 +166,11 @@ def _prime_agent_snapshot_state():
         total += _b.len(blob)
 
     out_dir = os.path.dirname(${pyStr(outPath)})
-    if os.path.lexists(out_dir):
-        out_dir_info = os.lstat(out_dir)
-        if stat.S_ISLNK(out_dir_info.st_mode) or not stat.S_ISDIR(out_dir_info.st_mode):
-            _b.print(${pyStr(RESULT_MARKER)} + json.dumps({"error": "unsafe snapshot directory"}))
-            return
-    else:
-        os.makedirs(out_dir, mode=0o700, exist_ok=False)
+    try:
+        _private_dir(out_dir)
+    except _b.Exception as _err:
+        _b.print(${pyStr(RESULT_MARKER)} + json.dumps({"error": "unsafe snapshot directory: " + _b.str(_err)}))
+        return
     tmp = ${pyStr(outPath)} + ".tmp." + _b.str(os.getpid()) + "." + os.urandom(8).hex()
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _b.getattr(os, "O_NOFOLLOW", 0)
@@ -166,7 +194,7 @@ def _prime_agent_snapshot_state():
         _b.print(${pyStr(RESULT_MARKER)} + json.dumps({"error": "write failed: " + _b.str(_err)}))
         return
 
-    bytes_written = os.path.getsize(${pyStr(outPath)})
+    bytes_written = os.lstat(${pyStr(outPath)}).st_size
     saved = _b.sorted(payload.keys())
     pruned = _b.sorted(name for name in oversized if name in ns) if ${pruneOversized ? "True" : "False"} else []
     manifest = {
@@ -251,12 +279,26 @@ def _prime_agent_restore_state():
 
     try:
         import stat as _stat
+        current = os.path.dirname(os.path.abspath(${pyStr(inPath)}))
+        while True:
+            directory_stat = os.lstat(current)
+            if _stat.S_ISLNK(directory_stat.st_mode) or not _stat.S_ISDIR(directory_stat.st_mode):
+                raise OSError("unsafe snapshot directory")
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
         snapshot_stat = os.lstat(${pyStr(inPath)})
         if not _stat.S_ISREG(snapshot_stat.st_mode):
             _b.print(${pyStr(RESULT_MARKER)} + json.dumps({"restored": [], "failed": [], "error": "load failed: snapshot is not a regular file"}))
             return
         flags = os.O_RDONLY | _b.getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(${pyStr(inPath)}, flags)
+        opened_stat = os.fstat(fd)
+        current_stat = os.lstat(${pyStr(inPath)})
+        if not _stat.S_ISREG(opened_stat.st_mode) or (opened_stat.st_dev, opened_stat.st_ino) != (current_stat.st_dev, current_stat.st_ino):
+            os.close(fd)
+            raise OSError("snapshot changed while opening")
         with os.fdopen(fd, "rb") as fh:
             payload = dill.load(fh)
     except _b.Exception as _err:

@@ -201,7 +201,6 @@ import {
 	getRefinementHistory,
 	type HarnessState,
 	inferRefinementResultScope,
-	isPersistentHarnessStorageSupported,
 	loadGlobalRefinementHistory,
 	loadHarnessState,
 	mergeHarnessStates,
@@ -213,7 +212,6 @@ import {
 	type RefinementResult,
 	reviewAutoRefine,
 	saveHarnessState,
-	WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR,
 } from "./refinement/index.js";
 import { resolveConfigValue } from "./resolve-config-value.js";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.js";
@@ -7666,8 +7664,7 @@ export class AgentSession {
 	}
 
 	private _autoRefineAllowedForSession(): boolean {
-		if (!isPersistentHarnessStorageSupported() || this._rlmDepth !== 0 || this._localHarnessStateDir() === undefined)
-			return false;
+		if (this._rlmDepth !== 0 || this._localHarnessStateDir() === undefined) return false;
 		try {
 			assertHarnessStateWritable(loadHarnessState(this._localHarnessStateDir()!, "local"));
 			return true;
@@ -8253,6 +8250,11 @@ export class AgentSession {
 		}
 		const globalPlanningState = loadHarnessState(globalHarnessStateDir, "global");
 		const localPlanningState = localHarnessStateDir ? loadHarnessState(localHarnessStateDir, "local") : undefined;
+		if (requestedScope === "global") {
+			assertHarnessStateWritable(globalPlanningState);
+		} else if (localPlanningState) {
+			assertHarnessStateWritable(localPlanningState);
+		}
 		const planningState =
 			requestedScope === "global"
 				? globalPlanningState
@@ -8275,6 +8277,7 @@ export class AgentSession {
 			: baselineScope === "global"
 				? globalPlanningState
 				: localPlanningState!;
+		assertHarnessStateWritable(baselineState);
 		if (!options.rollbackId && this._extensionRunner.hasHandlers("session_before_refine")) {
 			const result = (await this._extensionRunner.emit({
 				type: "session_before_refine",
@@ -8389,6 +8392,7 @@ export class AgentSession {
 			// Re-read the target state immediately before applying so concurrent kernel
 			// (`rlm.harness`) writes during the LLM pass are not clobbered.
 			const state = loadHarnessState(targetHarnessStateDir, targetScope);
+			assertHarnessStateWritable(state);
 			const proposal = {
 				...plan.proposal,
 				edits: plan.proposal.edits.map((edit) => {

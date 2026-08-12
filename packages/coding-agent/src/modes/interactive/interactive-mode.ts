@@ -140,7 +140,7 @@ import { readClipboardImage } from "../../utils/clipboard-image.js";
 import { parseGitUrl } from "../../utils/git.js";
 import { resizeImage } from "../../utils/image-resize.js";
 import { getCwdRelativePath } from "../../utils/paths.js";
-import { createPrivateTempFile, readPrivateFile, writePrivateFileAtomic } from "../../utils/private-files.js";
+import { createPrivateTempFile, writePrivateFileAtomic } from "../../utils/private-files.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { ensureTool, ensureToolWithStatus, formatMissingRipgrepMessage } from "../../utils/tools-manager.js";
 import { checkForNewPiVersion } from "../../utils/version-check.js";

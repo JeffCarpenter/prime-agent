@@ -15,8 +15,7 @@ import {
 	type OAuthProviderId,
 } from "@earendil-works/pi-ai";
 import { getOAuthProvider, getOAuthProviders } from "@earendil-works/pi-ai/oauth";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { join } from "path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../config.js";
 import { ensurePrivateFile, readPrivateFile, writePrivateFileAtomic } from "../utils/private-files.js";

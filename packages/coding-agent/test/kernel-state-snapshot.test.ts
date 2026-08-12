@@ -101,7 +101,8 @@ describe("buildSnapshotCode", () => {
 		expect(code).toContain('getattr(os, "O_NOFOLLOW", 0)');
 		expect(code).toContain("os.replace");
 		expect(code).toContain("except _b.KeyboardInterrupt");
-		expect(code).toContain("os.lstat(out_dir)");
+		expect(code).toContain("os.lstat(current)");
+		expect(code).toContain("_private_dir(out_dir)");
 		expect(code).toContain("os.fchmod");
 		// rlm and the IPython display names must never be serialized.
 		expect(code).toContain('"rlm"');

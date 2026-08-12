@@ -33,7 +33,6 @@ import {
 	getRefinementHistoryPath,
 	type HarnessState,
 	inferRefinementResultScope,
-	isPersistentHarnessStorageSupported,
 	loadGlobalRefinementHistory,
 	loadHarnessState,
 	mergeHarnessStates,
@@ -45,7 +44,6 @@ import {
 	type RefinementResult,
 	refineHarness,
 	saveHarnessState,
-	WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR,
 } from "../src/core/refinement/index.js";
 import { getProcessStartId } from "../src/core/session-lease.js";
 import type { CustomEntry } from "../src/core/session-manager.js";
@@ -62,22 +60,32 @@ const { completeSimpleMock, fsyncCallback, lockOwnerReadFailure } = vi.hoisted((
 
 vi.mock("node:fs", async (importOriginal) => {
 	const actual = await importOriginal<typeof NodeFs>();
+	const shouldFailLockOwnerRead = (path: unknown): boolean =>
+		!!lockOwnerReadFailure.error &&
+		(path === lockOwnerReadFailure.path ||
+			(lockOwnerReadFailure.pathIncludes !== undefined && String(path).includes(lockOwnerReadFailure.pathIncludes)));
 	const readFileSyncWithFailure = ((path: unknown, ...args: unknown[]): unknown => {
-		if (
-			lockOwnerReadFailure.error &&
-			(path === lockOwnerReadFailure.path ||
-				(lockOwnerReadFailure.pathIncludes !== undefined &&
-					String(path).includes(lockOwnerReadFailure.pathIncludes)))
-		) {
+		if (shouldFailLockOwnerRead(path)) {
 			throw lockOwnerReadFailure.error;
 		}
 		return Reflect.apply(actual.readFileSync, undefined, [path, ...args]);
 	}) as typeof actual.readFileSync;
+	const openSyncWithFailure = ((path: unknown, ...args: unknown[]): number => {
+		if (shouldFailLockOwnerRead(path)) {
+			throw lockOwnerReadFailure.error;
+		}
+		return Reflect.apply(actual.openSync, undefined, [path, ...args]) as number;
+	}) as typeof actual.openSync;
 	const fsyncSyncWithCallback = ((descriptor: number): void => {
 		actual.fsyncSync(descriptor);
 		fsyncCallback.current?.();
 	}) as typeof actual.fsyncSync;
-	return { ...actual, fsyncSync: fsyncSyncWithCallback, readFileSync: readFileSyncWithFailure };
+	return {
+		...actual,
+		fsyncSync: fsyncSyncWithCallback,
+		openSync: openSyncWithFailure,
+		readFileSync: readFileSyncWithFailure,
+	};
 });
 
 vi.mock("@earendil-works/pi-ai", async (importOriginal) => {

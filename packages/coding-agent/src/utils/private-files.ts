@@ -14,23 +14,18 @@ import {
 	readFileSync,
 	renameSync,
 	rmSync,
-	statSync,
+	type Stats,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, parse, resolve } from "node:path";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
-export const PRIVATE_FILE_SYSTEM_UNSUPPORTED_ERROR = "Private file storage requires O_NOFOLLOW support";
-
-export function requireNoFollow(flag: number | undefined): number {
-	if (flag === undefined || flag === null) throw new Error(PRIVATE_FILE_SYSTEM_UNSUPPORTED_ERROR);
-	return flag;
-}
 
 const NONBLOCK_FLAG = constants.O_NONBLOCK ?? 0;
 const DIRECTORY_FLAG = constants.O_DIRECTORY ?? 0;
+const NOFOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
 
 function pathExistsLexical(path: string): boolean {
 	try {
@@ -42,20 +37,18 @@ function pathExistsLexical(path: string): boolean {
 	}
 }
 
+function sameFileIdentity(
+	left: { dev: number | bigint; ino: number | bigint },
+	right: { dev: number | bigint; ino: number | bigint },
+): boolean {
+	return left.dev === right.dev && left.ino === right.ino;
+}
+
 function ensureNoSymlinkPath(path: string, mode: number): void {
 	const target = resolve(path);
-	let existing = target;
-	while (!pathExistsLexical(existing)) {
-		const parent = dirname(existing);
-		if (parent === existing) throw new Error(`Private path has no existing ancestor: ${path}`);
-		existing = parent;
-	}
-	if (lstatSync(existing).isSymbolicLink()) {
-		throw new Error(`Refusing to use non-directory private path: ${existing}`);
-	}
-	const suffix = target.slice(existing.length).split(/[/\\]/).filter(Boolean);
-	let current = existing;
-	for (const component of suffix) {
+	const root = parse(target).root;
+	let current = root;
+	for (const component of target.slice(root.length).split(/[/\\]/).filter(Boolean)) {
 		current = join(current, component);
 		if (!pathExistsLexical(current)) {
 			try {
@@ -71,9 +64,38 @@ function ensureNoSymlinkPath(path: string, mode: number): void {
 	}
 }
 
+export function assertSafeDirectoryPath(path: string, options: { requirePrivateMode?: boolean } = {}): void {
+	const target = resolve(path);
+	const root = parse(target).root;
+	let current = root;
+	for (const component of target.slice(root.length).split(/[/\\]/).filter(Boolean)) {
+		current = join(current, component);
+		let stats: ReturnType<typeof lstatSync>;
+		try {
+			stats = lstatSync(current);
+		} catch (error) {
+			if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+			throw error;
+		}
+		if (stats.isSymbolicLink() || !stats.isDirectory()) {
+			throw new Error(`Refusing to use non-directory private path: ${current}`);
+		}
+		if (current === target && options.requirePrivateMode && process.platform !== "win32") {
+			if ((stats.mode & 0o777) !== PRIVATE_DIRECTORY_MODE) {
+				throw new Error(`Refusing to read non-private directory: ${current}`);
+			}
+		}
+	}
+}
+
 function setPrivateFileMode(fd: number, path: string, mode: number): void {
 	if (process.platform === "win32") {
 		chmodSync(path, mode);
+		const pathStats = lstatSync(path);
+		const openedStats = fstatSync(fd);
+		if (pathStats.isSymbolicLink() || !sameFileIdentity(pathStats, openedStats)) {
+			throw new Error(`Private file changed while setting its mode: ${path}`);
+		}
 	} else {
 		fchmodSync(fd, mode);
 	}
@@ -84,10 +106,26 @@ function isAlreadyExistsError(error: unknown): boolean {
 }
 
 function openRegularFileNoSymlink(path: string, flags: number): number {
-	assertRegularFileNoSymlink(path);
-	const fd = openSync(path, flags | requireNoFollow(constants.O_NOFOLLOW) | NONBLOCK_FLAG);
-	const stats = fstatSync(fd);
-	if (!stats.isFile()) {
+	const before = lstatSync(path);
+	if (before.isSymbolicLink() || !before.isFile()) {
+		throw new Error(`Refusing to use non-regular private file: ${path}`);
+	}
+	const fd = openSync(path, flags | NOFOLLOW_FLAG | NONBLOCK_FLAG);
+	const opened = fstatSync(fd);
+	let after: Stats;
+	try {
+		after = lstatSync(path);
+	} catch (error) {
+		closeSync(fd);
+		throw error;
+	}
+	if (
+		!opened.isFile() ||
+		after.isSymbolicLink() ||
+		!after.isFile() ||
+		!sameFileIdentity(before, opened) ||
+		!sameFileIdentity(opened, after)
+	) {
 		closeSync(fd);
 		throw new Error(`Refusing to use non-regular private file: ${path}`);
 	}
@@ -103,18 +141,31 @@ export function assertRegularFileNoSymlink(path: string): void {
 
 export function ensurePrivateDirectory(path: string): void {
 	ensureNoSymlinkPath(path, PRIVATE_DIRECTORY_MODE);
-	const stats = lstatSync(path);
-	if (stats.isSymbolicLink() || !stats.isDirectory()) {
+	const before = lstatSync(path);
+	if (before.isSymbolicLink() || !before.isDirectory()) {
 		throw new Error(`Refusing to use non-directory private path: ${path}`);
 	}
 	if (process.platform === "win32") {
-		if ((stats.mode & 0o777) !== PRIVATE_DIRECTORY_MODE) chmodSync(path, PRIVATE_DIRECTORY_MODE);
+		if ((before.mode & 0o777) !== PRIVATE_DIRECTORY_MODE) chmodSync(path, PRIVATE_DIRECTORY_MODE);
+		const after = lstatSync(path);
+		if (after.isSymbolicLink() || !after.isDirectory() || !sameFileIdentity(before, after)) {
+			throw new Error(`Private directory changed while setting its mode: ${path}`);
+		}
 		return;
 	}
-	const fd = openSync(path, constants.O_RDONLY | DIRECTORY_FLAG | requireNoFollow(constants.O_NOFOLLOW));
+	const fd = openSync(path, constants.O_RDONLY | DIRECTORY_FLAG | NOFOLLOW_FLAG);
 	try {
 		const openedStats = fstatSync(fd);
-		if (!openedStats.isDirectory()) throw new Error(`Refusing to use non-directory private path: ${path}`);
+		const after = lstatSync(path);
+		if (
+			!openedStats.isDirectory() ||
+			after.isSymbolicLink() ||
+			!after.isDirectory() ||
+			!sameFileIdentity(before, openedStats) ||
+			!sameFileIdentity(openedStats, after)
+		) {
+			throw new Error(`Refusing to use non-directory private path: ${path}`);
+		}
 		if ((openedStats.mode & 0o777) !== PRIVATE_DIRECTORY_MODE) {
 			setPrivateFileMode(fd, path, PRIVATE_DIRECTORY_MODE);
 		}
@@ -130,9 +181,10 @@ export function ensurePrivateFile(path: string, initialContent = ""): void {
 		try {
 			fd = openSync(
 				path,
-				constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | requireNoFollow(constants.O_NOFOLLOW),
+				constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW_FLAG,
 				PRIVATE_FILE_MODE,
 			);
+			if (!fstatSync(fd).isFile()) throw new Error(`Refusing to use non-regular private file: ${path}`);
 			writeFileSync(fd, initialContent);
 		} catch (error) {
 			// Another process may have won the exclusive-create race. The regular-file
@@ -175,6 +227,25 @@ export function readPrivateFile(path: string, encoding: BufferEncoding): string 
 	}
 }
 
+function assertDirectoryIdentity(path: string, expected: Stats): void {
+	const current = lstatSync(path);
+	if (current.isSymbolicLink() || !current.isDirectory() || !sameFileIdentity(current, expected)) {
+		throw new Error(`Private directory changed during file operation: ${path}`);
+	}
+}
+
+function removeMatchingFile(path: string, expected: Stats | undefined): void {
+	if (!expected) return;
+	try {
+		const current = lstatSync(path);
+		if (!current.isSymbolicLink() && current.isFile() && sameFileIdentity(current, expected)) {
+			rmSync(path, { force: true });
+		}
+	} catch (error) {
+		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+	}
+}
+
 export function writePrivateFileAtomic(
 	path: string,
 	content: string | Uint8Array,
@@ -192,25 +263,32 @@ export function writePrivateFileAtomic(
 	} else {
 		ensurePrivateDirectory(parent);
 	}
+	const parentIdentity = lstatSync(parent);
 	if (pathExistsLexical(path)) {
 		assertRegularFileNoSymlink(path);
 	}
 	const tempPath = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
 	let fd: number | undefined;
+	let tempIdentity: Stats | undefined;
 	try {
 		fd = openSync(
 			tempPath,
-			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | requireNoFollow(constants.O_NOFOLLOW),
+			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW_FLAG,
 			PRIVATE_FILE_MODE,
 		);
+		tempIdentity = fstatSync(fd);
+		if (!tempIdentity.isFile()) throw new Error(`Refusing to use non-regular private file: ${tempPath}`);
 		writeFileSync(fd, content);
+		setPrivateFileMode(fd, tempPath, PRIVATE_FILE_MODE);
 		fsyncSync(fd);
 		closeSync(fd);
 		fd = undefined;
+		assertDirectoryIdentity(parent, parentIdentity);
+		if (pathExistsLexical(path)) assertRegularFileNoSymlink(path);
 		renameSync(tempPath, path);
 	} finally {
 		if (fd !== undefined) closeSync(fd);
-		rmSync(tempPath, { force: true });
+		removeMatchingFile(tempPath, tempIdentity);
 	}
 }
 
@@ -220,31 +298,41 @@ export function writePrivateFileAtomicLines(
 	options: { preserveOwnership?: boolean } = {},
 ): void {
 	ensurePrivateDirectory(dirname(path));
-	const metadata = options.preserveOwnership && pathExistsLexical(path) ? statSync(path) : undefined;
-	if (metadata) assertRegularFileNoSymlink(path);
+	const parent = dirname(path);
+	const parentIdentity = lstatSync(parent);
+	if (pathExistsLexical(path)) assertRegularFileNoSymlink(path);
+	const metadata = options.preserveOwnership && pathExistsLexical(path) ? lstatSync(path) : undefined;
 	const tempPath = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
 	let fd: number | undefined;
+	let tempIdentity: Stats | undefined;
 	try {
 		fd = openSync(
 			tempPath,
-			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | requireNoFollow(constants.O_NOFOLLOW),
+			constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW_FLAG,
 			PRIVATE_FILE_MODE,
 		);
+		tempIdentity = fstatSync(fd);
+		if (!tempIdentity.isFile()) throw new Error(`Refusing to use non-regular private file: ${tempPath}`);
 		for (const line of lines) writeFileSync(fd, line);
+		setPrivateFileMode(fd, tempPath, PRIVATE_FILE_MODE);
 		fsyncSync(fd);
 		if (metadata && process.platform !== "win32") fchownSync(fd, metadata.uid, metadata.gid);
 		closeSync(fd);
 		fd = undefined;
+		assertDirectoryIdentity(parent, parentIdentity);
+		if (pathExistsLexical(path)) assertRegularFileNoSymlink(path);
 		renameSync(tempPath, path);
 	} finally {
 		if (fd !== undefined) closeSync(fd);
-		rmSync(tempPath, { force: true });
+		removeMatchingFile(tempPath, tempIdentity);
 	}
 }
 
 export function appendPrivateFile(path: string, content: string): void {
-	ensurePrivateDirectory(dirname(path));
-	let flags = constants.O_WRONLY | constants.O_APPEND | requireNoFollow(constants.O_NOFOLLOW) | NONBLOCK_FLAG;
+	const parent = dirname(path);
+	ensurePrivateDirectory(parent);
+	const parentIdentity = lstatSync(parent);
+	let flags = constants.O_WRONLY | constants.O_APPEND | NOFOLLOW_FLAG | NONBLOCK_FLAG;
 	const exists = pathExistsLexical(path);
 	if (exists) {
 		assertRegularFileNoSymlink(path);
@@ -253,6 +341,7 @@ export function appendPrivateFile(path: string, content: string): void {
 	}
 	let fd: number;
 	try {
+		assertDirectoryIdentity(parent, parentIdentity);
 		fd = openSync(path, flags, PRIVATE_FILE_MODE);
 	} catch (error) {
 		if (!isAlreadyExistsError(error) || exists) throw error;
@@ -275,6 +364,10 @@ export interface PrivateTempFile {
 export function createPrivateTempFile(prefix: string, suffix: string, content = ""): PrivateTempFile {
 	const directory = mkdtempSync(join(tmpdir(), prefix));
 	chmodSync(directory, PRIVATE_DIRECTORY_MODE);
+	const directoryStats = lstatSync(directory);
+	if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
+		throw new Error(`Refusing to use non-directory private path: ${directory}`);
+	}
 	const path = join(directory, `${randomUUID()}${suffix}`);
 	try {
 		ensurePrivateFile(path, content);

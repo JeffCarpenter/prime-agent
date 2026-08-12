@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import importlib
 import json
 import os
 import socket
@@ -24,6 +25,8 @@ from rlm.harness import (
     _remove_observed_lock,
     get_harness_state,
 )
+
+harness_module = importlib.import_module("rlm.harness")
 
 PYTHON_REFERENCE = {
     "type": "python",
@@ -270,14 +273,14 @@ class HarnessStateTest(unittest.TestCase):
             owner_path.write_text(owner_before, encoding="utf-8")
             os.utime(lock_path, (0, 0))
             state = HarnessState(state_path, lock_timeout_seconds=0.02, stale_lock_seconds=0)
-            real_read_text = Path.read_text
+            real_open_private = harness_module._open_private_for_read
 
-            def fail_owner_read(path: Path, *args: Any, **kwargs: Any) -> str:
+            def fail_owner_read(path: Path):
                 if path == owner_path:
                     raise PermissionError(errno.EACCES, "simulated owner permission failure")
-                return real_read_text(path, *args, **kwargs)
+                return real_open_private(path)
 
-            with mock.patch("pathlib.Path.read_text", autospec=True, side_effect=fail_owner_read):
+            with mock.patch.object(harness_module, "_open_private_for_read", side_effect=fail_owner_read):
                 with self.assertRaisesRegex(
                     PermissionError,
                     r"Cannot inspect harness-state lock owner.*refusing to reclaim",
@@ -302,14 +305,14 @@ class HarnessStateTest(unittest.TestCase):
             owner_path.write_text(owner_before, encoding="utf-8")
             observation = _read_lock_observation(lock_path)
             self.assertIsNotNone(observation)
-            real_read_text = Path.read_text
+            real_open_private = harness_module._open_private_for_read
 
-            def fail_moved_owner_read(path: Path, *args: Any, **kwargs: Any) -> str:
+            def fail_moved_owner_read(path: Path):
                 if ".moved." in str(path):
                     raise OSError(errno.EIO, "simulated moved-owner I/O failure")
-                return real_read_text(path, *args, **kwargs)
+                return real_open_private(path)
 
-            with mock.patch("pathlib.Path.read_text", autospec=True, side_effect=fail_moved_owner_read):
+            with mock.patch.object(harness_module, "_open_private_for_read", side_effect=fail_moved_owner_read):
                 with self.assertRaisesRegex(OSError, r"Cannot inspect harness-state lock owner.*refusing to reclaim"):
                     _remove_observed_lock(lock_path, observation)
 

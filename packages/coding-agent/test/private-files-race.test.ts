@@ -45,12 +45,7 @@ vi.mock("node:fs", async (importOriginal) => {
 	};
 });
 
-import {
-	ensurePrivateFile,
-	PRIVATE_FILE_SYSTEM_UNSUPPORTED_ERROR,
-	readPrivateFile,
-	requireNoFollow,
-} from "../src/utils/private-files.js";
+import { ensurePrivateFile, readPrivateFile } from "../src/utils/private-files.js";
 
 let directory: string;
 
@@ -61,13 +56,6 @@ afterEach(() => {
 	fsMocks.raceTarget = undefined;
 	fsMocks.lastOpenFlags = undefined;
 	if (directory) rmSync(directory, { recursive: true, force: true });
-});
-
-describe("private filesystem capability", () => {
-	it("requires O_NOFOLLOW support", () => {
-		expect(PRIVATE_FILE_SYSTEM_UNSUPPORTED_ERROR).toContain("O_NOFOLLOW");
-		expect(() => requireNoFollow(undefined)).toThrow(PRIVATE_FILE_SYSTEM_UNSUPPORTED_ERROR);
-	});
 });
 
 describe("ensurePrivateFile exclusive-create races", () => {

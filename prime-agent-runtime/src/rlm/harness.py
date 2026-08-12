@@ -27,6 +27,7 @@ import math
 import os
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -44,7 +45,6 @@ ThinkingLevel = Literal["off", "minimal", "low", "medium", "high", "xhigh", "max
 
 _DEFAULT_FILE_NAME = "harness_state.json"
 _DEFAULT_HARNESS_DIR_NAME = "harness"
-WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR = "Persistent harness storage is unsupported on Windows"
 _KINDS: tuple[HarnessKind, ...] = ("prompt", "memory", "skill", "subagent")
 _THINKING_LEVELS: tuple[ThinkingLevel, ...] = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 _DEFAULT_LOCK_TIMEOUT_SECONDS = 10.0
@@ -163,7 +163,7 @@ def _compare_process_start_ids(recorded: str | None, observed: str | None) -> Li
 
 def _read_lock_observation(lock_path: Path) -> _LockObservation | None:
     try:
-        stat = lock_path.stat()
+        lock_info = lock_path.lstat()
     except FileNotFoundError:
         return None
     except OSError as error:
@@ -171,14 +171,19 @@ def _read_lock_observation(lock_path: Path) -> _LockObservation | None:
             error.errno,
             f"Cannot inspect harness-state lock at {lock_path}; refusing to reclaim the lock",
         ) from error
-    owner_path = lock_path / _LOCK_OWNER_FILE_NAME if lock_path.is_dir() else lock_path
+    if stat.S_ISLNK(lock_info.st_mode) or not (
+        stat.S_ISDIR(lock_info.st_mode) or stat.S_ISREG(lock_info.st_mode)
+    ):
+        raise OSError(f"Refusing to inspect non-regular harness-state lock at {lock_path}")
+    owner_path = lock_path / _LOCK_OWNER_FILE_NAME if stat.S_ISDIR(lock_info.st_mode) else lock_path
     try:
-        raw_owner = owner_path.read_text(encoding="utf-8")
+        with _open_private_for_read(owner_path) as owner_file:
+            raw_owner = owner_file.read()
     except FileNotFoundError:
-        if not lock_path.is_dir():
+        if not stat.S_ISDIR(lock_info.st_mode):
             return None
         try:
-            missing_owner_stat = lock_path.stat()
+            missing_owner_stat = lock_path.lstat()
         except FileNotFoundError:
             return None
         fingerprint = _lock_fingerprint(
@@ -228,7 +233,7 @@ def _lock_is_stale(
             return _compare_process_start_ids(process_start_id, current_start_id) == "mismatch"
         return False
     try:
-        return time.time() - lock_path.stat().st_mtime >= stale_lock_seconds
+        return time.time() - lock_path.lstat().st_mtime >= stale_lock_seconds
     except FileNotFoundError:
         return False
 
@@ -322,13 +327,17 @@ def _state_lock(
     owner_contents = f"{json.dumps(owner)}\n"
     owner_fingerprint = _lock_fingerprint(owner_contents)
     deadline = time.monotonic() + timeout_seconds
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_directory(file_path.parent)
     while True:
         candidate_path = Path(f"{lock_path}.candidate.{os.getpid()}.{uuid.uuid4()}")
         try:
             descriptor: int | None = None
             try:
-                descriptor = os.open(candidate_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                descriptor = os.open(
+                    candidate_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                )
                 with os.fdopen(descriptor, "w", encoding="utf-8") as candidate:
                     descriptor = None
                     candidate.write(owner_contents)
@@ -414,7 +423,7 @@ def _agent_dir() -> Path:
         or os.environ.get("PI_CODING_AGENT_DIR")
         or str(Path.home() / ".prime" / "agent")
     )
-    return Path(raw).expanduser().resolve()
+    return Path(os.path.abspath(Path(raw).expanduser()))
 
 
 def _resolve_global_flag(global_: bool = False, extra: dict[str, Any] | None = None) -> bool:
@@ -460,7 +469,7 @@ def _state_file(state_dir: str | Path | None = None, *, global_: bool = False) -
             "Use get_harness_state(global_=True) for global state."
         )
     if root:
-        return Path(root).expanduser().resolve() / _DEFAULT_FILE_NAME
+        return Path(os.path.abspath(Path(root).expanduser())) / _DEFAULT_FILE_NAME
     return _agent_dir() / _DEFAULT_HARNESS_DIR_NAME / _DEFAULT_FILE_NAME
 
 
@@ -471,18 +480,62 @@ def _chmod_open_file(fd: int, path: Path, mode: int) -> None:
         path.chmod(mode)
 
 
+def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
+    return left.st_dev == right.st_dev and left.st_ino == right.st_ino
+
+
+def _assert_safe_directory_path(path: Path) -> None:
+    absolute = Path(os.path.abspath(path))
+    candidates = [absolute, *absolute.parents]
+    for current in reversed(candidates):
+        if not os.path.lexists(current):
+            continue
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise OSError(f"Refusing to use non-directory private path: {current}")
+
+
 def _ensure_private_directory(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True, mode=0o700)
-    info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+    path = Path(os.path.abspath(path))
+    _assert_safe_directory_path(path)
+    missing: list[Path] = []
+    current = path
+    while not os.path.lexists(current):
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            raise OSError(f"Private path has no existing ancestor: {path}")
+        current = parent
+    for directory in reversed(missing):
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        created = directory.lstat()
+        if stat.S_ISLNK(created.st_mode) or not stat.S_ISDIR(created.st_mode):
+            raise OSError(f"Refusing to use non-directory private path: {directory}")
+        directory.chmod(0o700)
+    before = path.lstat()
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISDIR(before.st_mode):
         raise OSError(f"Refusing to use non-directory private path: {path}")
     if os.name == "nt":
         path.chmod(0o700)
+        after = path.lstat()
+        if stat.S_ISLNK(after.st_mode) or not stat.S_ISDIR(after.st_mode) or not _same_file(before, after):
+            raise OSError(f"Private directory changed while setting its mode: {path}")
         return
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
     try:
-        if not stat.S_ISDIR(os.fstat(fd).st_mode):
+        opened = os.fstat(fd)
+        after = path.lstat()
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or stat.S_ISLNK(after.st_mode)
+            or not stat.S_ISDIR(after.st_mode)
+            or not _same_file(before, opened)
+            or not _same_file(opened, after)
+        ):
             raise OSError(f"Refusing to use non-directory private path: {path}")
         _chmod_open_file(fd, path, 0o700)
     finally:
@@ -490,47 +543,28 @@ def _ensure_private_directory(path: Path) -> None:
 
 
 def _open_private_for_read(path: Path):
-    info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+    _assert_safe_directory_path(path.parent)
+    before = path.lstat()
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
         raise OSError(f"Refusing to use non-regular private file: {path}")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
     try:
         opened = os.fstat(fd)
-        if not stat.S_ISREG(opened.st_mode):
+        after = path.lstat()
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or stat.S_ISLNK(after.st_mode)
+            or not stat.S_ISREG(after.st_mode)
+            or not _same_file(before, opened)
+            or not _same_file(opened, after)
+        ):
             raise OSError(f"Refusing to use non-regular private file: {path}")
         _chmod_open_file(fd, path, 0o600)
         return os.fdopen(fd, "r", encoding="utf-8")
     except BaseException:
         os.close(fd)
         raise
-
-
-def _write_private_json_atomic(path: Path, data: dict[str, Any]) -> None:
-    _ensure_private_directory(path.parent)
-    if os.path.lexists(path):
-        info = path.lstat()
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-            raise OSError(f"Refusing to replace non-regular private file: {path}")
-    temp_path = path.parent / f".{path.name}.{os.getpid()}.{secrets.token_hex(12)}.tmp"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    fd: int | None = None
-    try:
-        fd = os.open(temp_path, flags, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            fd = None
-            json.dump(data, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    finally:
-        if fd is not None:
-            os.close(fd)
-        try:
-            temp_path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 @dataclass
@@ -611,19 +645,13 @@ class HarnessState:
         lock_timeout_seconds: float = _DEFAULT_LOCK_TIMEOUT_SECONDS,
         stale_lock_seconds: float = _DEFAULT_STALE_LOCK_SECONDS,
     ):
-        # Windows cannot provide the required no-follow and private-ACL guarantees
-        # through this portable implementation. Keep reads as an empty proxy and
-        # reject every mutation without resolving or touching a path.
-        if os.name == "nt":
-            in_memory = True
-            local_write_error = WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR
         # in_memory mode never resolves or touches a path. It is the safe fallback when
         # path resolution itself fails, so constructing it cannot re-raise that error.
         if in_memory:
             self.file_path: Path | None = None
         else:
             self.file_path = (
-                Path(file_path).expanduser().parent.resolve() / Path(file_path).expanduser().name
+                Path(os.path.abspath(Path(file_path).expanduser()))
                 if file_path
                 else _state_file(global_=(scope == "global"))
             )
@@ -680,7 +708,13 @@ class HarnessState:
     def load(self) -> "HarnessState":
         if self.file_path is None:
             return self
-        if not self.file_path.exists():
+        try:
+            _assert_safe_directory_path(self.file_path.parent)
+        except OSError as error:
+            self._local_write_error = str(error)
+            self._loaded_mtime = None
+            return self
+        if not os.path.lexists(self.file_path):
             self.revision = 0
             self.entries = {kind: {} for kind in _KINDS}
             self.refinements = []
@@ -802,13 +836,14 @@ class HarnessState:
         }
 
     def _disk_revision(self) -> int:
-        if self.file_path is None or not self.file_path.exists():
+        if self.file_path is None or not os.path.lexists(self.file_path):
             return 0
         try:
-            data = json.loads(self.file_path.read_text(encoding="utf-8"))
+            with _open_private_for_read(self.file_path) as state_file:
+                data = json.load(state_file)
         except (OSError, ValueError) as error:
             raise RuntimeError(
-                f"Harness state at {self.file_path} is invalid; refusing to overwrite it"
+                f"Harness state at {self.file_path} is invalid; refusing to overwrite it: {error}"
             ) from error
         if not isinstance(data, dict):
             raise RuntimeError(f"Harness state at {self.file_path} is invalid; refusing to overwrite it")
@@ -823,18 +858,32 @@ class HarnessState:
         if self.file_path is None:
             return
         assert_lock_owned()
-        mode = self.file_path.stat().st_mode & 0o777 if self.file_path.exists() else 0o600
+        _ensure_private_directory(self.file_path.parent)
+        if os.path.lexists(self.file_path):
+            info = self.file_path.lstat()
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                raise OSError(f"Refusing to replace non-regular private file: {self.file_path}")
         temp_path = Path(f"{self.file_path}.{os.getpid()}.{uuid.uuid4()}.tmp")
         descriptor: int | None = None
         try:
-            descriptor = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+            descriptor = os.open(
+                temp_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
             with os.fdopen(descriptor, "w", encoding="utf-8") as file:
                 descriptor = None
                 json.dump(data, file, indent=2, ensure_ascii=False)
                 file.write("\n")
                 file.flush()
                 os.fsync(file.fileno())
+                _chmod_open_file(file.fileno(), temp_path, 0o600)
             assert_lock_owned()
+            _assert_safe_directory_path(self.file_path.parent)
+            if os.path.lexists(self.file_path):
+                info = self.file_path.lstat()
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                    raise OSError(f"Refusing to replace non-regular private file: {self.file_path}")
             os.replace(temp_path, self.file_path)
             _fsync_directory(self.file_path.parent)
         finally:
@@ -1576,9 +1625,6 @@ def get_harness_state(
     """Return the cached local harness state, or global when requested."""
     global_ = _resolve_global_flag(global_, kwargs)
     scope: HarnessScope = "global" if global_ else "local"
-    if os.name == "nt":
-        # Do not resolve state_dir or access the filesystem on unsupported Windows.
-        return HarnessState(in_memory=True, scope=scope, local_write_error=WINDOWS_PERSISTENCE_UNSUPPORTED_ERROR)
     file_path = _state_file(state_dir, global_=global_)
     cache_key = (file_path, scope)
     state = _state_cache.get(cache_key)
@@ -1595,7 +1641,7 @@ def get_harness_state(
             except RuntimeError:
                 env_file = None
             if file_path != env_file:
-                state._global_target_state_dir = Path(state_dir).expanduser().resolve()
+                state._global_target_state_dir = Path(os.path.abspath(Path(state_dir).expanduser()))
         _state_cache[cache_key] = state
     return state
 

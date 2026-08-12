@@ -266,8 +266,12 @@ export type ReadonlySessionManager = Pick<
 
 export const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
+function isValidSessionId(sessionId: string): boolean {
+	return SESSION_ID_PATTERN.exec(sessionId)?.[0] === sessionId;
+}
+
 export function assertValidSessionId(sessionId: string): void {
-	if (!SESSION_ID_PATTERN.test(sessionId)) {
+	if (!isValidSessionId(sessionId)) {
 		throw new Error(
 			"Invalid session id: expected 1-128 ASCII letters, digits, dots, underscores, or hyphens, starting with a letter or digit",
 		);
@@ -1065,7 +1069,7 @@ function rootRlmDepthFromEnv(): number {
 function isValidSessionFile(filePath: string): boolean {
 	try {
 		const header = readSessionHeader(filePath);
-		return header?.type === "session" && typeof header.id === "string" && SESSION_ID_PATTERN.test(header.id);
+		return header?.type === "session" && typeof header.id === "string" && isValidSessionId(header.id);
 	} catch {
 		return false;
 	}
@@ -1098,7 +1102,7 @@ function sessionHeaderMatchesCwd(header: Partial<SessionHeader> | undefined, cwd
 	return (
 		header?.type === "session" &&
 		typeof header.id === "string" &&
-		SESSION_ID_PATTERN.test(header.id) &&
+		isValidSessionId(header.id) &&
 		typeof header.cwd === "string" &&
 		normalizeCwd(header.cwd) === normalizeCwd(cwd)
 	);
@@ -1386,7 +1390,7 @@ async function scanSessionInfo(filePath: string, stats: Awaited<ReturnType<typeo
 					return null;
 				}
 				header = entry as SessionHeader;
-				if (typeof header.id !== "string" || !SESSION_ID_PATTERN.test(header.id)) {
+				if (typeof header.id !== "string" || !isValidSessionId(header.id)) {
 					return null;
 				}
 			}
@@ -2363,6 +2367,7 @@ export class SessionManager {
 	}
 
 	static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
+		assertRegularFileNoSymlink(path);
 		// Only the header's cwd is needed to construct the manager; the constructor
 		// (setSessionFile) performs the full parse. Read just the first line here
 		// instead of parsing the entire file a second time — that double parse is a
@@ -2372,7 +2377,8 @@ export class SessionManager {
 			let header: Partial<SessionHeader> | undefined;
 			try {
 				header = readSessionHeader(path);
-			} catch {
+			} catch (error) {
+				if (!(error instanceof SyntaxError)) throw error;
 				header = undefined;
 			}
 			// readSessionHeader only inspects the first physical line. If that isn't a

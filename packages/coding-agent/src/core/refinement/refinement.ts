@@ -1,16 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-	appendFileSync,
 	closeSync,
 	existsSync,
 	fsyncSync,
 	linkSync,
-	mkdirSync,
+	lstatSync,
 	openSync,
-	readFileSync,
 	renameSync,
 	rmSync,
-	statSync,
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
@@ -21,7 +18,13 @@ import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core"
 import type { Model } from "@earendil-works/pi-ai";
 import { completeSimple } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../../config.js";
-import { appendPrivateFile, readPrivateFile, writePrivateFileAtomic } from "../../utils/private-files.js";
+import {
+	appendPrivateFile,
+	assertRegularFileNoSymlink,
+	assertSafeDirectoryPath,
+	ensurePrivateDirectory,
+	readPrivateFile,
+} from "../../utils/private-files.js";
 import { serializeConversation } from "../compaction/utils.js";
 import { convertToLlm } from "../messages.js";
 import { RLM_THINKING_LEVELS } from "../rlm-runtime.js";
@@ -37,15 +40,6 @@ export const REFINEMENT_CUSTOM_TYPE = "prime-agent.refinement";
 
 export const REFINE_SKILL_NAME = "refine";
 
-export const WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR = "Persistent harness storage is unsupported on Windows";
-
-export function isPersistentHarnessStorageSupported(): boolean {
-	return process.platform !== "win32";
-}
-
-function assertPersistentHarnessStorageSupported(): void {
-	if (!isPersistentHarnessStorageSupported()) throw new Error(WINDOWS_HARNESS_PERSISTENCE_UNSUPPORTED_ERROR);
-}
 const HARNESS_STATE_DIR_NAME = "harness";
 const REFINEMENT_HISTORY_FILE_NAME = "refinements.jsonl";
 const DEFAULT_OVERVIEW_ENTRY_LIMIT = 6;
@@ -115,6 +109,7 @@ export interface HarnessState {
 	revision?: number;
 	entries: Record<RefinementKind, Record<string, HarnessEntry>>;
 	refinements: HarnessRefinementEvent[];
+	persistentWriteError?: string;
 }
 
 export interface HarnessStateSaveOptions {
@@ -379,11 +374,11 @@ export function loadHarnessState(
 	harnessStateDir: string = getGlobalHarnessStateDir(),
 	scope: HarnessScope = "global",
 ): HarnessState {
-	if (!isPersistentHarnessStorageSupported()) return emptyHarnessState();
-	const directoryError = validateHarnessDirectory(harnessStateDir);
-	if (directoryError) {
+	try {
+		assertSafeDirectoryPath(harnessStateDir);
+	} catch (error) {
 		const state = emptyHarnessState();
-		state.persistentWriteError = directoryError;
+		state.persistentWriteError = error instanceof Error ? error.message : String(error);
 		return state;
 	}
 	const statePath = getHarnessStatePath(harnessStateDir);
@@ -478,9 +473,9 @@ function lockFingerprint(rawOwner: string): string {
 }
 
 function readHarnessLockObservation(lockPath: string): HarnessLockObservation | undefined {
-	let lockStat: ReturnType<typeof statSync>;
+	let lockStat: ReturnType<typeof lstatSync>;
 	try {
-		lockStat = statSync(lockPath);
+		lockStat = lstatSync(lockPath);
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			return undefined;
@@ -490,10 +485,13 @@ function readHarnessLockObservation(lockPath: string): HarnessLockObservation | 
 			{ cause: error },
 		);
 	}
+	if (lockStat.isSymbolicLink() || (!lockStat.isDirectory() && !lockStat.isFile())) {
+		throw new Error(`Refusing to inspect non-regular harness-state lock at ${lockPath}`);
+	}
 	const ownerPath = lockStat.isDirectory() ? join(lockPath, HARNESS_LOCK_OWNER_FILE_NAME) : lockPath;
 	let rawOwner: string;
 	try {
-		rawOwner = readFileSync(ownerPath, "utf8");
+		rawOwner = readPrivateFile(ownerPath, "utf8");
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
 			throw new Error(
@@ -505,7 +503,7 @@ function readHarnessLockObservation(lockPath: string): HarnessLockObservation | 
 			return undefined;
 		}
 		try {
-			const missingOwnerStat = statSync(lockPath);
+			const missingOwnerStat = lstatSync(lockPath);
 			return {
 				fingerprint: lockFingerprint(
 					`missing:${missingOwnerStat.dev}:${missingOwnerStat.ino}:${missingOwnerStat.mtimeMs}`,
@@ -564,7 +562,7 @@ function isHarnessLockStale(
 		return false;
 	}
 	try {
-		return Date.now() - statSync(lockPath).mtimeMs >= staleLockMs;
+		return Date.now() - lstatSync(lockPath).mtimeMs >= staleLockMs;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			return false;
@@ -591,7 +589,7 @@ function readPersistedHarnessRevision(statePath: string): number {
 	}
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(readFileSync(statePath, "utf8"));
+		parsed = JSON.parse(readPrivateFile(statePath, "utf8"));
 	} catch (error) {
 		throw new Error(
 			`Harness state at ${statePath} is invalid; refusing to overwrite it: ${error instanceof Error ? error.message : String(error)}`,
@@ -688,7 +686,7 @@ function acquireHarnessStateLock(harnessStateDir: string, options: HarnessStateS
 	};
 	const ownerContents = `${JSON.stringify(owner)}\n`;
 	const ownerFingerprint = lockFingerprint(ownerContents);
-	mkdirSync(harnessStateDir, { recursive: true });
+	ensurePrivateDirectory(harnessStateDir);
 	for (;;) {
 		const candidatePath = `${lockPath}.candidate.${process.pid}.${randomUUID()}`;
 		try {
@@ -788,13 +786,22 @@ function writeHarnessStateAtomically(
 	let tempFd: number | undefined;
 	try {
 		assertLockOwned();
-		const mode = existsSync(statePath) ? statSync(statePath).mode & 0o777 : 0o600;
-		tempFd = openSync(tempPath, "wx", mode);
-		writeFileSync(tempFd, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+		ensurePrivateDirectory(harnessStateDir);
+		if (existsSync(statePath)) assertRegularFileNoSymlink(statePath);
+		tempFd = openSync(tempPath, "wx", 0o600);
+		const persistedState = {
+			schema: state.schema,
+			revision: state.revision,
+			entries: state.entries,
+			refinements: state.refinements,
+		};
+		writeFileSync(tempFd, `${JSON.stringify(persistedState, null, 2)}\n`, "utf8");
 		fsyncSync(tempFd);
 		closeSync(tempFd);
 		tempFd = undefined;
 		assertLockOwned();
+		assertSafeDirectoryPath(harnessStateDir);
+		if (existsSync(statePath)) assertRegularFileNoSymlink(statePath);
 		renameSync(tempPath, statePath);
 		fsyncHarnessDirectory(harnessStateDir);
 	} finally {
@@ -812,6 +819,7 @@ export function saveHarnessState(
 	state: HarnessState,
 	options: HarnessStateSaveOptions = {},
 ): string {
+	assertHarnessStateWritable(state);
 	const statePath = getHarnessStatePath(harnessStateDir);
 	const lock = acquireHarnessStateLock(harnessStateDir, options);
 	try {
@@ -865,14 +873,17 @@ function isRefinementResult(data: unknown): data is RefinementResult {
  * session JSONL and roll back via their recorded harnessStatePath.
  */
 export function appendGlobalRefinement(harnessStateDir: string, result: RefinementResult): string {
-	assertPersistentHarnessStorageSupported();
 	const historyPath = getRefinementHistoryPath(harnessStateDir);
 	appendPrivateFile(historyPath, `${JSON.stringify(result)}\n`);
 	return historyPath;
 }
 
 export function loadGlobalRefinementHistory(harnessStateDir: string = getGlobalHarnessStateDir()): RefinementResult[] {
-	if (!isPersistentHarnessStorageSupported() || validateHarnessDirectory(harnessStateDir)) return [];
+	try {
+		assertSafeDirectoryPath(harnessStateDir, { requirePrivateMode: true });
+	} catch {
+		return [];
+	}
 	const historyPath = getRefinementHistoryPath(harnessStateDir);
 	if (!existsSync(historyPath)) {
 		return [];

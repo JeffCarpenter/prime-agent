@@ -1,1 +1,1 @@
-- Fixed session and artifact storage accepting traversal IDs, symlinked paths, permissive modes, and unsafe snapshot files ([#1105](https://github.com/PrimeIntellect-ai/prime-agent/pull/1105)).
+- Fixed private session artifacts accepting traversal IDs, symlinked paths, permissive modes, and unsafe snapshot files ([#1249](https://github.com/PrimeIntellect-ai/prime-agent/pull/1249) by [@sethkarten](https://github.com/sethkarten)).
