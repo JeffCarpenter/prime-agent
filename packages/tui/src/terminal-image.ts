@@ -42,13 +42,17 @@ export function setCellDimensions(dims: CellDimensions): void {
 }
 
 function tmuxSupportsHyperlinks(): boolean {
-	const result = spawnSync("tmux", ["display-message", "-p", "#{client_termfeatures}"], {
-		encoding: "utf8",
-		stdio: ["ignore", "pipe", "ignore"],
-		timeout: 250,
-	});
-	if (result.status !== 0 || typeof result.stdout !== "string") return false;
-	return result.stdout.split(/[,:]/).some((feature) => feature.trim() === "hyperlinks");
+	try {
+		const result = spawnSync("tmux", ["display-message", "-p", "#{client_termfeatures}"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 250,
+		});
+		if (result.status !== 0 || typeof result.stdout !== "string") return false;
+		return result.stdout.split(/[,:]/).some((feature) => feature.trim() === "hyperlinks");
+	} catch {
+		return false;
+	}
 }
 
 export function detectCapabilities(): TerminalCapabilities {

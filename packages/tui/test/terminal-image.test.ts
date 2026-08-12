@@ -31,6 +31,8 @@ const ENV_KEYS = [
 	"PATH",
 ] as const;
 
+const POSIX_EXECUTABLE_FIXTURE = { skip: process.platform === "win32" };
+
 function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
 	const saved: Record<string, string | undefined> = {};
 	for (const key of ENV_KEYS) {
@@ -223,7 +225,7 @@ describe("detectCapabilities", () => {
 		});
 	});
 
-	it("forces hyperlinks: false under tmux even if outer terminal supports OSC 8", () => {
+	it("forces hyperlinks: false under tmux even if outer terminal supports OSC 8", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux("RGB", () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.hyperlinks, false);
@@ -231,7 +233,7 @@ describe("detectCapabilities", () => {
 		});
 	});
 
-	it("enables hyperlinks when tmux negotiates the feature", () => {
+	it("enables hyperlinks when tmux negotiates the feature", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux("RGB,hyperlinks", () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.hyperlinks, true);
@@ -239,21 +241,28 @@ describe("detectCapabilities", () => {
 		});
 	});
 
-	it("parses hyperlinks embedded in a tmux feature group", () => {
+	it("parses hyperlinks embedded in a tmux feature group", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux("RGB:hyperlinks", () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.hyperlinks, true);
 		});
 	});
 
-	it("keeps hyperlinks disabled when tmux does not report support", () => {
+	it("requires hyperlinks to be an exact negotiated feature", POSIX_EXECUTABLE_FIXTURE, () => {
+		withFakeTmux("RGB,not-hyperlinks", () => {
+			const caps = detectCapabilities();
+			assert.strictEqual(caps.hyperlinks, false);
+		});
+	});
+
+	it("keeps hyperlinks disabled when tmux does not report support", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux("RGB,256", () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.hyperlinks, false);
 		});
 	});
 
-	it("keeps hyperlinks disabled when the tmux probe fails", () => {
+	it("keeps hyperlinks disabled when the tmux probe fails", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux(
 			"hyperlinks",
 			() => {
@@ -264,12 +273,22 @@ describe("detectCapabilities", () => {
 		);
 	});
 
-	it("keeps hyperlinks disabled when the tmux probe times out", () => {
+	it("keeps hyperlinks disabled when the tmux executable is missing", () => {
+		withEnv({ TMUX: "/tmp/tmux/default,1234,0", TERM_PROGRAM: "ghostty", PATH: "" }, () => {
+			const caps = detectCapabilities();
+			assert.strictEqual(caps.hyperlinks, false);
+			assert.strictEqual(caps.images, null);
+		});
+	});
+
+	it("keeps hyperlinks disabled when the tmux probe times out", POSIX_EXECUTABLE_FIXTURE, () => {
 		withFakeTmux(
 			"hyperlinks",
 			() => {
+				const startedAt = Date.now();
 				const caps = detectCapabilities();
 				assert.strictEqual(caps.hyperlinks, false);
+				assert.ok(Date.now() - startedAt < 750, "tmux probe should honor its 250 ms timeout");
 			},
 			0,
 			1,
