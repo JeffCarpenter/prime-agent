@@ -181,44 +181,130 @@ prime_agent_install_traps() {
 
 prime_agent_cleanup() {
 	status=$?
+	trap '' INT TERM
 	prime_agent_stop_animation_command
 	if [ -n "${prime_agent_download_dir:-}" ] && [ -d "$prime_agent_download_dir" ]; then
-		rm -rf "$prime_agent_download_dir"
+		rm -rf "$prime_agent_download_dir" || true
 	fi
 	if [ -n "${prime_agent_pending_command_link:-}" ]; then
-		rm -f "$prime_agent_pending_command_link"
+		rm -f "$prime_agent_pending_command_link" || true
 	fi
-	prime_agent_restore_terminal
+	prime_agent_restore_terminal || true
 	return "$status"
 }
 
 prime_agent_signal_cleanup() {
-	prime_agent_restore_terminal
+	trap '' INT TERM
+	prime_agent_restore_terminal || true
 	exit "$1"
 }
 
 prime_agent_stop_animation_command() {
-	if [ -z "${prime_agent_animation_command_pid:-}" ]; then
-		return
-	fi
-	if kill -0 "$prime_agent_animation_command_pid" 2>/dev/null; then
-		kill -TERM "$prime_agent_animation_command_pid" 2>/dev/null || true
-		grace_ticks=0
-		while kill -0 "$prime_agent_animation_command_pid" 2>/dev/null; do
-			grace_ticks=$((grace_ticks + 1))
-			if [ "$grace_ticks" -gt 10 ]; then
-				kill -KILL "$prime_agent_animation_command_pid" 2>/dev/null || true
-				break
-			fi
-			sleep 0.05
-		done
-	fi
-	wait "$prime_agent_animation_command_pid" 2>/dev/null || true
+	command_pid="${prime_agent_animation_command_pid:-}"
+	output_dir="${prime_agent_animation_output_dir:-}"
+
+	# Claim the tracked resources before cleanup so a repeated trap cannot signal a
+	# PID that was already reaped and potentially reused.
 	prime_agent_animation_command_pid=
-	if [ -n "${prime_agent_animation_output_dir:-}" ] && [ -d "$prime_agent_animation_output_dir" ]; then
-		rm -rf "$prime_agent_animation_output_dir"
-	fi
 	prime_agent_animation_output_dir=
+
+	case "$command_pid" in
+		""|*[!0-9]*) ;;
+		*)
+			descendant_pids=$(prime_agent_animation_descendant_pids "$command_pid") || descendant_pids=
+			prime_agent_signal_animation_processes TERM "$command_pid" "$descendant_pids"
+
+			grace_tick=0
+			while prime_agent_any_animation_process_is_running "$command_pid" "$descendant_pids"; do
+				if [ "$grace_tick" -ge 10 ]; then
+					prime_agent_signal_animation_processes KILL "$command_pid" "$descendant_pids"
+					break
+				fi
+				new_descendant_pids=$(prime_agent_animation_descendant_pids "$command_pid") || new_descendant_pids=
+				if [ -n "$new_descendant_pids" ]; then
+					prime_agent_signal_animation_processes TERM "" "$new_descendant_pids"
+					descendant_pids="$descendant_pids $new_descendant_pids"
+				fi
+				grace_tick=$((grace_tick + 1))
+				sleep 0.05
+			done
+			wait "$command_pid" 2>/dev/null || true
+			;;
+	esac
+
+	if [ -n "$output_dir" ] && [ -d "$output_dir" ]; then
+		rm -rf "$output_dir" || true
+	fi
+}
+
+prime_agent_animation_descendant_pids() {
+	root_pid="$1"
+	ps -e -o pid= -o ppid= 2>/dev/null | awk -v root="$root_pid" '
+		{
+			pids[NR] = $1
+			parents[NR] = $2
+		}
+		END {
+			owned[root] = 1
+			do {
+				changed = 0
+				for (i = 1; i <= NR; i++) {
+					if (!owned[pids[i]] && owned[parents[i]]) {
+						owned[pids[i]] = 1
+						print pids[i]
+						changed = 1
+					}
+				}
+			} while (changed)
+		}
+	'
+}
+
+prime_agent_signal_animation_processes() {
+	signal_name="$1"
+	root_pid="$2"
+	descendant_pids="$3"
+
+	# Stop the owned root first so it cannot intentionally launch more work while
+	# its already-observed descendants are being terminated.
+	if [ -n "$root_pid" ]; then
+		kill "-$signal_name" "$root_pid" 2>/dev/null || true
+	fi
+	for descendant_pid in $descendant_pids; do
+		case "$descendant_pid" in
+			""|*[!0-9]*) ;;
+			*) kill "-$signal_name" "$descendant_pid" 2>/dev/null || true ;;
+		esac
+	done
+}
+
+prime_agent_any_animation_process_is_running() {
+	root_pid="$1"
+	descendant_pids="$2"
+	if prime_agent_animation_process_is_running "$root_pid"; then
+		return 0
+	fi
+	for descendant_pid in $descendant_pids; do
+		if prime_agent_animation_process_is_running "$descendant_pid"; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+prime_agent_animation_process_is_running() {
+	process_pid="$1"
+	case "$process_pid" in
+		""|*[!0-9]*) return 1 ;;
+	esac
+	if ! kill -0 "$process_pid" 2>/dev/null; then
+		return 1
+	fi
+	process_state=$(ps -o stat= -p "$process_pid" 2>/dev/null) || process_state=
+	case "$process_state" in
+		*Z*) return 1 ;;
+	esac
+	return 0
 }
 
 prime_agent_restore_terminal() {
@@ -844,14 +930,14 @@ prime_agent_run_quiet_with_animation_command() {
 	else
 		command_status=$?
 	fi
+	prime_agent_animation_command_pid=
 
 	if [ "$command_status" -ne 0 ] && [ -s "$output_file" ]; then
 		prime_agent_restore_terminal
 		printf '\n' >&2
 		cat "$output_file" >&2
 	fi
-	rm -rf "$output_dir"
-	prime_agent_animation_command_pid=
+	rm -rf "$output_dir" || true
 	prime_agent_animation_output_dir=
 	return "$command_status"
 }
