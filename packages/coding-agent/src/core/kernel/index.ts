@@ -85,8 +85,8 @@ export class KernelBusyAfterInterruptError extends Error {
 /** Comm target the kernel-side `rlm.host_request` shim opens for typed host requests. */
 export const HOST_COMM_TARGET = "host.request";
 
-/** Lifecycle metadata for one typed request from the IPython kernel. */
-export interface HostRequestContext {
+/** Timeout and cancellation metadata passed by the current kernel dispatcher. */
+export interface HostRequestLifecycleContext {
 	requestType: string;
 	timeoutMs: number;
 	/** Aborted with the source execution, when the deadline expires, or when the Comm closes. */
@@ -103,7 +103,7 @@ export interface HostRequestContext {
 // The host always passes context; it remains optional so existing direct handler calls stay compatible.
 export type HostRequestHandler = (
 	payload: Record<string, unknown>,
-	context?: HostRequestContext,
+	context?: HostRequestLifecycleContext,
 ) => Promise<Record<string, unknown>>;
 
 /**
