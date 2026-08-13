@@ -4997,6 +4997,25 @@ export class DaemonSupervisor {
 		};
 	}
 
+	/**
+	 * Keep an exact stop's registration and descriptor authoritative while any
+	 * part of its cleanup is in flight. Root kills acquire this before forwarding
+	 * because a synchronous shutdown event may arrive before the worker replies.
+	 */
+	private acquireWorkerStopOwnership(worker: ResidentWorker): () => void {
+		if (!this.workerStopCounts) this.workerStopCounts = new Map();
+		const stopCounts = this.workerStopCounts;
+		stopCounts.set(worker, (stopCounts.get(worker) ?? 0) + 1);
+		let released = false;
+		return () => {
+			if (released) return;
+			released = true;
+			const remaining = (stopCounts.get(worker) ?? 1) - 1;
+			if (remaining === 0) stopCounts.delete(worker);
+			else stopCounts.set(worker, remaining);
+		};
+	}
+
 	private async stopWorker(
 		worker: ResidentWorker,
 		removeDescriptor: boolean,
