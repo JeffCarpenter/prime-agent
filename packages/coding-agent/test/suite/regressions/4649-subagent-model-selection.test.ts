@@ -340,7 +340,7 @@ describe("ENG-4649 subagent model selection", () => {
 		}
 	});
 
-	it("does not start a child after its parent is disposed during preflight", async () => {
+	it("does not start a child after its parent starts disposal during preflight", async () => {
 		const harness = await createHarness({
 			provider,
 			models: [{ id: "parent-model" }, { id: "child-model" }],
@@ -370,7 +370,7 @@ describe("ENG-4649 subagent model selection", () => {
 			harness.session.dispose();
 			releasePreflight();
 
-			await expect(run).rejects.toThrow("Cannot spawn a subagent after its parent was disposed");
+			await expect(run).rejects.toThrow("Cannot spawn a subagent after its parent started disposal");
 			expect(providerCalls).toBe(0);
 			expect((await harness.session.listRlmSubagents()).subagents).toEqual([]);
 		} finally {
