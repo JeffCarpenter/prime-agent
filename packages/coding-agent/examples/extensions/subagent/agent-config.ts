@@ -21,7 +21,6 @@ export interface AgentConfig {
 	filePath: string;
 }
 
-<<<<<<< HEAD
 export function parseAgentConfig(
 	frontmatter: Record<string, unknown>,
 	body: string,

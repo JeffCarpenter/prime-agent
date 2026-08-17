@@ -58,6 +58,7 @@ function reusedPidWorker(bystander: ChildProcess, descriptorOverrides: object = 
 	const format = observed?.slice(0, observed.indexOf(":")) ?? "ps2";
 	return {
 		stopRevision: 0,
+		summaries: new Map(),
 		transcriptCaches: new Map(),
 		snapshotCache: new Map(),
 		descriptor: {
