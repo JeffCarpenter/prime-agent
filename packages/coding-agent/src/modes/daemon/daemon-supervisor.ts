@@ -672,7 +672,6 @@ function looksLikeSessionPath(selector: string): boolean {
 	return isAbsolute(selector) || selector.endsWith(".jsonl") || selector.includes("/") || selector.includes("\\");
 }
 
-
 function isFinalizedTranscriptEvent(eventType: string | undefined): boolean {
 	return (
 		eventType === "message_end" ||

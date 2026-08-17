@@ -461,11 +461,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 			return;
 		}
 
-		if (
-			this.authUrl &&
-			kb.matches(data, "app.auth.openUrl") &&
-			(!this.inputVisible || !isPrintableInput(data))
-		) {
+		if (this.authUrl && kb.matches(data, "app.auth.openUrl") && (!this.inputVisible || !isPrintableInput(data))) {
 			this.openAuthUrl(true);
 			return;
 		}
