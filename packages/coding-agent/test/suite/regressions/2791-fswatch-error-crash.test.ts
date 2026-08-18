@@ -1,9 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ENV_AGENT_DIR } from "../../../src/config.js";
+
+const tsxPath = resolve(__dirname, "../../../../../node_modules/tsx/dist/cli.mjs");
 
 /**
  * Regression test for https://github.com/earendil-works/pi-mono/issues/2791
@@ -88,7 +90,7 @@ process.exit(0);
 		let stderr = "";
 		let exitCode: number;
 		try {
-			_stdout = execFileSync("npx", ["tsx", scriptPath], {
+			_stdout = execFileSync(process.execPath, [tsxPath, scriptPath], {
 				timeout: 10000,
 				encoding: "utf-8",
 				env: { ...process.env, [ENV_AGENT_DIR]: agentDir },

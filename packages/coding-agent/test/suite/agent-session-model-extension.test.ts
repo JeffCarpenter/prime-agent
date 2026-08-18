@@ -3,6 +3,7 @@ import { fauxAssistantMessage, fauxToolCall, type Model } from "@earendil-works/
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AgentCronJob } from "../../src/core/cron-jobs.js";
+import { formatHeartbeatPromptContent } from "../../src/core/messages.js";
 import type { ExtensionAPI } from "../../src/index.js";
 import { createHarness, getAssistantTexts, getMessageText, type Harness } from "./harness.js";
 
@@ -431,7 +432,8 @@ describe("AgentSession model and extension characterization", () => {
 		await harness.session.setModel(harness.getModel("faux-2")!, { waitForExtensions: false });
 		await handlerStarted.promise;
 
-		const heartbeat = harness.session.promptHeartbeat(createHeartbeat());
+		const heartbeatJob = createHeartbeat();
+		const heartbeat = harness.session.promptHeartbeat(heartbeatJob);
 		await flushAsyncWork();
 
 		expect(harness.session.messages).toHaveLength(0);
@@ -444,7 +446,7 @@ describe("AgentSession model and extension characterization", () => {
 			harness.session.messages.slice(0, 2).map((message) => ({ role: message.role, text: getMessageText(message) })),
 		).toEqual([
 			{ role: "custom", text: "heartbeat model context" },
-			{ role: "custom", text: "Check whether the long-running task needs another step." },
+			{ role: "custom", text: formatHeartbeatPromptContent(heartbeatJob) },
 		]);
 		expect(getAssistantTexts(harness)).toContain("heartbeat");
 	});

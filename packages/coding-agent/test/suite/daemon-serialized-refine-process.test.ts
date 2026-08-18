@@ -205,7 +205,8 @@ describe("Real-process serializedRefine — JSON mode", () => {
 
 		// Clean exit — the production env scrub allowed the supervisor
 		// to start correctly despite the inherited worker role env var.
-		expect(result).toMatchObject({ code: 0, signal: null });
+		expect(result.code, `CLI stderr:\n${result.stderr}\nCLI stdout:\n${result.stdout}`).toBe(0);
+		expect(result.signal).toBeNull();
 		expect(result.stderr).not.toContain("Timed out waiting for daemon");
 
 		// Daemon socket exists — the daemon path was used.

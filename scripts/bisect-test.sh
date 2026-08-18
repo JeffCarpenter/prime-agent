@@ -72,7 +72,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VITEST_ARGS=(
     --run
     --cache
-    --experimental.fsModuleCache
     --maxWorkers=2
     --maxConcurrency=2
     --bail=1
@@ -80,14 +79,48 @@ VITEST_ARGS=(
 
 run_vitest() {
     echo "Running $1 tests without API keys..."
+    local package="$1"
+    shift
     (
-        cd "$ROOT_DIR/packages/$1"
-        pnpx vitest "${VITEST_ARGS[@]}"
+        cd "$ROOT_DIR/packages/$package"
+        pnpx vitest --clearCache
+        pnpx vitest "${VITEST_ARGS[@]}" "$@"
     )
 }
 
 # Test the package that failed during the initial bisect attempt first.
-run_vitest coding-agent
+run_vitest coding-agent \
+    --exclude test/acp-cold-cli.test.ts \
+    --exclude test/acp-kernel-features.test.ts \
+    --exclude test/daemon-supervisor-process.test.ts \
+    --exclude test/kernel-agent-observe-skill.test.ts \
+    --exclude test/kernel-agent-message-skill.test.ts \
+    --exclude test/kernel-attach-image-skill.test.ts \
+    --exclude test/kernel-execute-reply-fallback.test.ts \
+    --exclude test/kernel-goal-skill.test.ts \
+    --exclude test/kernel-rlm-heartbeat-skill.test.ts \
+    --exclude test/kernel-state-roundtrip.test.ts \
+    --exclude test/suite/daemon-serialized-refine-process.test.ts \
+    --exclude test/suite/regressions/4685-daemon-client-modes.test.ts \
+    --exclude test/suite/regressions/4603-worker-recovery.test.ts
+run_vitest coding-agent test/daemon-supervisor-process.test.ts
+KERNEL_TESTS=(
+    test/acp-cold-cli.test.ts \
+    test/acp-kernel-features.test.ts \
+    test/kernel-agent-message-skill.test.ts \
+    test/kernel-agent-observe-skill.test.ts \
+    test/kernel-attach-image-skill.test.ts \
+    test/kernel-execute-reply-fallback.test.ts \
+    test/kernel-goal-skill.test.ts \
+    test/kernel-rlm-heartbeat-skill.test.ts \
+    test/kernel-state-roundtrip.test.ts
+)
+for test_file in "${KERNEL_TESTS[@]}"; do
+    run_vitest coding-agent "$test_file"
+done
+run_vitest coding-agent test/suite/daemon-serialized-refine-process.test.ts
+run_vitest coding-agent test/suite/regressions/4603-worker-recovery.test.ts
+run_vitest coding-agent test/suite/regressions/4685-daemon-client-modes.test.ts
 run_vitest agent
 run_vitest ai
 

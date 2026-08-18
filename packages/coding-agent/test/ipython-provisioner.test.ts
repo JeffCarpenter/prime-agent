@@ -266,6 +266,7 @@ describe("IpythonKernelProvisioner", () => {
 	});
 
 	it("defaults bare %%bash cells to the Windows Git Bash script path", async () => {
+		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 		const getDefaultShell = vi
 			.spyOn(shellModule, "getWindowsIpythonBashScriptPath")
 			.mockReturnValue("C:/PROGRA~1/Git/bin/bash.exe");
@@ -287,13 +288,15 @@ describe("IpythonKernelProvisioner", () => {
 			);
 		} finally {
 			getDefaultShell.mockRestore();
+			platform.mockRestore();
 		}
 	});
 
 	it("prefers an explicit shellPath over the Windows default", async () => {
+		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 		const getDefaultShell = vi
 			.spyOn(shellModule, "getWindowsIpythonBashScriptPath")
-			.mockReturnValue("C:/PROGRA~1/Git/bin/bash.exe");
+			.mockImplementation((customShellPath) => customShellPath ?? "C:/PROGRA~1/Git/bin/bash.exe");
 		try {
 			const execute = vi.fn<KernelManager["execute"]>().mockResolvedValueOnce(okExecuteResult());
 			const manager = { execute } as unknown as KernelManager;
@@ -310,10 +313,12 @@ describe("IpythonKernelProvisioner", () => {
 			);
 		} finally {
 			getDefaultShell.mockRestore();
+			platform.mockRestore();
 		}
 	});
 
 	it("leaves bare %%bash cells untouched when no Windows Git Bash is resolvable", async () => {
+		const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
 		const getDefaultShell = vi.spyOn(shellModule, "getWindowsIpythonBashScriptPath").mockReturnValue(undefined);
 		try {
 			const execute = vi.fn<KernelManager["execute"]>().mockResolvedValueOnce(okExecuteResult());
@@ -331,6 +336,7 @@ describe("IpythonKernelProvisioner", () => {
 			);
 		} finally {
 			getDefaultShell.mockRestore();
+			platform.mockRestore();
 		}
 	});
 

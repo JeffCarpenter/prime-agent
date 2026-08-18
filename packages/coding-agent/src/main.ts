@@ -1566,7 +1566,7 @@ export async function main(args: string[], options?: MainOptions) {
 			({ connection, summary } = await createDaemonClientConnection({
 				socketPath: daemonSocketPath,
 				config: defaultSessionConfig,
-				sessionPath: parsed.noSession ? undefined : sessionManager.getSessionFile(),
+				sessionPath: parsed.noSession ? undefined : sessionManager.materializeSessionFile(),
 				continueRecent: parsed.continue,
 				clientOwned: isClientOwnedDaemonSession(appMode, parsed.noSession),
 				noSession: parsed.noSession,

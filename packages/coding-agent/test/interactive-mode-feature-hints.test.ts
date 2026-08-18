@@ -33,7 +33,10 @@ function createMode() {
 		featureHintContainer,
 		loadingAnimation: loader,
 		workingVisible: true,
-		connectionState: { isStreaming: true },
+		connectionState: {
+			isStreaming: true,
+			sessionActions: { queuedCount: 0, steering: [], followUps: [] },
+		},
 		workingTimer: undefined,
 		workingStartedAt: 0,
 		featureHintDeck,

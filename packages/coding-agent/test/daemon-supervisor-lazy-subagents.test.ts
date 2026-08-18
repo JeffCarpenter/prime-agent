@@ -423,7 +423,7 @@ describe("daemon supervisor passive subagent topology", () => {
 			return resident;
 		});
 		Object.assign(supervisor, {
-			catalog: { siblings: vi.fn(async () => siblings) },
+			rlmLedgerSiblings: vi.fn(async () => siblings),
 			launchWorker,
 		});
 
@@ -469,7 +469,10 @@ describe("daemon supervisor passive subagent topology", () => {
 			defaultSessionConfig: { agentDir: directory, cwd: directory },
 			descriptorDir: join(directory, "workers"),
 		}) as unknown as SupervisorInternals;
-		Object.assign(supervisor, { catalog: { siblings: vi.fn(async () => siblings), rename } });
+		Object.assign(supervisor, {
+			rlmLedgerSiblings: vi.fn(async () => siblings),
+			catalog: { rename },
+		});
 		const client = { id: "client", attachedActiveSessionIds: new Set<string>() };
 
 		const first = supervisor.handleCommand(client, {

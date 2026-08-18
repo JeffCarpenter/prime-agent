@@ -30,7 +30,10 @@ function createFeatureHintMode() {
 		compactionQueuedMessages: [],
 		loadingAnimation: loader,
 		workingVisible: true,
-		connectionState: { isStreaming: true },
+		connectionState: {
+			isStreaming: true,
+			sessionActions: { queuedCount: 0, steering: [], followUps: [] },
+		},
 		featureHintDeck: { next: vi.fn(() => ({ id: "test", text: "A useful feature hint." })) },
 		currentFeatureHint: undefined,
 		featureHintEligibleAt: 0,

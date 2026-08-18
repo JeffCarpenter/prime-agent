@@ -101,8 +101,8 @@ describe("RLM child compaction terminal notices", () => {
 					maxRetries: 1,
 				},
 			},
-			settings: { compaction: { enabled: true, reserveTokens: 400, keepRecentTokens: 1 } },
-			models: [{ id: "faux-compacting-child", contextWindow: 1000 }],
+			settings: { compaction: { enabled: true, reserveTokens: 9400, keepRecentTokens: 1 } },
+			models: [{ id: "faux-compacting-child", contextWindow: 10_000, maxTokens: 100 }],
 			extensionFactories: [
 				(pi) => {
 					pi.on("session_before_compact", async (event) => ({

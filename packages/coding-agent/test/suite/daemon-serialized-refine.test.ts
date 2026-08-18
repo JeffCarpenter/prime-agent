@@ -72,7 +72,7 @@ describe("Daemon-backed serializedRefine propagation", () => {
 
 		const sessionManager = SessionManager.create(tempDir, sessionDir);
 		sessionManager.newSession();
-		const sessionFile = sessionManager.getSessionFile()!;
+		const sessionFile = sessionManager.materializeSessionFile();
 
 		const state = await internals.createRuntime({ type: "create", sessionPath: sessionFile });
 
@@ -115,7 +115,7 @@ describe("Daemon-backed serializedRefine propagation", () => {
 
 		const sessionManager = SessionManager.create(tempDir, sessionDir);
 		sessionManager.newSession();
-		const sessionFile = sessionManager.getSessionFile()!;
+		const sessionFile = sessionManager.materializeSessionFile();
 
 		const state = await internals.createRuntime({ type: "create", sessionPath: sessionFile });
 
@@ -176,7 +176,7 @@ describe("Daemon-backed serializedRefine propagation", () => {
 
 		const sessionManager = SessionManager.create(tempDir, sessionDir);
 		sessionManager.newSession();
-		const sessionFile = sessionManager.getSessionFile()!;
+		const sessionFile = sessionManager.materializeSessionFile();
 
 		const state = await internals.createRuntime({ type: "create", sessionPath: sessionFile });
 		const session = state.runtime.session;
