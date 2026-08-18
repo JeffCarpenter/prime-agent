@@ -68,7 +68,7 @@ done < <(env)
 unset FORCE_COLOR
 export NO_COLOR=1
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VITEST_ARGS=(
     --run
     --cache
