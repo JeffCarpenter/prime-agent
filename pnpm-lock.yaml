@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@earendil-works/pi-coding-agent':
-        specifier: ^0.7.2
+        specifier: ^0.8.0
         version: link:packages/coding-agent
       get-east-asian-width:
         specifier: ^1.6.0
@@ -55,7 +55,7 @@ importers:
   packages/agent:
     dependencies:
       '@earendil-works/pi-ai':
-        specifier: ^0.7.2
+        specifier: ^0.8.0
         version: link:../ai
       typebox:
         specifier: ^1.3.9
@@ -132,13 +132,13 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0(zod@4.4.3)
       '@earendil-works/pi-agent-core':
-        specifier: ^0.7.2
+        specifier: ^0.8.0
         version: link:../agent
       '@earendil-works/pi-ai':
-        specifier: ^0.7.2
+        specifier: ^0.8.0
         version: link:../ai
       '@earendil-works/pi-tui':
-        specifier: ^0.7.2
+        specifier: ^0.8.0
         version: link:../tui
       '@silvia-odwyer/photon-node':
         specifier: ^0.3.4
