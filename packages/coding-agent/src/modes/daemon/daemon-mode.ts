@@ -694,14 +694,18 @@ export class AgentDaemon {
 		} catch (error) {
 			this.log(`session lease sweep failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
-		const sessionDir = this.options.defaultSessionConfig.sessionDir ?? getSessionsDir(this.agentDir);
-		void sweepGhostSessionFiles(sessionDir)
-			.then((count) => {
-				if (count > 0) this.log(`swept ${count} ghost session file(s) at startup`);
-			})
-			.catch((error) => {
-				this.log(`ghost session sweep failed: ${error instanceof Error ? error.message : String(error)}`);
-			});
+		// Worker daemons share the session directory and may be recovering a
+		// persisted draft, so only the top-level daemon may remove ghost files.
+		if (!this.options.worker) {
+			const sessionDir = this.options.defaultSessionConfig.sessionDir ?? getSessionsDir(this.agentDir);
+			void sweepGhostSessionFiles(sessionDir)
+				.then((count) => {
+					if (count > 0) this.log(`swept ${count} ghost session file(s) at startup`);
+				})
+				.catch((error) => {
+					this.log(`ghost session sweep failed: ${error instanceof Error ? error.message : String(error)}`);
+				});
+		}
 	}
 
 	private startSupervisorMonitor(): void {

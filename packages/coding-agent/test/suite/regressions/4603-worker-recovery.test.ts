@@ -756,6 +756,15 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
+function stopShutdownAdmissionRefresh(admission: object): void {
+	const renewal = Reflect.get(admission, "renewal") as object | undefined;
+	const refreshTimer = renewal
+		? (Reflect.get(renewal, "refreshTimer") as ReturnType<typeof setInterval> | undefined)
+		: undefined;
+	if (!refreshTimer) throw new Error("Shutdown admission did not start its lease refresh");
+	clearInterval(refreshTimer);
+}
+
 describe("ENG-4603 worker recovery convergence", () => {
 	it("waits for fresh client context before replacing a crashed resident worker", async () => {
 		if (process.platform === "win32") return;
@@ -999,12 +1008,7 @@ describe("ENG-4603 worker recovery convergence", () => {
 			};
 			expect(record.pid).toBe(process.pid);
 			expect(record.processStartId).toBe(getProcessStartId(process.pid));
-			const renewal = Reflect.get(first, "renewal") as object | undefined;
-			const refreshTimer = renewal
-				? (Reflect.get(renewal, "refreshTimer") as ReturnType<typeof setInterval> | undefined)
-				: undefined;
-			if (!refreshTimer) throw new Error("Shutdown admission did not start its lease refresh");
-			clearInterval(refreshTimer);
+			stopShutdownAdmissionRefresh(first);
 			let acquired = false;
 			const waiting = acquireDaemonShutdownAdmission().then((admission) => {
 				acquired = true;
@@ -1040,9 +1044,7 @@ describe("ENG-4603 worker recovery convergence", () => {
 		try {
 			const admission = await acquireDaemonShutdownAdmission();
 			try {
-				const refreshTimer = Reflect.get(admission, "refreshTimer") as NodeJS.Timeout | undefined;
-				if (!refreshTimer) throw new Error("Shutdown admission did not start its lease refresh");
-				clearInterval(refreshTimer);
+				stopShutdownAdmissionRefresh(admission);
 				const admissionPath = join(paths.registryDir, "shutdown-admission.json");
 				const record = JSON.parse(readFileSync(admissionPath, "utf8")) as { expiresAt: string };
 				record.expiresAt = new Date(Date.now() - 1_000).toISOString();
@@ -1072,9 +1074,7 @@ describe("ENG-4603 worker recovery convergence", () => {
 			const renewals: Promise<void>[] = [];
 			let releaseBlockedLocks: () => void = () => undefined;
 			try {
-				const refreshTimer = Reflect.get(admission, "refreshTimer") as NodeJS.Timeout | undefined;
-				if (!refreshTimer) throw new Error("Shutdown admission did not start its lease refresh");
-				clearInterval(refreshTimer);
+				stopShutdownAdmissionRefresh(admission);
 
 				const originalLock = lockfile.lock.bind(lockfile);
 				const blockedLocks = new Promise<void>((resolveBlockedLocks) => {

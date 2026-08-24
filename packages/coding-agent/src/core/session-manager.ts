@@ -3,7 +3,7 @@ import type { AssistantMessage, ImageContent, Message, ServiceTier, TextContent,
 import { randomUUID } from "crypto";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { readdir, readFile, stat } from "fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { v7 as uuidv7 } from "uuid";
 import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.js";
 import { readFirstLineSync, readLinesAsBuffers } from "../utils/file-lines.js";

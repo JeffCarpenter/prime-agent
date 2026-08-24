@@ -238,7 +238,6 @@ class DaemonSupervisorOwnership {
 		) {
 			throw this.ownershipLostError();
 		}
-		}
 	}
 
 	private ownershipLostError(): DaemonSupervisorOwnershipLostError {

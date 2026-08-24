@@ -458,6 +458,7 @@ describe("daemon supervisor resident workers", () => {
 		mkdirSync(projectDir, { recursive: true });
 		const sessionManager = SessionManager.create(projectDir, sessionDir);
 		sessionManager.appendMessage({ role: "user", content: "owned worker fixture", timestamp: 1 });
+		sessionManager.flushNow();
 		const sessionFile = sessionManager.getSessionFile();
 		if (!sessionFile) {
 			throw new Error("Fixture session did not persist");
@@ -1110,6 +1111,7 @@ describe("daemon supervisor resident workers", () => {
 		const sessionFiles = Array.from({ length: 2 }, (_, index) => {
 			const manager = SessionManager.create(projectDir, sessionDir);
 			manager.appendMessage({ role: "user", content: `smoke root ${index}`, timestamp: index + 1 });
+			manager.flushNow();
 			const sessionFile = manager.getSessionFile();
 			if (!sessionFile) {
 				throw new Error("Fixture session did not persist");

@@ -2,11 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-	deleteSessionArtifacts,
-	deleteSessionFile,
-	sweepGhostSessionFiles,
-} from "../src/core/session-file-actions.js";
+import { deleteSessionArtifacts, deleteSessionFile, sweepGhostSessionFiles } from "../src/core/session-file-actions.js";
 
 let root = "";
 
