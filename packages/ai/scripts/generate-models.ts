@@ -1133,6 +1133,25 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
+		// Every Workers AI route is also reachable through AI Gateway's compat
+		// endpoint. models.dev can publish the native route before its gateway
+		// mirror, so synthesize any missing mirrors from the authoritative native
+		// metadata to keep generation deterministic across that lag.
+		const gatewayWorkerIds = new Set(
+			models.filter((model) => model.provider === "cloudflare-ai-gateway").map((model) => model.id),
+		);
+		const workersAiModels = models.filter((model) => model.provider === "cloudflare-workers-ai");
+		for (const model of workersAiModels) {
+			const id = `workers-ai/${model.id}`;
+			if (gatewayWorkerIds.has(id)) continue;
+			models.push({
+				...model,
+				id,
+				provider: "cloudflare-ai-gateway",
+				baseUrl: CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
+			});
+		}
+
 		// Process xAi models
 		if (data.xai?.models) {
 			for (const [modelId, model] of Object.entries(data.xai.models)) {
