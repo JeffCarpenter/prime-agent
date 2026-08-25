@@ -1,0 +1,1 @@
+- Fixed slow IPython kernel starts being reported as broken by allowing up to 30 seconds for port publication and readiness.

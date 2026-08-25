@@ -1,0 +1,2 @@
+- Fixed ACP rejecting an immediate follow-up prompt when injected work restarted the session; the follow-up now queues behind in-flight work, and `session/cancel` drops a queued prompt that has not started.
+- Fixed ACP returning a silent `end_turn` before a requested compaction resumed the agent.

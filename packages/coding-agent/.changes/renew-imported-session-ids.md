@@ -1,0 +1,1 @@
+- Fixed imported JSONL transcripts retaining an existing session ID and making exact saved-session lookup ambiguous ([#1087](https://github.com/PrimeIntellect-ai/prime-agent/pull/1087) by [@creatifcoding](https://github.com/creatifcoding)).
