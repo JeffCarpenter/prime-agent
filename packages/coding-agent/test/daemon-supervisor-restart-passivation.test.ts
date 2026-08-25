@@ -117,7 +117,7 @@ function descriptor(
 		createdAt: new Date(0).toISOString(),
 		updatedAt: new Date(0).toISOString(),
 		lifecycle: "ready",
-		createCommand: { type: "create", sessionPath: session.sessionFile, config: { cwd: fixture.root } },
+		createCommand: { type: "create", sessionPath: session.sessionFile },
 		consecutiveFailures: 0,
 	};
 }

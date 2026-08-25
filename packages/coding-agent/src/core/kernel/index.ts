@@ -1978,10 +1978,7 @@ export class KernelManager {
 			} else if (forked) {
 				const kill = forked.kill("KILL");
 				kill.catch(() => {});
-				const outcome = await Promise.race([
-					kill,
-					sleep(KERNEL_SIGKILL_TIMEOUT_MS, undefined, { ref: false }),
-				]);
+				const outcome = await Promise.race([kill, sleep(KERNEL_SIGKILL_TIMEOUT_MS, undefined, { ref: false })]);
 				if (outcome === "signaled") recordOrphanProcessState(forked.pid, false);
 			}
 		} catch {

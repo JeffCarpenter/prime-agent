@@ -1240,9 +1240,7 @@ export class DaemonSupervisor {
 					const passive =
 						durableDescriptor.ownerClientId === undefined &&
 						!durableDescriptor.stopRequestedAt &&
-						(alreadyPassivated ||
-							durableDescriptor.pid === undefined ||
-							!isProcessAlive(durableDescriptor.pid))
+						(alreadyPassivated || durableDescriptor.pid === undefined || !isProcessAlive(durableDescriptor.pid))
 							? await this.passivatedSummaryForDescriptor(durableDescriptor)
 							: undefined;
 					if (passive) {
@@ -2770,7 +2768,10 @@ export class DaemonSupervisor {
 			if (worker.descriptor.lifecycle !== "failed" || worker.descriptor.ownerClientId) {
 				return false;
 			}
-			const identity = this.processIdentity(worker.descriptor.pid, worker.descriptor.processStartId);
+			const identity =
+				worker.descriptor.pid === undefined
+					? "gone"
+					: this.processIdentity(worker.descriptor.pid, worker.descriptor.processStartId);
 			if (identity === "current") {
 				if (!freshCreate || !worker.descriptor.processStartId) return false;
 				await this.stopWorker(worker, true, true);

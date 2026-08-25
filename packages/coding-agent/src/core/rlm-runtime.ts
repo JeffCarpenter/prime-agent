@@ -155,21 +155,6 @@ export function clampRlmThinkingLevel(level: ThinkingLevel, availableLevels: rea
 	return availableLevels[0];
 }
 
-/** Validate and normalize an orchestrator-supplied subagent thinking level. */
-export function normalizeRequestedRlmSubagentThinkingLevel(value: unknown): ThinkingLevel | undefined {
-	if (value === undefined) {
-		return undefined;
-	}
-	if (typeof value !== "string") {
-		throw new Error("rlm.run thinking must be a string");
-	}
-	const thinkingLevel = value.trim();
-	if (!RLM_THINKING_LEVELS.includes(thinkingLevel as ThinkingLevel)) {
-		throw new Error(`rlm.run thinking must be one of: ${RLM_THINKING_LEVELS.join(", ")}`);
-	}
-	return thinkingLevel as ThinkingLevel;
-}
-
 /** Create a readable, collision-resistant default name usable as an agent-message selector. */
 export function createDefaultRlmSubagentSessionName(prompt: string, childId: string): string {
 	const promptSlug = prompt
