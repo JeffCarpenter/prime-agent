@@ -1,0 +1,20 @@
+# Kernel-side package for the bundled prime-self-intellect skill. It reads and
+# writes Prime Agent's own settings.json files directly (no host bridge), so
+# prime-agent-runtime is not required and is intentionally not declared as a
+# dependency (it is not published on PyPI).
+[project]
+name = "prime-self-intellect"
+version = "0.1.0"
+description = "Prime Agent self-configuration skill: inspect and edit Prime Agent's own settings.json"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["typing_extensions>=4.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prime_self_intellect"]

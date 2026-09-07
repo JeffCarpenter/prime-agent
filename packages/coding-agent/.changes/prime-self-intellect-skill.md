@@ -1,0 +1,1 @@
+- Added the `prime-self-intellect` bundled skill for reading and editing Prime Agent's own global and per-project `settings.json` from the kernel.
