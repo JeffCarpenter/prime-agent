@@ -1,0 +1,17 @@
+preferWorkspacePackages: true
+
+packages:
+  - "packages/*"
+  - "packages/coding-agent/examples/extensions/with-deps"
+  - "packages/coding-agent/examples/extensions/custom-provider-anthropic"
+  - "packages/coding-agent/examples/extensions/custom-provider-gitlab-duo"
+  - "packages/coding-agent/examples/extensions/sandbox"
+
+allowBuilds:
+  '@google/genai': true
+  canvas: true
+  esbuild: true
+  koffi: true
+  protobufjs: true
+
+linkWorkspacePackages: deep
