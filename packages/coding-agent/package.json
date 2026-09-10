@@ -29,7 +29,7 @@
 	"scripts": {
 		"clean": "shx rm -rf dist",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
-		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/cli.js && npm run copy-assets && npm run bundle",
+		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/cli.js && pnpm run copy-assets && pnpm run bundle",
 		"build:binary": "node scripts/build-binary.mjs",
 		"copy-assets": "node scripts/catalog-assets.mjs copy-source --out dist --optional && shx mkdir -p dist/modes/interactive/theme && shx cp src/modes/interactive/theme/*.json dist/modes/interactive/theme/ && shx mkdir -p dist/modes/interactive/assets && shx cp src/modes/interactive/assets/*.png dist/modes/interactive/assets/ && shx mkdir -p dist/core/export-html/vendor && shx cp src/core/export-html/template.html src/core/export-html/template.css src/core/export-html/template.js dist/core/export-html/ && shx cp src/core/export-html/vendor/*.js dist/core/export-html/vendor/ && shx rm -rf dist/prime-agent-runtime && shx cp -r ../../prime-agent-runtime dist/prime-agent-runtime && shx rm -rf dist/skills && shx cp -r skills dist/skills",
 		"copy-binary-assets": "node scripts/copy-binary-assets.mjs",
@@ -38,7 +38,7 @@
 		"test:process": "vitest --run test/daemon-supervisor-process.test.ts",
 		"test:process-stress": "vitest --run --tagsFilter process-stress test/daemon-supervisor-process.test.ts",
 		"postinstall": "node postinstall.cjs",
-		"prepublishOnly": "npm run clean && npm run build",
+		"prepublishOnly": "pnpm run clean && pnpm run build",
 		"bundle": "node scripts/bundle.mjs",
 		"test:kernel": "vitest --run --no-file-parallelism --tagsFilter kernel-heavy test/acp-kernel-features.test.ts test/acp-cold-cli.test.ts test/kernel-goal-skill.test.ts test/repl-kernel-state-roundtrip.test.ts test/repl-kernel-mcp-shutdown.test.ts",
 		"catalog-assets": "node scripts/catalog-assets.mjs",

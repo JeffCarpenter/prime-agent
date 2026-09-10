@@ -102,7 +102,7 @@ function parseArgs(args) {
 function printHelp() {
 	console.log(`Usage: node scripts/pack-prime-agent-release.mjs --base-url url [--channel stable|beta] [--version x.y.z] [--out-dir path] [--binary-dir path]
 
-Creates private npm tarballs for R2 distribution:
+Creates private pnpm tarballs for R2 distribution:
 
   <out-dir>/artifacts/prime-agent-<version>.tgz
   <out-dir>/artifacts/prime-agent-ai-<version>.tgz
@@ -151,7 +151,7 @@ function packageJsonPath(packageDir) {
 function requireBuiltPackage(packageDir) {
 	const dist = join(packagePath(packageDir), "dist");
 	if (!existsSync(dist)) {
-		throw new Error(`Missing ${dist}. Run npm run build before packing a release.`);
+		throw new Error(`Missing ${dist}. Run pnpm run build before packing a release.`);
 	}
 	if (packageDir === "coding-agent") validateBundledCatalogDir(dist);
 }
@@ -162,7 +162,7 @@ function copyIfExists(source, target) {
 	}
 }
 
-function npmTarballName(packageName, version) {
+function pnpmTarballName(packageName, version) {
 	return `${packageName.replace(/^@/, "").replace("/", "-")}-${version}.tgz`;
 }
 
@@ -304,7 +304,7 @@ function main() {
 		packageNames.set(releasePackage.packageDir, packageName);
 		artifactFiles.set(
 			releasePackage.packageDir,
-			npmTarballName(releasePackage.artifactName || packageName, releaseVersion),
+			pnpmTarballName(releasePackage.artifactName || packageName, releaseVersion),
 		);
 	}
 
@@ -344,16 +344,16 @@ function main() {
 			writeJson(join(stagingDir, "dist/native-release.json"), { baseUrl: args.baseUrl, version: releaseVersion });
 		}
 
-		const tarballName = run("npm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent"], root)
+		const tarballName = run("pnpm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent"], root)
 			.split("\n")
 			.at(-1);
 		if (!tarballName) {
-			throw new Error(`npm pack did not report a tarball name for ${packageName}`);
+			throw new Error(`pnpm pack did not report a tarball name for ${packageName}`);
 		}
 
 		const tarballPath = join(artifactsDir, basename(tarballName));
 		if (!existsSync(tarballPath) || !statSync(tarballPath).isFile()) {
-			throw new Error(`npm pack did not create ${tarballPath}`);
+			throw new Error(`pnpm pack did not create ${tarballPath}`);
 		}
 
 		const artifactFile = artifactFiles.get(releasePackage.packageDir);
