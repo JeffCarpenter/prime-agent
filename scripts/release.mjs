@@ -9,11 +9,11 @@
  *
  * Steps:
  * 1. Check for uncommitted changes
- * 2. Bump version via npm run version:xxx or set an explicit version
+ * 2. Bump version via pnpm run version:xxx or set an explicit version
  * 3. Update CHANGELOG.md files: aggregate .changes/*.md fragments into a
  *    [version] - date section, git rm the consumed fragments
  * 4. Commit and tag
- * 5. Publish to npm
+ * 5. Publish to pnpm
  */
 
 import { execSync } from "child_process";
@@ -82,7 +82,7 @@ function bumpOrSetVersion(target) {
 
 	if (BUMP_TYPES.has(target)) {
 		console.log(`Bumping version (${target})...`);
-		run(`npm run version:${target}`);
+		run(`pnpm run version:${target}`);
 		return getVersion();
 	}
 
@@ -93,7 +93,7 @@ function bumpOrSetVersion(target) {
 
 	console.log(`Setting explicit version (${target})...`);
 	run(
-		`npm version ${target} -ws --no-git-tag-version && node scripts/sync-versions.js && npx shx rm -rf node_modules packages/*/node_modules package-lock.json && npm install`,
+		`pnpm version ${target} -ws --no-git-tag-version && node scripts/sync-versions.js && npx shx rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install`,
 	);
 	return getVersion();
 }
@@ -214,8 +214,8 @@ run(`git commit -m "Release v${version}"`);
 run(`git tag v${version}`);
 console.log();
 
-console.log("Publishing to npm...");
-run("npm run publish");
+console.log("Publishing to pnpm...");
+run("pnpm run publish");
 console.log();
 
 console.log("Pushing to remote...");
