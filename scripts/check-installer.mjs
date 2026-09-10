@@ -95,7 +95,7 @@ screen_case() {
 progress_case() {
 	progress_details="Preparing global install.
 Linking command binaries.
-Finalizing pnpm install."
+Finalizing npm install."
 	for progress_frame in 1 24 25 48 49 200; do
 		prime_agent_animation_frame="$progress_frame"
 		printf '__PROGRESS__ %s\t%s\t%s\\n' "$progress_frame" "$(prime_agent_animation_status "Installing Prime Agent" "$progress_details" static)" "$(prime_agent_animation_detail "$progress_details")"
@@ -168,13 +168,13 @@ console.log("Installer check passed.");
 function checkNpmInstallPolicies() {
 	const binDir = join(tempDir, "bin");
 	const installHarnessPath = join(tempDir, "install-harness.sh");
-	const pnpmPath = join(binDir, "pnpm");
+	const npmPath = join(binDir, "npm");
 	const tarballPath = join(tempDir, "verified release package.tgz");
 	const installHarnessSource = `${installerSource.slice(0, mainCallIndex)}
 
-prime_agent_pnpm_install "$1"
+prime_agent_npm_install "$1"
 `;
-	const pnpmSource = `#!/bin/sh
+	const npmSource = `#!/bin/sh
 set -eu
 
 if [ "\${1:-}" = "--version" ]; then
@@ -195,8 +195,8 @@ for arg in "$@"; do
 done
 [ "$target" = "$FAKE_NPM_TARBALL" ] || exit 1
 
-pnpm_major=\${FAKE_NPM_VERSION%%.*}
-if [ "$pnpm_major" -ge 12 ]; then
+npm_major=\${FAKE_NPM_VERSION%%.*}
+if [ "$npm_major" -ge 12 ]; then
 	[ "$remote_policy" = all ] && [ "$script_policy" = "$FAKE_NPM_TARBALL" ] || exit 1
 else
 	[ -z "$remote_policy" ] && [ -z "$script_policy" ] || exit 1
@@ -205,22 +205,22 @@ fi
 
 	mkdirSync(binDir);
 	writeFileSync(installHarnessPath, installHarnessSource, "utf-8");
-	writeFileSync(pnpmPath, pnpmSource, "utf-8");
+	writeFileSync(npmPath, npmSource, "utf-8");
 	writeFileSync(tarballPath, "verified fixture", "utf-8");
-	chmodSync(pnpmPath, 0o755);
+	chmodSync(npmPath, 0o755);
 
-	for (const pnpmVersion of ["10.9.8", "11.12.1", "12.0.2"]) {
+	for (const npmVersion of ["10.9.8", "11.12.1", "12.0.2"]) {
 		const result = spawnSync("sh", [installHarnessPath, tarballPath], {
 			encoding: "utf-8",
 			env: {
 				...process.env,
 				FAKE_NPM_TARBALL: tarballPath,
-				FAKE_NPM_VERSION: pnpmVersion,
+				FAKE_NPM_VERSION: npmVersion,
 				PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
 			},
 		});
 		if (result.status !== 0) {
-			failures.push(`pnpm ${pnpmVersion}: install policy check failed\n${result.stderr}${result.stdout}`);
+			failures.push(`npm ${npmVersion}: install policy check failed\n${result.stderr}${result.stdout}`);
 		}
 	}
 }
@@ -307,8 +307,8 @@ function assertInstallerProgress(progress) {
 		"Preparing global install.",
 		"Linking command binaries.",
 		"Linking command binaries.",
-		"Finalizing pnpm install.",
-		"Finalizing pnpm install.",
+		"Finalizing npm install.",
+		"Finalizing npm install.",
 	];
 	for (const [index, expectedDetail] of expectedDetails.entries()) {
 		check(
