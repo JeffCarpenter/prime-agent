@@ -344,7 +344,7 @@ function main() {
 			writeJson(join(stagingDir, "dist/native-release.json"), { baseUrl: args.baseUrl, version: releaseVersion });
 		}
 
-		const tarballName = run("pnpm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent"], root)
+		const tarballName = run("pnpm", ["--dir", stagingDir, "pack", "--pack-destination", artifactsDir, "--silent"], root)
 			.split("\n")
 			.at(-1);
 		if (!tarballName) {
