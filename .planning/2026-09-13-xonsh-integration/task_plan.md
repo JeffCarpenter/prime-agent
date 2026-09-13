@@ -4,7 +4,7 @@
 Define and implement the requested xonsh integration for prime-agent after the integration scope is confirmed.
 
 ## Next Step
-Confirm the required xonsh integration behavior and repository touchpoints.
+Execute two-pronged approach: determine relevant claims, and implement/register the `xonsh` tool.
 
 ## Current Phase
 Phase 1
@@ -18,13 +18,13 @@ Phase 1
 - **Status:** in_progress
 
 ### Phase 2: Planning & Structure
-- [ ] Define approach
-- [ ] Create project structure
+- [ ] Determine/guess which information/claims are germane to implementing a `xonsh` tool (alongside `ipython`)
+- [ ] Check/verify the claims we figure are germane to the xonsh tool work
 - **Status:** pending
 
 ### Phase 3: Implementation
-- [ ] Execute the plan
-- [ ] Write to files before executing
+- [ ] Implement `packages/coding-agent/src/core/tools/xonsh.ts`
+- [ ] Register `xonsh` in `packages/coding-agent/src/core/tools/index.ts`
 - **Status:** pending
 
 ### Phase 4: Testing & Verification
