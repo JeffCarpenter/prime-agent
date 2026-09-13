@@ -1,0 +1,186 @@
+@startuml tooling-system-architecture
+!pragma layout smetana
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName Monospace
+skinparam ArrowColor #455A64
+skinparam ComponentBorderColor #37474F
+skinparam PackageBorderColor #607D8B
+skinparam NoteBorderColor #78909C
+skinparam NoteBackgroundColor #ECEFF1
+
+actor "Parent model" as model
+
+package "TypeScript host" as ts {
+  component "Agent loop\npackages/agent/src/agent-loop.ts" as loop
+
+  package "Tool definition and registration" as registration {
+    component "Built-in factories\ncore/tools/*.ts" as builtin
+    component "SDK customTools\ndefineTool(...)" as custom
+    component "Extension loader\ncore/extensions/loader.ts" as loader
+    component "Extension runner\ncore/extensions/runner.ts" as runner
+    component "ToolDefinition adapter\ncore/tools/tool-definition-wrapper.ts" as toolwrap
+    component "Extension-context adapter\ncore/extensions/wrapper.ts" as extwrap
+  }
+
+  component "AgentSession\ncore/agent-session.ts" as session
+  component "Active tool registry\nAgentTool[] / tool map" as registry
+
+  package "Built-in AgentTool" as builtins {
+    component "ipython tool\ncore/tools/ipython.ts" as ipython
+    component "IpythonKernelProvisioner" as provisioner
+  }
+
+  package "Kernel boundary" as kernel {
+    component "ReplKernelManager\ncore/kernel/repl-manager.ts" as manager
+    component "Kernel bootstrap\ncore/kernel/bootstrap.ts" as bootstrap
+    component "Kernel state snapshots\ncore/kernel/state-snapshot.ts" as snapshot
+    component "Kernel shared protocol\ncore/kernel/shared.ts" as shared
+  }
+
+  component "RLM host policy\ncore/rlm-runtime.ts\nAgentSession handlers" as rlmhost
+  component "Child AgentSession" as child
+}
+
+package "Python runtime process" as py {
+  component "python -m rlm.repl\nPersistent namespace" as repl
+  component "prime-agent-runtime\nPython rlm callable + host_request" as runtime
+  component "Python-backed skills\ngoal / agent_message / bash / ..." as skills
+}
+
+cloud "Model provider" as provider
+folder "Session artifacts\ntranscripts / kernel snapshots /\nchild directories / harness state" as artifacts
+
+model --> loop : model response / tool call
+loop --> registry : resolve tool name
+registry --> session : active session state
+session --> loop : tool context + results
+
+builtin --> session : ToolDefinition
+custom --> session : ToolDefinition
+loader --> runner : load extension factory
+loader --> runner : registerTool(definition)
+runner --> extwrap : RegisteredTool + runner context
+extwrap --> toolwrap : adapt definition
+builtin --> toolwrap : built-in definition
+custom --> toolwrap : custom definition
+toolwrap --> registry : AgentTool
+session --> registry : refresh / select active tools
+
+session --> ipython : createAllToolDefinitions()
+ipython --> provisioner : execute Python source
+provisioner --> manager : start / execute / interrupt
+bootstrap --> manager : Python environment
+snapshot --> manager : persist / restore namespace
+shared --> manager : protocol constants + types
+manager <--> repl : JSON-lines stdio
+
+repl --> runtime : import / call runtime API
+runtime --> skills : Python callables
+skills --> runtime : rlm / host_request
+runtime --> manager : host_request event
+manager --> rlmhost : typed dispatch
+rlmhost --> child : admit child AgentSession
+child --> provider : model requests
+child --> registry : inherited tooling configuration
+child --> artifacts : child transcript / state
+session --> artifacts : root state / usage / registry
+
+note right of registry
+  ToolDefinition = metadata, schema, execute
+  RegisteredTool = extension definition + source info
+  AgentTool = executable agent-loop shape
+end note
+
+note bottom of manager
+  Process/protocol/execution boundary.
+  Not ordinary tool registration.
+  Transport is newline-delimited JSON over stdio.
+end note
+
+note bottom of rlmhost
+  RLM policy remains in TypeScript:
+  depth, model, child admission,
+  lifecycle, cancellation, accounting.
+end note
+
+note bottom of runtime
+  rlm(...) is a Python API backed by
+  host_request. It is not a second
+  ordinary model-facing AgentTool.
+end note
+@enduml
+
+@startuml tooling-system-ipython-rlm
+skinparam shadowing false
+skinparam defaultFontName Monospace
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 15
+skinparam BoxPadding 10
+skinparam ArrowColor #455A64
+
+actor Model as model
+participant "Agent loop" as loop
+participant "AgentSession\nactive registry" as session
+participant "ipython AgentTool\ncore/tools/ipython.ts" as ipython
+participant "IpythonKernelProvisioner" as provisioner
+participant "ReplKernelManager\ncore/kernel/repl-manager.ts" as manager
+participant "python -m rlm.repl" as repl
+participant "prime-agent-runtime\nPython rlm module" as runtime
+participant "AgentSession\nRLM host handler" as host
+participant "Child AgentSession" as child
+participant "Model provider" as provider
+
+== Normal ipython call ==
+model -> loop : tool call: ipython(code)
+loop -> session : resolve + validate tool
+session -> ipython : AgentTool.execute(...)
+ipython -> provisioner : executeWithBusyKernelChoice(code)
+provisioner -> manager : start lazily if needed
+manager -> repl : execute JSON line
+repl --> manager : stdout / result / display JSON lines
+manager --> ipython : ExecuteResult
+ipython --> session : AgentToolResult
+session --> loop : tool result
+loop --> model : tool output
+
+== RLM delegation nested inside ipython ==
+model -> loop : ipython(await rlm(prompt))
+loop -> session : resolve ipython
+session -> ipython : execute Python cell
+ipython -> provisioner : submit cell
+provisioner -> manager : execute(code)
+manager -> repl : execute JSON line
+repl -> runtime : evaluate rlm(...)
+runtime -> manager : host_request: rlm.run
+manager -> host : typed host-request dispatch
+host -> host : validate depth/model/name/thinking
+host -> child : admit detached child run
+host --> manager : host_reply: RLMSpawnHandle
+manager --> runtime : matching host reply
+runtime --> repl : RLMSpawnHandle
+repl --> manager : cell result
+manager --> ipython : ExecuteResult
+ipython --> loop : handle in AgentToolResult
+loop --> model : admission handle
+
+== Child completion is later ==
+child -> provider : independent model/tool loop
+provider --> child : response / tool calls
+child -> host : lifecycle + usage updates
+child -> model : agent_message or file artifact
+
+note over manager,repl
+  The kernel bridge uses newline-delimited JSON over stdio.
+  It is not a ZMQ/Jupyter execute_request path.
+end note
+
+note over host,child
+  The original rlm(...) call admits the child only.
+  It does not return the child's answer.
+end note
+@enduml
