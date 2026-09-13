@@ -1,0 +1,618 @@
+PRIME-AGENT TOOLING SYSTEM
+===========================
+
+Purpose
+-------
+This is an ASCII architecture map of the TypeScript tooling system and its
+connection to the persistent Python/RLM runtime.  It distinguishes:
+
+  * tool definition and registration,
+  * tool lookup and execution,
+  * the Python kernel process and protocol,
+  * RLM host policy and child sessions, and
+  * Python-side skills and delegation.
+
+The strongest source for the RLM boundary is:
+  packages/coding-agent/docs/rlm.md
+  packages/coding-agent/docs/rlm-runtime.md
+
+The module inventory and call paths below were checked against the local
+checkout by a static audit on 2026-09-13.  The architecture remains descriptive
+documentation, not a substitute for reading the implementation before changing
+it.
+
+
+1. SYSTEM OVERVIEW
+------------------
+
+                         +-----------------------------+
+                         |        User / Task           |
+                         +--------------+--------------+
+                                        |
+                                        v
+                         +-----------------------------+
+                         |       Parent model           |
+                         |  selects a tool or writes    |
+                         |  Python in an ipython call   |
+                         +--------------+--------------+
+                                        |
+                 normal AgentTool call  |
+                                        v
++--------------------------------------------------------------------------+
+| TypeScript host                                                          |
+|                                                                          |
+|  +--------------------+      +----------------------------------------+  |
+|  | Agent loop         |----->| AgentSession                           |  |
+|  | packages/agent/    |      | packages/coding-agent/src/core/         |  |
+|  | src/agent-loop.ts  |      | agent-session.ts                        |  |
+|  +--------------------+      |                                        |  |
+|                              |  active tool registry                  |  |
+|                              |  built-ins + customTools + extensions  |  |
+|                              |  RLM policy + child registry          |  |
+|                              |  host-request handlers                 |  |
+|                              |  lifecycle + usage attribution         |  |
+|                              +-------------+--------------------------+  |
+|                                            |                             |
+|                                            | AgentTool.execute(...)     |
+|                                            v                             |
+|                              +--------------------------+               |
+|                              | Built-in/custom/extension |               |
+|                              | AgentTool implementations |               |
+|                              +------------+-------------+               |
+|                                           |                             |
+|                                           | ipython is the RLM bridge   |
+|                                           v                             |
+|                              +--------------------------+               |
+|                              | core/tools/ipython.ts    |               |
+|                              | createIpythonTool...     |               |
+|                              +------------+-------------+               |
+|                                           |                             |
+|                                           v                             |
+|                              +--------------------------+               |
+|                              | core/kernel/              |               |
+|                              | ReplKernelManager        |               |
+|                              | process + protocol       |               |
+|                              +------------+-------------+               |
+|                                           | JSON-lines stdio            |
++-------------------------------------------+------------------------------+
+                                            |
+                                            v
++--------------------------------------------------------------------------+
+| Python runtime process                                                   |
+|                                                                          |
+|  +----------------------+       +-------------------------------------+  |
+|  | python -m rlm.repl  |<----->| prime-agent-runtime                  |  |
+|  | persistent namespace |       | rlm callable, handles, skills,      |  |
+|  | stdout/stderr/result |       | host_request, runtime helpers      |  |
+|  +----------+-----------+       +----------------+--------------------+  |
+|             |                                     |                       |
+|             | executes model Python               | imports/calls          |
+|             v                                     v                       |
+|  +----------------------+       +-------------------------------------+  |
+|  | Python code         |       | Python-backed skills                 |  |
+|  | Path, data, bash(), |       | goal, agent_message, compact,       |  |
+|  | edits, transforms   |       | rlm_heartbeat, custom skills, etc. |  |
+|  +----------------------+       +----------------+--------------------+  |
+|                                                    |                      |
+|                                                    | host_request         |
++----------------------------------------------------+----------------------+
+                                                     |
+                                                     v
+                                      +-------------------------------+
+                                      | ReplKernelManager dispatch    |
+                                      | typed HostRequestHandlers     |
+                                      +---------------+---------------+
+                                                      |
+                                                      v
+                                      +-------------------------------+
+                                      | Parent AgentSession           |
+                                      | authoritative host state      |
+                                      +-------------------------------+
+
+
+2. WHERE TOOLS COME FROM
+------------------------
+
+There are three principal sources of tool definitions.  They converge before
+execution in AgentSession's active tool registry.
+
+Current-checkout detail: `createAllToolDefinitions()` currently returns only the
+`ipython` definition.  The tools directory still contains factories and helpers
+for bash, edit, ACP/MCP, previews, mutation queues, rendering, and truncation;
+those modules are not automatically proof that each tool is active by default.
+
+  BUILT-IN FACTORIES
+  ------------------
+
+  +-----------------------------+
+  | core/tools/*.ts             |
+  | e.g. ipython.ts             |
+  |                             |
+  | create...ToolDefinition()   |
+  +--------------+--------------+
+                 |
+                 | ToolDefinition
+                 v
+
+  SDK CUSTOM TOOLS
+  ----------------
+
+  +-----------------------------+
+  | AgentSession config         |
+  | customTools: [...]          |
+  | defineTool(...)             |
+  +--------------+--------------+
+                 |
+                 | ToolDefinition
+                 v
+
+  EXTENSION-REGISTERED TOOLS
+  --------------------------
+
+  +-----------------------------+
+  | extension module             |
+  | default factory(api)         |
+  +--------------+--------------+
+                 |
+                 | api.registerTool(definition)
+                 v
+  +-----------------------------+
+  | core/extensions/loader.ts   |
+  | ExtensionAPI construction   |
+  | discovery + factory loading |
+  +--------------+--------------+
+                 |
+                 v
+  +-----------------------------+
+  | extension tool map          |
+  | ExtensionRunner             |
+  | core/extensions/runner.ts   |
+  +--------------+--------------+
+                 |
+                 | RegisteredTool objects
+                 v
+  +-----------------------------+
+  | core/extensions/wrapper.ts  |
+  | context-aware adaptation    |
+  +--------------+--------------+
+                 |
+                 | AgentTool objects
+                 v
+
+                         +-------------------------------+
+                         | AgentSession._refreshToolRegistry |
+                         | combines built-ins, customTools, |
+                         | and extension tools              |
+                         +---------------+----------------+
+                                         |
+                                         v
+                         +-------------------------------+
+                         | active tool definitions        |
+                         | active AgentTool registry      |
+                         +-------------------------------+
+
+Important distinction:
+
+  ToolDefinition = metadata, parameter schema, and execute implementation.
+  RegisteredTool = extension-side definition plus registration/source context.
+  AgentTool      = executable shape consumed by the agent loop.
+
+The wrapper layer adapts registered definitions to the runtime shape.  It is
+not the same responsibility as the kernel manager, which runs Python code.
+
+
+3. NORMAL TOOL EXECUTION
+------------------------
+
+  +-------------+
+  | Parent model |
+  +------+------+ 
+         |
+         | tool call: name + arguments
+         v
+  +-------------------------------+
+  | Agent loop                    |
+  | resolve tool by name          |
+  | prepare/validate arguments    |
+  | invoke AgentTool.execute      |
+  +---------------+---------------+
+                  |
+                  v
+  +-------------------------------+
+  | AgentSession tool registry    |
+  | Map<string, AgentTool>        |
+  +---------------+---------------+
+                  |
+                  v
+  +-------------------------------+
+  | selected AgentTool            |
+  | built-in, custom, or wrapped  |
+  +---------------+---------------+
+                  |
+                  v
+  +-------------------------------+
+  | AgentToolResult               |
+  | text, images, details         |
+  +---------------+---------------+
+                  |
+                  v
+  +-------------+
+  | Parent model |
+  +-------------+
+
+For ordinary non-ipython tools, execution can end at the tool's own
+implementation.  For ipython, execution continues into the kernel path below.
+
+
+4. NORMAL IPYTHON EXECUTION
+---------------------------
+
+  Model
+    |
+    | calls AgentTool "ipython" with Python source
+    v
+  +------------------------------------------+
+  | createIpythonToolDefinition()            |
+  | packages/coding-agent/src/core/tools/    |
+  | ipython.ts                               |
+  +----------------------+-------------------+
+                         |
+                         | lazy provision if needed
+                         v
+  +------------------------------------------+
+  | IpythonKernelProvisioner                 |
+  | obtains/starts the persistent kernel     |
+  +----------------------+-------------------+
+                         |
+                         v
+  +------------------------------------------+
+  | ReplKernelManager                        |
+  | packages/coding-agent/src/core/kernel/  |
+  | repl-manager.ts                          |
+  +----------------------+-------------------+
+                         |
+                         | execute request over stdin
+                         v
+  +------------------------------------------+
+  | python -m rlm.repl                       |
+  | persistent Python namespace              |
+  +----------------------+-------------------+
+                         |
+                         | stdout/stderr/result/display/events
+                         | over stdout JSON lines
+                         v
+  +------------------------------------------+
+  | ReplKernelManager                        |
+  | correlates cell id and result            |
+  +----------------------+-------------------+
+                         |
+                         v
+  +------------------------------------------+
+  | ipython tool execute()                   |
+  | shapes output as AgentToolResult         |
+  | (text, images, diffs, attachments)       |
+  +----------------------+-------------------+
+                         |
+                         v
+                       Model
+
+The kernel is a durable control environment, not a security sandbox.  Python
+and shell commands run with the worker's operating-system permissions.
+
+
+5. RLM DELEGATION INSIDE IPYTHON
+--------------------------------
+
+A call to await rlm(...) is nested inside the ipython execution path.  It is
+not a second ordinary model-facing AgentTool call and it is not local Python
+recursion.
+
+  Parent model
+       |
+       | ipython code: await rlm("review the API")
+       v
+  +-----------------------------+
+  | ipython AgentTool           |
+  +--------------+--------------+
+                 |
+                 v
+  +-----------------------------+
+  | Python REPL / rlm package   |
+  | callable rlm object         |
+  +--------------+--------------+
+                 |
+                 | host_request event: rlm.run
+                 | JSON line over runtime stdio
+                 v
+  +-----------------------------+
+  | ReplKernelManager           |
+  | dispatches typed request    |
+  +--------------+--------------+
+                 |
+                 | HostRequestHandlers
+                 v
+  +-----------------------------+
+  | Parent AgentSession         |
+  | runRlmChild() / RLM policy  |
+  |                              |
+  | - check RLM_DEPTH            |
+  | - resolve/inherit model      |
+  | - validate thinking level    |
+  | - admit child                |
+  | - update child registry      |
+  | - attribute usage           |
+  +--------------+--------------+
+                 |
+                 | immediate host reply
+                 v
+  +-----------------------------+
+  | RLMSpawnHandle              |
+  | child id, name, session dir,|
+  | model                       |
+  +--------------+--------------+
+                 |
+                 | returned to Python cell
+                 v
+  +-----------------------------+
+  | ipython result to parent    |
+  +-----------------------------+
+
+The original call returns admission only.  It does not contain the child's
+answer and normally does not wait for child completion.
+
+
+6. CHILD SESSION PATH
+---------------------
+
+                  admitted RLMSpawnHandle
+                             |
+                             v
+              +-------------------------------+
+              | TypeScript host starts child  |
+              | AgentSession                  |
+              +---------------+---------------+
+                              |
+        inherits/reuses        |        gets independent context
+  +---------------------------+---------------------------+
+  | provider hooks, model registry, tools, resource      |
+  | loader, transport, retry settings, thinking config   |
+  +---------------------------+---------------------------+
+                              |
+                              v
+              +-------------------------------+
+              | child Agent loop               |
+              | child has its own tool registry|
+              | child can use ipython/RLM      |
+              +---------------+---------------+
+                              |
+                              v
+              +-------------------------------+
+              | provider calls + tool execution |
+              +---------------+---------------+
+                              |
+           +------------------+------------------+
+           |                                     |
+           | explicit agent_message             | result file
+           v                                     v
+  +----------------------+             +----------------------+
+  | parent receives      |             | parent reads shared  |
+  | ordinary message    |             | artifact/file        |
+  +----------------------+             +----------------------+
+
+The parent-scoped child registry is authoritative in TypeScript.  Child
+transcripts and artifacts can remain addressable after the interactive client
+detaches, subject to the session/daemon mode.
+
+
+7. HOST-REQUEST CONTROL PLANE
+-----------------------------
+
+The data plane executes Python cells.  The control plane asks the TypeScript
+host to perform operations whose authoritative state is outside Python.
+
+  Python code / bundled skill
+             |
+             | await host_request(type, payload)
+             v
+  +-----------------------------+
+  | runtime host_request event  |
+  +--------------+--------------+
+                 |
+                 | JSON-lines stdio
+                 v
+  +-----------------------------+
+  | ReplKernelManager           |
+  | typed dispatch table        |
+  +--------------+--------------+
+                 |
+                 v
+  +-----------------------------+
+  | AgentSession host handlers  |
+  +--------------+--------------+
+                 |
+        +--------+--------+------------------+------------------+
+        |                 |                  |                  |
+        v                 v                  v                  v
+  rlm.run          goal.*            agent_message.*       heartbeat/*
+  child policy     goal state        daemon messaging      scheduling
+
+The same pattern applies to bundled Python skills such as goal, agent_message,
+rlm_heartbeat, and compact.  The skill is a Python client; TypeScript remains
+the authority for credentials, provider execution, transcript writes, child
+routing, scheduling, and lifecycle state.
+
+
+8. RESPONSIBILITY MAP
+---------------------
+
+  Layer / path                                      Owns
+  ------------------------------------------------  -------------------------
+  packages/agent/src/agent-loop.ts                 Tool-call loop and model
+                                                    interaction.
+
+  core/extensions/types.ts                          ToolDefinition and
+                                                    extension contracts.
+
+  core/extensions/loader.ts                        Extension discovery/loading
+                                                    and ExtensionAPI creation.
+
+  core/extensions/runner.ts                        Extension lifecycle and
+                                                    registered-tool collection.
+
+  core/extensions/wrapper.ts                       Context-aware conversion of
+                                                    registered tools to AgentTools.
+
+  core/tools/ipython.ts                            ipython AgentTool definition,
+                                                    kernel provisioning, output
+                                                    shaping.
+
+  core/agent-session.ts                             Active tool registry, RLM
+                                                    policy, host handlers,
+                                                    child lifecycle, accounting.
+
+  core/kernel/repl-manager.ts                      Python process, JSONL stdio,
+                                                    cell execution, interrupts,
+                                                    host-request dispatch.
+
+  core/rlm-runtime.ts                               TypeScript-side validation /
+                                                    model discovery / RLM handle
+                                                    concerns (per architecture
+                                                    documentation).
+
+  prime-agent-runtime/src/rlm/                     Python-side rlm callable,
+                                                    handles, host_request, and
+                                                    runtime-facing helpers.
+
+  Python-backed skills                            Python-level capability
+                                                    wrappers; may call host_request
+                                                    or rlm().
+
+  provider / child AgentSession                    Actual recursive model work
+                                                    after child admission.
+
+
+9. WHAT IS AND IS NOT A TOOL
+----------------------------
+
+  IS AN AgentTool / tool-system object:
+
+    * a ToolDefinition produced by a built-in factory;
+    * an SDK customTool / defineTool definition;
+    * an extension tool registered through ExtensionAPI.registerTool;
+    * a wrapped AgentTool in AgentSession's active registry;
+    * the ipython boundary exposed to the parent model.
+
+  IS NOT necessarily a separate AgentTool:
+
+    * Python's bash() helper;
+    * a Python-backed skill callable;
+    * rlm(...), which is a Python API backed by host_request;
+    * goal/agent_message/heartbeat/compact Python clients;
+    * a child AgentSession (it is a session, not a tool).
+
+Extensions may intentionally add more AgentTools.  The RLM design does not
+require one model-facing AgentTool for every capability.
+
+
+10. LIFECYCLE AND STATE
+-----------------------
+
+  first ipython use
+        |
+        v
+  kernel Python environment is resolved/bootstrapped
+        |
+        v
+  python -m rlm.repl starts
+        |
+        v
+  namespace remains persistent across ordinary calls
+        |
+        +--> interrupt / shutdown through ReplKernelManager
+        |
+        +--> snapshot / restore for persisted sessions (where enabled)
+        |
+        +--> child sessions and host-owned registries remain in TypeScript
+
+Relevant persisted concepts include:
+
+  * kernel namespace snapshots;
+  * root and child session artifacts;
+  * harness state;
+  * scheduled jobs;
+  * child registry and usage attribution.
+
+Persistence connects the Python control environment to the normal session
+lifecycle.  It does not move provider credentials or authoritative child policy
+into Python.
+
+
+11. VERIFIED MODULE INVENTORY
+-----------------------------
+
+  KERNEL: packages/coding-agent/src/core/kernel/
+
+    boot-gate.ts         resolveKernelBootConcurrency,
+                         withKernelBootPermit
+    bootstrap-cli.ts     bootstrap CLI entry module (no exported API reported)
+    bootstrap.ts         runtime/environment provisioning and
+                         ensureKernelPython
+    index.ts             kernel public exports
+    repl-manager.ts      ReplKernelManager and process/protocol execution
+    shared.ts             protocol constants, output parsers, shared types,
+                         errors, and lifecycle helpers
+    state-snapshot.ts    snapshot/restore path helpers and result types
+
+  TOOLS: packages/coding-agent/src/core/tools/
+
+    acp-mcp.ts, bash.ts, code-preview.ts, edit-diff.ts, edit.ts,
+    file-mutation-queue.ts, index.ts, ipython-cell-code.ts, ipython.ts,
+    output-accumulator.ts, path-utils.ts, render-utils.ts,
+    tool-definition-wrapper.ts, truncate.ts
+
+    Key distinction:
+      tool-definition-wrapper.ts = generic ToolDefinition -> AgentTool adapter
+      extensions/wrapper.ts       = extension-context adapter using the runner
+
+  EXTENSIONS: packages/coding-agent/src/core/extensions/
+
+    bundled-modules.ts, index.ts, loader.ts, runner.ts, types.ts, wrapper.ts
+
+  RLM HOST BOUNDARY:
+
+    core/agent-session.ts       registry, host handlers, RLM child policy
+    core/rlm-runtime.ts         RLM request/handle validation and model lookup
+    prime-agent-runtime/src/rlm/
+                                Python rlm callable, host_request, handles,
+                                and runtime helpers
+
+
+12. IMPORTANT SOURCE-VERIFICATION NOTES
+---------------------------------------
+
+  + DeepWiki has been useful for candidate paths and symbols, but it has also
+    conflated wrapper modules and speculated about files.  The local audit
+    confirmed the two wrapper modules are separate:
+
+      core/tools/tool-definition-wrapper.ts
+      core/extensions/wrapper.ts
+
+  + The RLM documents and local source specify newline-delimited JSON over
+    stdio and `python -m rlm.repl`.  A claimed ZMQ `execute_request` path is
+    rejected: local source/dependencies contain no ZMQ, Jupyter, IPython
+    kernel, or KernelGateway implementation for this path.
+
+  + The local checkout does contain `bash.ts`, `edit.ts`, `bootstrap.ts`, and
+    `state-snapshot.ts`.  Their existence is now verified, but presence alone
+    does not mean every factory is active in `createAllToolDefinitions()`.
+
+  + Keep these boundaries separate when reasoning about changes:
+
+      definition != registration != wrapping != kernel execution
+      kernel execution != RLM host policy
+      child admission != child completion
+      Python capability != AgentTool registration
+      tool availability != tool-module existence
+
+
+END OF DIAGRAM
