@@ -292,7 +292,7 @@ function main() {
 
 		copyPackageContents(packagePath(releasePackage.packageDir), stagingDir, packageJson);
 
-		const tarballName = run("pnpm", ["pack", stagingDir, "--pack-destination", artifactsDir, "--silent"], root)
+		const tarballName = run("pnpm", ["--dir", stagingDir, "pack", "--pack-destination", artifactsDir, "--silent"], root)
 			.split("\n")
 			.at(-1);
 		if (!tarballName) {
