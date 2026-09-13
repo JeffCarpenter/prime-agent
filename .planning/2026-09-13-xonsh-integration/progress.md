@@ -30,6 +30,7 @@
 - Added a consolidated research snapshot separating the likely ownership boundaries from claims that still need local source verification.
 - Received and recorded a local-source audit from `kernel-tooling-verifier`, including exact module inventories, verified call paths, and rejection of the ZMQ claim.
 - Created `doc/tooling-system.txt` with a thorough ASCII architecture diagram covering registration, execution, kernel transport, RLM host requests, child sessions, ownership, and verification cautions.
+- Ported the architecture to `doc/tooling-system.puml`, with component and sequence diagrams; `plantuml -checkonly` passed.
 
 ### Errors
 | Error | Resolution |
