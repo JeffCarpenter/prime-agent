@@ -12,7 +12,7 @@ import { isProcessAlive, spawnHidden } from "../../utils/child-process.js";
 import { tryAcquireDirLock } from "../../utils/dir-lock.js";
 import type { PythonSkillRuntimeInfo } from "../skills.js";
 
-const BOOTSTRAP_SCHEMA = 9;
+const BOOTSTRAP_SCHEMA = 10;
 const PYTHON_VERSION = "3.11";
 const RUNTIME_REQUIREMENT = "prime-agent-runtime";
 // Serializes the kernel's user namespace so it can be revived across session
@@ -31,6 +31,7 @@ const DEFAULT_RLM_EXTRA_PACKAGES = [
 	{ uvArg: "lxml", importName: "lxml", promptLabel: "lxml" },
 	{ uvArg: "pydantic", importName: "pydantic", promptLabel: "pydantic" },
 	{ uvArg: "tyro", importName: "tyro", promptLabel: "tyro" },
+	{ uvArg: "xonsh", importName: "xonsh", promptLabel: "xonsh" },
 ];
 export const DEFAULT_RLM_EXTRA_UV_ARGS = DEFAULT_RLM_EXTRA_PACKAGES.map((pkg) => pkg.uvArg);
 export const DEFAULT_RLM_EXTRA_IMPORT_NAMES = DEFAULT_RLM_EXTRA_PACKAGES.map((pkg) => pkg.importName);

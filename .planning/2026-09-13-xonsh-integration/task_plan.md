@@ -12,25 +12,26 @@ Phase 1
 ## Phases
 
 ### Phase 1: Requirements & Discovery
-- [ ] Understand user intent
-- [ ] Identify constraints
-- [ ] Document in findings.md
-- **Status:** in_progress
+- [x] Understand user intent
+- [x] Identify constraints
+- [x] Document in findings.md
+- **Status:** complete
 
 ### Phase 2: Planning & Structure
-- [ ] Determine/guess which information/claims are germane to implementing a `xonsh` tool (alongside `ipython`)
-- [ ] Check/verify the claims we figure are germane to the xonsh tool work
-- **Status:** pending
+- [x] Determine/guess which information/claims are germane to implementing a `xonsh` tool (alongside `ipython`)
+- [x] Check/verify the claims we figure are germane to the xonsh tool work
+- **Status:** complete
 
 ### Phase 3: Implementation
-- [ ] Implement `packages/coding-agent/src/core/tools/xonsh.ts`
-- [ ] Register `xonsh` in `packages/coding-agent/src/core/tools/index.ts`
-- **Status:** pending
+- [x] Implement `packages/coding-agent/src/core/tools/xonsh.ts`
+- [x] Register `xonsh` in `packages/coding-agent/src/core/tools/index.ts`
+- [x] Append `xonsh` to `DEFAULT_RLM_EXTRA_PACKAGES` in `packages/coding-agent/src/core/kernel/bootstrap.ts` (and increment the schema version)
+- **Status:** complete
 
 ### Phase 4: Testing & Verification
-- [ ] Verify requirements met
-- [ ] Document test results
-- **Status:** pending
+- [x] Verify requirements met
+- [x] Document test results
+- **Status:** complete
 
 ### Phase 5: Delivery
 - [ ] Review outputs
@@ -45,3 +46,6 @@ Phase 1
 ## Errors Encountered
 | Error | Resolution |
 |-------|------------|
+
+### Support xonsh fully
+- `agent-session.ts` must be updated to recognize `xonsh` as a primary REPL tool alongside ipython
