@@ -303,6 +303,7 @@ import { type BashOperations, createLocalBashOperations } from "./tools/bash.js"
 import { createAllToolDefinitions } from "./tools/index.js";
 import { IpythonKernelProvisioner } from "./tools/ipython.js";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.js";
+import { XonshKernelProvisioner } from "./tools/xonsh.js";
 import {
 	addAssistantUsage,
 	cloneUsage,
@@ -483,6 +484,7 @@ export interface AgentSessionConfig {
 	subagentRuntimeHost?: SubagentRuntimeHost;
 	autonomous?: AgentAutonomousConfig;
 	prewarmIpythonKernel?: boolean;
+	prewarmXonshKernel?: boolean;
 	autoRefineReviewer?: AutoRefineReviewer;
 	/**
 	 * When true, auto-refine runs synchronously between turns at the
@@ -830,7 +832,11 @@ function appendSentAgentMessageToToolResult(
 	toolCallId: string,
 	sentMessage: KernelSentAgentMessage,
 ): boolean {
-	if (message.role !== "toolResult" || message.toolName !== "ipython" || message.toolCallId !== toolCallId) {
+	if (
+		message.role !== "toolResult" ||
+		(message.toolName !== "ipython" && message.toolName !== "xonsh") ||
+		message.toolCallId !== toolCallId
+	) {
 		return false;
 	}
 	const details = isObjectRecord(message.details) ? message.details : {};
@@ -1228,11 +1234,13 @@ export class AgentSession {
 	private _disposing = false;
 	private _disposeAsyncPromise?: Promise<void>;
 	private _ipythonKernelProvisioner?: IpythonKernelProvisioner;
+	private _xonshKernelProvisioner?: XonshKernelProvisioner;
 	/** Artifact dir backing the current provisioner's kernel snapshot, if any. */
 	private _ipythonKernelSnapshotDir?: string;
 	/** True once the runtime has been built once; later builds are in-process rebuilds (/reload). */
 	private _ipythonRuntimeBuilt = false;
 	private readonly _prewarmIpythonKernel: boolean;
+	private readonly _prewarmXonshKernel: boolean;
 	private _rlmDepth: number;
 	private readonly _configuredRlmMaxDepth: number | undefined;
 	private _rlmMaxDepth: number;
@@ -1346,6 +1354,7 @@ export class AgentSession {
 		this._rlmMaxDepth = resolvedRlmMaxDepth.maxDepth;
 		this._rlmMaxDepthSource = resolvedRlmMaxDepth.source;
 		this._prewarmIpythonKernel = (config.prewarmIpythonKernel ?? false) && this._rlmDepth === 0;
+		this._prewarmXonshKernel = (config.prewarmXonshKernel ?? false) && this._rlmDepth === 0;
 		this._autoRefineReviewer = config.autoRefineReviewer;
 		this._serializedRefine = config.serializedRefine ?? false;
 		this._rlmSessionDir = config.rlmSessionDir;
@@ -1422,14 +1431,41 @@ export class AgentSession {
 		this.agent.state.systemPrompt = this._baseSystemPrompt;
 	}
 
+	private _getReplProvisioner(activeNames?: string[]): IpythonKernelProvisioner | XonshKernelProvisioner | undefined {
+		const names = activeNames ?? this.getActiveToolNames();
+		if (names.includes("xonsh") && this._xonshKernelProvisioner) {
+			return this._xonshKernelProvisioner;
+		}
+		if (names.includes("ipython") && this._ipythonKernelProvisioner) {
+			return this._ipythonKernelProvisioner;
+		}
+		if (this._xonshKernelProvisioner?.hasRunningKernel) {
+			return this._xonshKernelProvisioner;
+		}
+		if (this._ipythonKernelProvisioner?.hasRunningKernel) {
+			return this._ipythonKernelProvisioner;
+		}
+		if (this._initialActiveToolNames?.includes("xonsh") && !this._initialActiveToolNames.includes("ipython")) {
+			return this._xonshKernelProvisioner ?? this._ipythonKernelProvisioner;
+		}
+		if (this._allowedToolNames?.has("xonsh") && !this._allowedToolNames.has("ipython")) {
+			return this._xonshKernelProvisioner ?? this._ipythonKernelProvisioner;
+		}
+		return this._ipythonKernelProvisioner ?? this._xonshKernelProvisioner;
+	}
+
+	private get _primaryReplProvisioner(): IpythonKernelProvisioner | XonshKernelProvisioner | undefined {
+		return this._getReplProvisioner();
+	}
+
 	replaceAcpMcpServers(servers: readonly AcpMcpServerConfig[], ownerId: string): void {
 		if (this.isStreaming) throw new Error("Cannot replace ACP MCP servers while the agent is running");
 		if (!this._mcpManager) {
 			if (servers.length > 0) throw new Error("MCP is unavailable in this session");
 			return;
 		}
-		if (servers.length > 0 && !this._ipythonKernelProvisioner) {
-			throw new Error("ACP MCP servers require the built-in cpython tool");
+		if (servers.length > 0 && !this._primaryReplProvisioner) {
+			throw new Error("ACP MCP servers require a primary REPL tool (ipython or xonsh)");
 		}
 		this._assertAcpMcpToolNamesAvailable(acpMcpToolNames(servers));
 		if (!this._mcpManager.replaceAcpServers(servers, ownerId)) return;
@@ -1456,7 +1492,7 @@ export class AgentSession {
 			// the kernel-owned MCP registry to close only these cached transports.
 			await this.agent.waitForIdle();
 			await this._agentEventQueue;
-			const manager = this._ipythonKernelProvisioner?.manager;
+			const manager = this._primaryReplProvisioner?.manager;
 			if (!manager?.isRunning) return;
 			const code = [
 				"import importlib as _prime_importlib",
@@ -1654,7 +1690,7 @@ export class AgentSession {
 	}
 
 	private _applyLateIpythonSentAgentMessages(message: AgentMessage): void {
-		if (message.role !== "toolResult" || message.toolName !== "ipython") {
+		if (message.role !== "toolResult" || (message.toolName !== "ipython" && message.toolName !== "xonsh")) {
 			return;
 		}
 		for (const sentMessage of this._lateIpythonSentAgentMessages.get(message.toolCallId) ?? []) {
@@ -2155,26 +2191,47 @@ export class AgentSession {
 
 	/**
 	 * Goals are pursued through the kernel goal skill, so the only tool the
-	 * model needs is ipython. Force-activate it (including into a live
-	 * continuation context) so the model can always reach `goal.complete()`.
+	 * model needs is a primary REPL tool (ipython or xonsh). Force-activate it
+	 * (including into a live continuation context) so the model can always
+	 * reach `goal.complete()`.
 	 */
 	private _ensureGoalRuntimeActive(context?: AgentContext): void {
 		if (!this._includeGoals) {
 			throw new Error("Goals are disabled. Enable goals before using /goal.");
 		}
-		const ipythonTool = this._toolRegistry.get("ipython");
-		if (!ipythonTool) {
-			throw new Error("Goals require the ipython tool, which is not available in this session.");
+		const activeNames = this.getActiveToolNames();
+		let targetToolName: "ipython" | "xonsh" | undefined;
+		if (activeNames.includes("xonsh") && this._toolRegistry.has("xonsh")) {
+			targetToolName = "xonsh";
+		} else if (activeNames.includes("ipython") && this._toolRegistry.has("ipython")) {
+			targetToolName = "ipython";
+		} else if (
+			this._allowedToolNames?.has("xonsh") &&
+			!this._allowedToolNames.has("ipython") &&
+			this._toolRegistry.has("xonsh")
+		) {
+			targetToolName = "xonsh";
+		} else if (this._toolRegistry.has("ipython")) {
+			targetToolName = "ipython";
+		} else if (this._toolRegistry.has("xonsh")) {
+			targetToolName = "xonsh";
 		}
-		const activeToolNames = new Set(this.getActiveToolNames());
-		if (!activeToolNames.has("ipython")) {
-			activeToolNames.add("ipython");
+
+		const replTool = targetToolName ? this._toolRegistry.get(targetToolName) : undefined;
+		if (!replTool || !targetToolName) {
+			throw new Error(
+				"Goals require a primary REPL tool (ipython or xonsh), which is not available in this session.",
+			);
+		}
+		const activeToolNames = new Set(activeNames);
+		if (!activeToolNames.has(targetToolName)) {
+			activeToolNames.add(targetToolName);
 			this.setActiveToolsByName([...activeToolNames]);
 		}
 		if (context) {
 			const contextTools = [...(context.tools ?? [])];
-			if (!contextTools.some((tool) => tool.name === "ipython")) {
-				contextTools.push(ipythonTool);
+			if (!contextTools.some((tool) => tool.name === "ipython" || tool.name === "xonsh")) {
+				contextTools.push(replTool);
 				context.tools = contextTools;
 			}
 		}
@@ -4179,6 +4236,11 @@ export class AgentSession {
 		this._deletedRlmChildIds.clear();
 		try {
 			await this._ipythonKernelProvisioner?.dispose({ snapshot: kernelSnapshot });
+		} catch {
+			// a failed kernel startup already cleaned up after itself
+		}
+		try {
+			await this._xonshKernelProvisioner?.dispose({ snapshot: kernelSnapshot });
 		} catch {
 			// a failed kernel startup already cleaned up after itself
 		}
@@ -6621,6 +6683,7 @@ export class AgentSession {
 	get isSessionActive(): boolean {
 		return (
 			this._ipythonKernelProvisioner?.manager?.hasBackgroundWork === true ||
+			this._xonshKernelProvisioner?.manager?.hasBackgroundWork === true ||
 			this.isStreaming ||
 			this.isCompacting ||
 			this.isRetrying ||
@@ -7441,7 +7504,7 @@ export class AgentSession {
 	}
 
 	private async _syncKernelStateAfterCompaction(): Promise<void> {
-		const provisioner = this._ipythonKernelProvisioner;
+		const provisioner = this._primaryReplProvisioner;
 		if (!provisioner?.hasRunningKernel) return;
 		const pruned = await provisioner.pruneOversizedVariables().catch(() => null);
 		const abort = new AbortController();
@@ -9299,12 +9362,19 @@ export class AgentSession {
 					createToolDefinitionFromAgentTool(tool),
 				]),
 			);
+			if ((this._baseToolsOverride.ipython as any)?.provisioner) {
+				this._ipythonKernelProvisioner = (this._baseToolsOverride.ipython as any).provisioner;
+			}
+			if ((this._baseToolsOverride.xonsh as any)?.provisioner) {
+				this._xonshKernelProvisioner = (this._baseToolsOverride.xonsh as any).provisioner;
+			}
 		} else {
 			// Rebuilding (e.g. /reload) replaces the provisioner; drop the previous
 			// kernel so the session never holds two live kernels. Gate the new kernel's
 			// startup on the old one's dispose (which flushes a final snapshot), so a
 			// reload can't restore from a snapshot the old kernel is still writing.
-			const previousDispose = this._ipythonKernelProvisioner?.dispose();
+			const previousIpythonDispose = this._ipythonKernelProvisioner?.dispose();
+			const previousXonshDispose = this._xonshKernelProvisioner?.dispose();
 			this._ipythonKernelSnapshotDir = this.sessionManager.getSessionArtifactDir();
 			// Only surface the "revived from your previous session" notice on the first
 			// build (a genuine resume). A later rebuild (/reload) restores state silently
@@ -9318,12 +9388,30 @@ export class AgentSession {
 				hostHandlers: this._createKernelHostHandlers(),
 				pythonSkills,
 				snapshotDir: this._ipythonKernelSnapshotDir,
-				readyGate: previousDispose,
+				readyGate: previousIpythonDispose,
+				onRestore: notifyRestore ? (result) => this._onIpythonStateRestored(result) : undefined,
+			});
+			this._xonshKernelProvisioner = new XonshKernelProvisioner(this._cwd, {
+				env: this._rlmKernelEnv(),
+				commandPrefix: this.settingsManager.getShellCommandPrefix(),
+				shellPath: this.settingsManager.getShellPath(),
+				sessionId: this.sessionId,
+				hostHandlers: this._createKernelHostHandlers(),
+				pythonSkills,
+				snapshotDir: this._ipythonKernelSnapshotDir,
+				readyGate: previousXonshDispose,
 				onRestore: notifyRestore ? (result) => this._onIpythonStateRestored(result) : undefined,
 			});
 			configuredBaseToolDefinitions = createAllToolDefinitions(this._cwd, {
 				ipython: {
 					provisioner: this._ipythonKernelProvisioner,
+					commandPrefix: this.settingsManager.getShellCommandPrefix(),
+					shellPath: this.settingsManager.getShellPath(),
+					onLateSentAgentMessage: (toolCallId, message) =>
+						this._recordLateIpythonSentAgentMessage(toolCallId, message),
+				},
+				xonsh: {
+					provisioner: this._xonshKernelProvisioner,
 					commandPrefix: this.settingsManager.getShellCommandPrefix(),
 					shellPath: this.settingsManager.getShellPath(),
 					onLateSentAgentMessage: (toolCallId, message) =>
@@ -9364,22 +9452,39 @@ export class AgentSession {
 
 		const previousAcpMcpToolNames = new Set(this._acpMcpTools.map((tool) => tool.name));
 		const acpServers = this._mcpManager?.getAcpServers() ?? [];
-		if (acpServers.length > 0 && !this._ipythonKernelProvisioner) {
-			throw new Error("ACP MCP servers require the built-in cpython tool");
+		const replProvisioner = this._getReplProvisioner(options.activeToolNames);
+		if (acpServers.length > 0 && !replProvisioner) {
+			throw new Error("ACP MCP servers require a primary REPL tool (ipython or xonsh)");
 		}
-		const acpMcpTools = this._ipythonKernelProvisioner
-			? createAcpMcpToolDefinitions(acpServers, this._ipythonKernelProvisioner)
+		const acpMcpTools = replProvisioner
+			? createAcpMcpToolDefinitions(acpServers, replProvisioner as unknown as IpythonKernelProvisioner)
 			: [];
 		this._assertAcpMcpToolNamesAvailable(acpMcpTools.map((tool) => tool.name));
 		for (const name of previousAcpMcpToolNames) this._allowedToolNames?.delete(name);
 		for (const tool of acpMcpTools) this._allowedToolNames?.add(tool.name);
 		this._acpMcpTools = acpMcpTools;
 
-		const defaultActiveToolNames = this._baseToolsOverride ? Object.keys(this._baseToolsOverride) : ["ipython"];
+		const defaultActiveToolNames = this._baseToolsOverride
+			? Object.keys(this._baseToolsOverride)
+			: this._allowedToolNames?.has("xonsh") && !this._allowedToolNames.has("ipython")
+				? ["xonsh"]
+				: ["ipython"];
 		const baseActiveToolNames = [...(options.activeToolNames ?? defaultActiveToolNames)];
 		if (this._goalState.status === "active" && this._includeGoals) {
-			// An active goal needs ipython so the model can reach the goal skill.
-			baseActiveToolNames.push("ipython");
+			// An active goal needs a primary REPL tool so the model can reach the goal skill.
+			if (!baseActiveToolNames.includes("ipython") && !baseActiveToolNames.includes("xonsh")) {
+				if (
+					this._baseToolDefinitions.has("xonsh") &&
+					this._allowedToolNames?.has("xonsh") &&
+					!this._allowedToolNames.has("ipython")
+				) {
+					baseActiveToolNames.push("xonsh");
+				} else if (this._baseToolDefinitions.has("ipython")) {
+					baseActiveToolNames.push("ipython");
+				} else if (this._baseToolDefinitions.has("xonsh")) {
+					baseActiveToolNames.push("xonsh");
+				}
+			}
 		}
 		this._refreshToolRegistry({
 			activeToolNames: [...new Set(baseActiveToolNames)],
@@ -9392,8 +9497,12 @@ export class AgentSession {
 		// would otherwise lazily start on first use.
 		const hasSnapshot =
 			!!this._ipythonKernelSnapshotDir && existsSync(snapshotPathIn(this._ipythonKernelSnapshotDir));
-		if ((this._prewarmIpythonKernel || hasSnapshot) && this.getActiveToolNames().includes("ipython")) {
+		const activeNames = this.getActiveToolNames();
+		if ((this._prewarmIpythonKernel || hasSnapshot) && activeNames.includes("ipython")) {
 			this._ipythonKernelProvisioner?.prewarm();
+		}
+		if ((this._prewarmXonshKernel || this._prewarmIpythonKernel || hasSnapshot) && activeNames.includes("xonsh")) {
+			this._xonshKernelProvisioner?.prewarm();
 		}
 
 		// Subsequent builds are in-process rebuilds (/reload), not a fresh resume.
