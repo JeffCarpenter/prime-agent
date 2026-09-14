@@ -31,6 +31,13 @@
 - Received and recorded a local-source audit from `kernel-tooling-verifier`, including exact module inventories, verified call paths, and rejection of the ZMQ claim.
 - Created `doc/tooling-system.txt` with a thorough ASCII architecture diagram covering registration, execution, kernel transport, RLM host requests, child sessions, ownership, and verification cautions.
 - Ported the architecture to `doc/tooling-system.puml`, with component and sequence diagrams; `plantuml -checkonly` passed.
+- Implemented and verified `packages/coding-agent/src/core/tools/xonsh.ts` mirroring `ipython.ts`.
+- Registered `xonsh` in `packages/coding-agent/src/core/tools/index.ts`.
+- Appended `xonsh` to `DEFAULT_RLM_EXTRA_PACKAGES` in `bootstrap.ts` and bumped the schema.
+- Built and successfully ran 21 tests via `packages/coding-agent/test/suite/xonsh.test.ts` to guarantee parity.
+- Fully refactored `packages/coding-agent/src/core/agent-session.ts` to recognize and natively accept `xonsh` as a primary REPL tool.
+- Executed an exhaustive repository-wide grep for `ipython` references, storing 954 matches in `ipython-grep-results.md`.
+- Read `prime-agent-runtime/src/rlm/repl.py` and began formulating targeted file-replacement plans.
 
 ### Errors
 | Error | Resolution |

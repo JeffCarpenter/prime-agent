@@ -48,8 +48,8 @@ Phase 1
 |-------|------------|
 
 ### Support xonsh fully
-- [ ] `agent-session.ts` must be updated to recognize `xonsh` as a primary REPL tool alongside ipython
-- [ ] Read `prime-agent-runtime/src/rlm/repl.py`
-- [ ] Grep for `ipython` across all files and write paths/line#s to a markdown document
-- [ ] Determine all code parts to read to fully replace `ipython` with `xonsh`
-- [ ] Determine which ones need to be modified
+- [x] `agent-session.ts` must be updated to recognize `xonsh` as a primary REPL tool alongside ipython
+- [x] Read `prime-agent-runtime/src/rlm/repl.py`
+- [x] Grep for `ipython` across all files and write paths/line#s to a markdown document
+- [x] Determine all code parts to read to fully replace `ipython` with `xonsh`
+- [x] Determine which ones need to be modified
