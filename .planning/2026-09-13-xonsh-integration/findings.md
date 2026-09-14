@@ -247,3 +247,35 @@ DeepWiki contradiction resolved:
 - A literal local search found no `zmq`, `execute_request`, `jupyter`, `ipykernel`, or `KernelGateway` implementation/dependency in the relevant source. The runtime uses child-process pipes and newline-delimited JSON, so the claimed ZMQ path is rejected.
 
 The audit report is retained in the parent-agent message log; this summary is the durable project finding.
+
+### Verified Germane Claims for Xonsh Integration
+
+#### 1. `ipython.ts`
+- **Claim:** Lazily provisions the Python kernel, bootstraps the namespace, and shapes output to AgentToolResult.
+- **Verification:** TRUE. `IpythonKernelProvisioner` handles this lazily. It uses `buildRlmBootstrapCode` to inject `rlm`, `bash`, and `mcp`. 
+- **Xonsh impact:** We must mirror this in `xonsh.ts`, ensuring `buildXonshRlmBootstrapCode` injects into Xonsh's context (e.g. `__xonsh__.ctx`). The persistent execution mode must remain sequential.
+
+#### 2. `repl-manager.ts`
+- **Claim:** `ReplKernelManager` starts `python -m rlm.repl` and uses JSON-lines stdio protocol.
+- **Verification:** TRUE. The invocation `spawnHidden(python, ["-m", "rlm.repl"], ...)` is strictly hardcoded.
+- **Xonsh impact:** To support Xonsh, `repl-manager.ts` MUST be refactored to parameterize the command/args. Xonsh will also need to support the V3 JSON-lines protocol and swallow raw output properly.
+
+#### 3. `bootstrap.ts`
+- **Claim:** Owns runtime/environment provisioning, including `ensureKernelPython`.
+- **Verification:** TRUE. It provisions a CPython 3.11 virtual environment via `uv` and validates it with strict `python -c` tests.
+- **Xonsh impact:** Since Xonsh is a Python package, it can be hosted in this environment by adding `xonsh` to `DEFAULT_RLM_EXTRA_PACKAGES` and incrementing `BOOTSTRAP_SCHEMA`. Execution would then use `<python> -m xonsh` or `<venv>/bin/xonsh`.
+
+#### 4. `agent-session.ts`
+- **Claim:** Connects tool registry to host policy and owns child-session behavior.
+- **Verification:** TRUE. It instantiates `IpythonKernelProvisioner` with kernel host handlers and aggregates tools into `_toolRegistry`.
+- **Xonsh impact:** There is significant hardcoding of `ipython` references (e.g., `_ipythonKernelProvisioner`, default tool fallbacks, goal requirements requiring ipython). To support xonsh fully, `agent-session.ts` must be updated to recognize `xonsh` as a primary REPL tool alongside ipython.
+
+#### 5. `loader.ts` & `runner.ts` (Extensions)
+- **Claim:** Discovers/loads extensions and manages their lifecycle, collecting registered tools.
+- **Verification:** TRUE. `loader.ts` uses `jiti` to discover extensions and exposes `registerTool`. `runner.ts` manages their lifecycle and context.
+- **Xonsh impact:** Minimal. Xonsh is being integrated as a built-in core tool, so it bypasses `loader.ts`. However, `runner.ts` still supplies the runtime execution context (`ExtensionContext`) to built-in tools.
+
+#### 6. `extensions/wrapper.ts` & `tool-definition-wrapper.ts`
+- **Claim:** Adapts definitions into AgentTool shape and injects ExtensionContext.
+- **Verification:** TRUE. `tool-definition-wrapper.ts` handles the generic `ToolDefinition` -> `AgentTool` translation. `extensions/wrapper.ts` wraps built-in and extension tools alike to dynamically inject `ExtensionContext` from `runner.ts`.
+- **Xonsh impact:** `xonsh.ts` correctly utilizes this by calling `wrapToolDefinition(createXonshToolDefinition(cwd, options))`, which automatically grants it access to `ctx.ui` for UI status messages and prompts.
