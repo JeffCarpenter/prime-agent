@@ -37,21 +37,32 @@ export {
 	truncateLine,
 	truncateTail,
 } from "./truncate.js";
+export {
+	createXonshTool,
+	createXonshToolDefinition,
+	XonshKernelProvisioner,
+	type XonshToolDetails,
+	type XonshToolInput,
+	type XonshToolOptions,
+} from "./xonsh.js";
 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ToolDefinition } from "../extensions/types.js";
 import { createIpythonToolDefinition, type IpythonToolOptions } from "./ipython.js";
+import { createXonshToolDefinition, type XonshToolOptions } from "./xonsh.js";
 
 export type Tool = AgentTool<any>;
 export type ToolDef = ToolDefinition<any, any>;
-export type ToolName = "ipython";
+export type ToolName = "ipython" | "xonsh";
 
 export interface ToolsOptions {
 	ipython?: IpythonToolOptions;
+	xonsh?: XonshToolOptions;
 }
 
 export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef> {
 	return {
 		ipython: createIpythonToolDefinition(cwd, options?.ipython),
+		xonsh: createXonshToolDefinition(cwd, options?.xonsh),
 	};
 }
