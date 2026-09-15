@@ -1,0 +1,2 @@
+- Added native Xonsh REPL support as the default coding-agent runtime, including persistent shell/Python cells, state restoration, and interactive and ACP rendering.
+- Retained explicit IPython/Python REPL selection and compatibility behavior for existing sessions and integrations.
