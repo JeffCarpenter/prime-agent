@@ -46,7 +46,7 @@ function writeBootstrapVersion(venv: string, pythonSkills: readonly KernelPython
 	writeFileSync(
 		join(venv, ".bootstrap-version"),
 		`${JSON.stringify({
-			schema: 9,
+			schema: 10,
 			runtime: runtimeIdentity,
 			snapshot: "dill",
 			extraUvArgs: DEFAULT_RLM_EXTRA_UV_ARGS,
@@ -237,7 +237,7 @@ describe("kernel bootstrap", () => {
 		// The on-disk manifest is what every later warm-start decision reads.
 		const version = JSON.parse(readFileSync(join(venv, ".bootstrap-version"), "utf8"));
 		expect(version).toEqual({
-			schema: 9,
+			schema: 10,
 			runtime: runtimeIdentity,
 			snapshot: "dill",
 			extraUvArgs: DEFAULT_RLM_EXTRA_UV_ARGS,
@@ -443,7 +443,7 @@ describe("kernel bootstrap", () => {
 				writeFileSync(
 					join(venv, ".bootstrap-version"),
 					`${JSON.stringify({
-						schema: 9,
+						schema: 10,
 						runtime: "sha256:stale",
 						snapshot: "dill",
 						extraUvArgs: DEFAULT_RLM_EXTRA_UV_ARGS,

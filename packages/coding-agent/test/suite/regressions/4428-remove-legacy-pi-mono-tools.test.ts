@@ -41,8 +41,8 @@ describe("regression #4428: remove legacy pi-mono built-in tools", () => {
 		}
 	});
 
-	it("registers only ipython as a built-in tool and keeps legacy names parseable", () => {
-		expect(Object.keys(createAllToolDefinitions(process.cwd()))).toEqual(["ipython"]);
+	it("registers Xonsh and IPython as built-in tools and keeps legacy names parseable", () => {
+		expect(Object.keys(createAllToolDefinitions(process.cwd()))).toEqual(["ipython", "xonsh"]);
 		expect(parseArgs(["--tools", "bash,edit,ipython"])).toMatchObject({
 			tools: ["bash", "edit", "ipython"],
 			diagnostics: [],
@@ -58,6 +58,7 @@ describe("regression #4428: remove legacy pi-mono built-in tools", () => {
 			expected: ["bash"],
 		},
 		{ name: "ipython stays built in", tools: ["ipython"], factories: [], expected: ["ipython"] },
+		{ name: "xonsh stays built in", tools: ["xonsh"], factories: [], expected: ["xonsh"] },
 	])("$name", async ({ tools, factories, expected }) => {
 		const settingsManager = SettingsManager.create(tempDir, agentDir);
 		const resourceLoader = new DefaultResourceLoader({
