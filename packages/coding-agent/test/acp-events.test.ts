@@ -73,6 +73,44 @@ describe("ACP session event mapping", () => {
 		).toEqual([]);
 	});
 
+	it("treats Xonsh as an execute tool call carrying its cell source", () => {
+		expect(acpToolKind("xonsh")).toBe("execute");
+		const updates = acpUpdatesForSessionEvent({
+			type: "tool_execution_start",
+			toolCallId: "call-xonsh",
+			toolName: "xonsh",
+			args: { code: "echo @(1 + 1)" },
+		} as AgentConnectionSessionEvent);
+		expect(updates).toEqual([
+			{
+				sessionUpdate: "tool_call",
+				toolCallId: "call-xonsh",
+				title: "Xonsh cell",
+				kind: "execute",
+				status: "in_progress",
+				rawInput: { code: "echo @(1 + 1)" },
+			},
+		]);
+	});
+
+	it("carries rich Xonsh output under Xonsh metadata", () => {
+		const updates = acpUpdatesForSessionEvent({
+			type: "tool_execution_end",
+			toolCallId: "call-xonsh",
+			toolName: "xonsh",
+			result: {
+				output: "done",
+				details: { attachments: [{ mimeType: "image/png", data: "aGVsbG8=" }], diffs: [{}] },
+			},
+			isError: false,
+		} as AgentConnectionSessionEvent);
+		expect(updates[0]?._meta).toEqual({
+			[PRIME_AGENT_META_NAMESPACE]: {
+				xonsh: { attachments: [{ mimeType: "image/png", bytes: 5 }], diffCount: 1 },
+			},
+		});
+	});
+
 	it("treats IPython as an execute tool call carrying its cell source", () => {
 		expect(acpToolKind("ipython")).toBe("execute");
 		const updates = acpUpdatesForSessionEvent({
@@ -243,6 +281,24 @@ describe("ACP session event mapping", () => {
 		} as AgentConnectionSessionEvent);
 		expect(failed[0]?._meta).toMatchObject({
 			[PRIME_AGENT_META_NAMESPACE]: { refinement: { status: "failed", error: "budget exhausted" } },
+		});
+	});
+
+	it("surfaces agent-to-agent messages sent from the Xonsh kernel", () => {
+		const updates = acpUpdatesForSessionEvent({
+			type: "xonsh_sent_agent_message",
+			toolCallId: "cell-xonsh",
+			message: {
+				id: "agentmsg_xonsh",
+				message: "done",
+				deliveryStatus: "queued",
+				target: { activeSessionId: "a1", sessionId: "s1", sessionName: "reviewer" },
+			},
+		} as AgentConnectionSessionEvent);
+		expect(updates[0]?._meta).toMatchObject({
+			[PRIME_AGENT_META_NAMESPACE]: {
+				agentMessage: { toolCallId: "cell-xonsh", target: "reviewer", deliveryStatus: "queued" },
+			},
 		});
 	});
 

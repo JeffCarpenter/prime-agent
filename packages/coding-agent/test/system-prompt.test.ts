@@ -49,6 +49,21 @@ describe("buildRlmPrompt", () => {
 		expect(prompt).toContain("Python is the orchestration language");
 	});
 
+	test("keeps xonsh guidance and recursion available for xonsh-only sessions", () => {
+		const prompt = buildRlmPrompt({
+			cwd: "/repo",
+			messagesPath: "/repo/session.jsonl",
+			installedSkills: ["agent_message", "edit"],
+			activeTools: ["xonsh"],
+			depth: 1,
+		});
+
+		expect(prompt).toContain("persistent Xonsh REPL");
+		expect(prompt).toContain("Installed Python skill modules (pre-imported)");
+		expect(prompt).toContain("await rlm('sub-task')");
+		expect(prompt).toContain("await edit(path=");
+	});
+
 	test("discovers requested models through a bounded authenticated host search", () => {
 		const prompt = buildRlmPrompt({
 			cwd: "/repo",

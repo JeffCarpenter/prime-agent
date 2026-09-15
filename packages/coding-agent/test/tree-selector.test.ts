@@ -1,4 +1,5 @@
 import { setKeybindings } from "@earendil-works/pi-tui";
+import stripAnsi from "strip-ansi";
 import { beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.js";
 import { SettingsManager } from "../src/core/settings-manager.js";
@@ -59,7 +60,11 @@ function assistantMessage(id: string, parentId: string | null, text: string): Ag
 }
 
 // Helper to create a tool-call-only assistant message (filtered out in default mode)
-function toolCallOnlyAssistant(id: string, parentId: string | null): AgentConnectionSessionMessageEntry {
+function toolCallOnlyAssistant(
+	id: string,
+	parentId: string | null,
+	toolName = "ipython",
+): AgentConnectionSessionMessageEntry {
 	return {
 		type: "message",
 		id,
@@ -67,9 +72,7 @@ function toolCallOnlyAssistant(id: string, parentId: string | null): AgentConnec
 		timestamp: new Date().toISOString(),
 		message: {
 			role: "assistant",
-			content: [
-				{ type: "toolCall", id: `tc-${id}`, name: "ipython", arguments: { code: "open('test.ts').read()" } },
-			],
+			content: [{ type: "toolCall", id: `tc-${id}`, name: toolName, arguments: { code: "open('test.ts').read()" } }],
 			api: "anthropic-messages",
 			provider: "anthropic",
 			model: "claude-sonnet-4",
@@ -142,6 +145,39 @@ function buildTree(entries: Array<AgentConnectionSessionEntry>): AgentConnection
 }
 
 describe("TreeSelectorComponent", () => {
+	test("renders native Xonsh tool calls in the session tree", () => {
+		const tree = buildTree([
+			userMessage("user-xonsh", null, "run a command"),
+			toolCallOnlyAssistant("asst-xonsh", "user-xonsh", "xonsh"),
+			{
+				type: "message",
+				id: "result-xonsh",
+				parentId: "asst-xonsh",
+				timestamp: new Date().toISOString(),
+				message: {
+					role: "toolResult",
+					toolCallId: "tc-asst-xonsh",
+					toolName: "xonsh",
+					content: [],
+					isError: false,
+					timestamp: Date.now(),
+				},
+			},
+		]);
+		const selector = new TreeSelectorComponent(
+			tree,
+			"result-xonsh",
+			24,
+			() => {},
+			() => {},
+			undefined,
+			undefined,
+			"all",
+		);
+		const rendered = stripAnsi(selector.getTreeList().render(160).join("\n"));
+		expect(rendered).toContain("[xonsh: open('test.ts').read()]");
+	});
+
 	describe("default filter", () => {
 		test("defaults the tree filter setting to user messages", () => {
 			expect(SettingsManager.inMemory().getTreeFilterMode()).toBe("user-only");

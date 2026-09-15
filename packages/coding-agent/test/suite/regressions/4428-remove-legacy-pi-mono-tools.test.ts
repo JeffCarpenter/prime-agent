@@ -27,8 +27,8 @@ describe("regression #4428: remove legacy pi-mono built-in tools", () => {
 		}
 	});
 
-	it("registers only ipython as a built-in tool", () => {
-		expect(Object.keys(createAllToolDefinitions(process.cwd()))).toEqual(["ipython"]);
+	it("registers Xonsh and IPython as built-in tools", () => {
+		expect(Object.keys(createAllToolDefinitions(process.cwd()))).toEqual(["ipython", "xonsh"]);
 	});
 
 	it("keeps legacy names available for extension and custom tool allowlists", () => {

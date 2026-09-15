@@ -279,6 +279,28 @@ describe("daemon protocol helpers", () => {
 		expect(event).toMatchObject({ event: { type: "refine_failed", error: "disk full" } });
 	});
 
+	it("accepts Xonsh agent-message events on the backward-compatible session channel", () => {
+		const event: DaemonOutbound = {
+			type: "session_event",
+			activeSessionId: "active-1",
+			event: {
+				type: "xonsh_sent_agent_message",
+				toolCallId: "call-xonsh",
+				message: {
+					id: "agentmsg-xonsh",
+					message: "done",
+					deliveryStatus: "queued",
+					target: { activeSessionId: "active-1", sessionId: "session-1" },
+				},
+			},
+		};
+
+		expect(DAEMON_SCHEMA_REVISION).toBe(28);
+		expect(DAEMON_OUTBOUND_COMPATIBILITY.session_event).toEqual({ minProtocol: 7 });
+		expect(event).toMatchObject({ event: { type: "xonsh_sent_agent_message" } });
+		expect(JSON.parse(JSON.stringify(event))).toEqual(event);
+	});
+
 	it("accepts legacy side-question and bash shapes in new daemons and clients", () => {
 		const oldClientSideQuestion: DaemonCommand = {
 			type: "start_side_question",
