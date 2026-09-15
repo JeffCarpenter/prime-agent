@@ -9,6 +9,7 @@ import {
 	readFileSync,
 	renameSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { createConnection, type Socket } from "node:net";
@@ -134,7 +135,14 @@ async function createPaths(): Promise<TestPaths> {
 	const harness = await createHarness();
 	harnesses.push(harness);
 	const executablePath = join(harness.tempDir, APP_NAME);
-	linkSync(process.execPath, executablePath);
+	try {
+		linkSync(process.execPath, executablePath);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "EPERM" && (error as NodeJS.ErrnoException).code !== "EXDEV") {
+			throw error;
+		}
+		symlinkSync(process.execPath, executablePath);
+	}
 	// Unix socket paths are length limited, so the child TMPDIR stays under a short root.
 	const socketTmpRoot = process.platform === "win32" ? tmpdir() : "/tmp";
 	mkdirSync(socketTmpRoot, { recursive: true, mode: 0o700 });

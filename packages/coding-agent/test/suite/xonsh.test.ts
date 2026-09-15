@@ -516,6 +516,33 @@ describe("xonsh tool", () => {
 			await expect(provisioner.kill()).resolves.toBeUndefined();
 		});
 
+		it("executes native Xonsh syntax with persistent state while preserving Python mode", async () => {
+			const provisioner = new XonshKernelProvisioner(process.cwd(), {
+				env: { PYTHONPATH: `${process.cwd()}/../../prime-agent-runtime/src` },
+			});
+			try {
+				const manager = await provisioner.ensure();
+				const setup = await manager.execute('$PHASE6_TEST = "value"\nphase6_state = 40', { mode: "xonsh" });
+				expect(setup.status).toBe("ok");
+
+				const xonsh = await manager.execute(
+					"print($PHASE6_TEST)\nphase6_state += 2\nprint(phase6_state)\nprint($(printf hi))\nawait asyncio.sleep(0)\n$[echo phase6]",
+					{ mode: "xonsh" },
+				);
+				expect(xonsh.status).toBe("ok");
+				expect(xonsh.stdout).toContain("value");
+				expect(xonsh.stdout).toContain("42");
+				expect(xonsh.stdout).toContain("hi");
+				expect(`${xonsh.stdout}${xonsh.backgroundOutput ?? ""}`).toContain("phase6");
+
+				const python = await manager.execute("1 + 1");
+				expect(python.status).toBe("ok");
+				expect(python.result).toBe("2");
+			} finally {
+				await provisioner.dispose({ snapshot: false });
+			}
+		});
+
 		it("delegates namespace inspection and variable pruning to started manager", async () => {
 			const { provisioner } = createMockProvisioner();
 
