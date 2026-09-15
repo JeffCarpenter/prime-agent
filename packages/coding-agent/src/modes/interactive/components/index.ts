@@ -27,9 +27,14 @@ export { FooterComponent } from "./footer.js";
 export { InjectedPromptMessageComponent, isInjectedPromptMessage } from "./injected-prompt-message.js";
 export {
 	getIpythonCodeFromArgs,
+	getXonshCodeFromArgs,
 	IPythonCellComponent,
 	type IPythonCellContentBlock,
 	type IPythonCellState,
+	ReplCellComponent,
+	XonshCellComponent,
+	type XonshCellContentBlock,
+	type XonshCellState,
 } from "./ipython-cell.js";
 export { keyHint, keyText, rawKeyHint } from "./keybinding-hints.js";
 export { LoginDialogComponent } from "./login-dialog.js";

@@ -66,7 +66,9 @@ Each `bash()` call is its own process, while Python state, `os.chdir(...)`, and 
 The callable `rlm` object is preloaded in the kernel. Spawn a child with a direct call:
 
 ```python
-handle = await rlm("Review the authentication flow for security issues", name="auth-reviewer")
+handle = await rlm(
+    "Review the authentication flow for security issues", name="auth-reviewer"
+)
 print(handle.rlm_child_id, handle.name, handle.session_dir, handle.model)
 ```
 
@@ -77,7 +79,9 @@ Spawn independent children in separate calls and end the turn instead of awaitin
 ```python
 api_review = await rlm("Review the public API", name="api-reviewer")
 test_review = await rlm("Review the test coverage", name="test-reviewer")
-integration_audit = await rlm("Run the slow integration audit", name="integration-audit")
+integration_audit = await rlm(
+    "Run the slow integration audit", name="integration-audit"
+)
 ```
 
 Results arrive only through explicit `agent_message` replies or files, never as an `rlm()` return value. Children reply when an answer is needed:

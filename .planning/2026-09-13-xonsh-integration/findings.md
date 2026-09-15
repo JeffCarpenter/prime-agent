@@ -288,3 +288,42 @@ During the exhaustive architectural mapping (where we found 954 matches for `ipy
 3. **The CPython AST Constraint in the Runtime:** Replacing the shell environment is not enough. The `_compile_cell` function in `prime-agent-runtime/src/rlm/repl.py` relies strictly on CPython's native `ast.parse` to evaluate code blocks. Because Xonsh mixes standard Python with bash-like shell syntax (e.g., `!(ls -la)` or `$VAR="val"`), we determined we must actively bypass `ast.parse` and route execution through `xonsh.execer.Execer` to prevent the agent from instantly crashing.
 4. **The Elegance of the `ExtensionContext` Wrapper:** The boundary between built-in tools and the interactive UI is incredibly well architected. When T9 investigated `extensions/wrapper.ts`, it discovered that built-in tools are dynamically wrapped at runtime to receive the `ExtensionContext`. This meant our new `xonsh.ts` automatically inherited access to `ctx.ui` without extra wiring, allowing it to instantly render loading animations or prompt the user with interactive menus if a kernel gets busy during an interrupt.
 5. **The Power of Hierarchical Swarm Verification:** Using a bounded pool of 5 `flash` subagents concurrently to read and verify source claims—and then assigning 3 specialized planners (T16, T17, T18) to digest the 954-line grep document—prevented massive context bloat. We mapped an exact 123-file parity replacement plan in mere minutes without getting bogged down in unrelated files.
+
+
+### Restoration audit
+Source: local worktree and Git history on 2026-09-13.
+
+- The active plan pointer already names `2026-09-13-xonsh-integration`.
+- The tracked worktree has no pending diff.
+- Branch `xonsh-repl` contains implementation commits `2afc64266` and `20a0bd555`, followed by planning documentation commits.
+- `packages/coding-agent/src/core/tools/xonsh.ts` and `packages/coding-agent/test/suite/xonsh.test.ts` are present in `HEAD`.
+- `.planning/2026-09-13-xonsh-integration/prompt_draft.md` is untracked. It proposes a separate, broader parity pass and requires user approval before execution; it must not be treated as completed work.
+
+- `handoff.md` is stale: it still describes the start of Phase 2, while `task_plan.md`, later commits, and `progress.md` record completion through Phase 4.
+- The two implementation commits changed `agent-session.ts`, `kernel/bootstrap.ts`, `tools/index.ts`, added `tools/xonsh.ts`, and added `test/suite/xonsh.test.ts`; they did not implement the broader 123-file parity proposal described by the untracked prompt draft.
+
+- The committed `xonsh.test.ts` suite primarily verifies metadata, wrapping, AgentSession routing with faux/mock provisioners, result formatting, and lifecycle behavior. It contains no test that starts a real xonsh process or executes xonsh shell syntax.
+- `XonshKernelProvisioner.startKernel()` passes `options.xonsh ?? options.python` into `ReplKernelManager`'s `python` option, but otherwise uses the same `rlm.repl` runtime and identical bootstrap code as ipython. With default options this selects the normal provisioned Python interpreter, not a xonsh executable.
+- The current implementation therefore establishes a second tool identity and session routing, but does not yet prove or provide xonsh-language execution. This matches the broader follow-up work identified in `prompt_draft.md` and is a delivery blocker if “xonsh integration” means shell-syntax support.
+- `git diff --check 2afc64266^..20a0bd555` reports pre-existing trailing whitespace in two committed planning-document lines. The source-code diff was not reached in the original chained command because `git diff --check` returned exit code 2.
+
+### Hcom AGY execution constraints
+- Worker launch form: `hcom agy --headless --go --tag worker-$ROLE --hcom-prompt "$INITIAL_PROMPT"`.
+- Coordinator must parse generated names from launch output, use thread-isolated messages, forbid recursive delegation, and cap active workers at 5.
+- Existing worker pool is empty; one unrelated inactive hcom agent (`tori`) does not consume this task's pool.
+
+### Delegation ownership preference
+- If worker reads all or most context needed for a change, same worker should implement that change rather than hand work back as read-only analysis. Dispatch tranches with implementation ownership when scope is sufficiently bounded.
+- Use separate read-only reviewers only after implementation is stabilized.
+
+### JSON inspection preference
+- User requires `jq` wherever possible when reading JSON. Python `json` remains acceptable for constructing/writing runtime state, but inspection should use `jq`.
+
+### Antigravity fan-out launch blocker
+- `T7-core`, `T7-events`, and `T7-ui` launchers reached an empty Antigravity prompt but hcom classified them `launch_blocked` because readiness detection settled before binding; their initial prompts were not delivered. Repair by inspecting PTY and injecting each already-prepared tranche prompt, not by launching replacement workers (which would exceed/duplicate pool entries).
+- Clarification: `jq` is preferred chiefly to filter/project JSON before output reaches model context. Python `json` is allowed for any JSON work when it is not materially more verbose; avoid dumping large raw JSON directly into context.
+
+### Worker SITREP blocker after compaction
+- All four Antigravity workers eventually became launcher-ready, but their terminal screens report `Individual quota reached` with reset near 167 hours. `hcom list --json` shows `hooks_bound: false`, `process_bound: true`, and 2–3 unread messages each, so requested SITREPs cannot be processed normally.
+- No runtime/core/events/UI code files are modified in `git status`; only pre-existing planning and unrelated untracked paths appear. Thus no worker implementation can yet be accepted.
+- Keep all workers alive per user instruction; do not terminate them.

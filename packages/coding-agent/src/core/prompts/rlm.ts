@@ -27,29 +27,32 @@ const SIMPLIFIED_TECHNICAL_ENGLISH_PROMPT = [
 	"Treat this as clarity guidance, not a claim of formal ASD-STE100 compliance. Preserve a user-requested format, tone, terminology, and necessary precision.",
 ].join("\n");
 
-const REPL_CONTROL_PROMPT = [
-	"The `ipython` tool is a persistent Python REPL — the agent's long-lived control environment for reasoning, context management, state, tool orchestration, and recursive subcalls. Top-level `await` works directly. Use it to keep intermediate variables, inspect and transform outputs, and write small helper functions. Compaction removes individual variables whose serialized form exceeds 16 MiB; keep large source data on disk and reload it when needed.",
-	"",
-	"Python is the orchestration language: use Python for loops, conditionals, parsing, and state. Use `bash()` to invoke programs, not to write shell programs — no shell loops or heredocs; do those in Python.",
-	"",
-	"Do not assume the REPL is the native runtime of the external thing being investigated. A repository, package, service, dataset, paper, website, benchmark, or API may have its own environment and normal interface. Evaluate external systems through their own interface, then use the REPL to coordinate the process and analyze what comes back.",
-	"",
-	"`bash(command)` starts a shell command in the background and returns a handle immediately: `h = bash('npm test')`. Use `h.pid` / `h.running` for liveness, `h.tail(n)` / `h.output()` for combined stdout+stderr so far, `h.poll()` for a non-blocking result, `h.kill()` to terminate (SIGTERM, escalating to SIGKILL; on Windows kill() uses taskkill /T and detached or reparented descendants may survive), and `await h` (or `await bash('cmd')`) for the completed result with exit_code, output, and duration. Prefer bash() for long-running commands so the turn keeps working. Run shell commands with `bash()`, not `subprocess`/`os.system`: subprocess calls block the kernel, show the user nothing while they run, and spawn processes the harness cannot see or stop.",
-	"",
-	"Important: do not install dependencies into the kernel just to make an external project import or run there. If a project import, test, script, CLI, or dependency check is needed, run it through that project's own environment and normal command interface. For example, in a Python repo use its documented commands, `uv run ...`, `.venv/bin/python ...`, or the active project interpreter from the repo root. Treat failures from that native environment as the relevant result.",
-	"",
-	"Use Python for reading, searching, and editing files — it gives you reusable variables you can slice, filter, and act on without re-reading. Always assign read/search results to named variables so you can revisit them later.",
-	"",
-	"Each `bash()` call is its own process, so shell state does not persist between calls; use `os.chdir(...)` for the working directory and `os.environ[...]` for environment variables — both persist in the REPL and apply to later `bash()` calls.",
-	"",
-	"Python state in the kernel persists across cells: named variables, helper functions, classes, imports, notes, parsed outputs, and helper data structures all remain available in every later turn. Tool calls are themselves Python `await` expressions, so their return values can be bound to variables and composed into program logic just like any other call.",
-	"",
-	"Continual harness state is available as `rlm.harness` and `rlm.get_harness_state()`. CRUD calls are local to this Prime Agent session by default: `rlm.harness.create_memory(...)`, `rlm.harness.update_memory(...)`, `rlm.harness.delete_memory(...)`, `rlm.harness.create_skill(...)`, `rlm.harness.update_skill(...)`, `rlm.harness.delete_skill(...)`, `rlm.harness.create_subagent(...)`, `rlm.harness.update_subagent(...)`, `rlm.harness.delete_subagent(...)`, `rlm.harness.create_prompt_note(...)`, `rlm.harness.update_prompt_note(...)`, `rlm.harness.delete_prompt_note(...)`, plus `rlm.harness.record_refinement(...)` and `rlm.harness.overview()`. Use `global_=True` only for stable cross-session lessons; Python reserves `global`, so literal `global=True` is invalid syntax.",
-	"",
-	"Terminology: continual harness names the persisted prompt, memory, skill, and subagent layer; RLM names the runtime, Python REPL kernel, and native call interface exposed to the model.",
-	"",
-	"RLM-native call contract: installed Python skills are pre-imported modules. Read the matching SKILL.md and call its documented function, such as `await <skill_import>.<function>(...)`; when a CLI exists, use `<skill_import> ...` from shell. Continual harness skill entries are Python REPL skills with an explicit Python `reference` and `arguments` contract. Spawn a reusable delegation spec with `await rlm('sub-task')`; admission returns a child handle immediately. Results arrive only through an available messaging capability or files, never as an `rlm()` return value. Do not invent non-native wrappers such as `call_skill(...)` or `run_subagent(...)`.",
-].join("\n");
+const REPL_CONTROL_PROMPT = (toolName: "ipython" | "xonsh"): string =>
+	[
+		toolName === "xonsh"
+			? "The `xonsh` tool is a persistent Xonsh REPL — the agent's long-lived control environment for reasoning, context management, state, tool orchestration, and recursive subcalls. Top-level `await` works directly. Execute Python and shell syntax in the same persistent state; direct shell commands and `bash()` are available. Compaction removes individual variables whose serialized form exceeds 16 MiB; keep large source data on disk and reload it when needed."
+			: "The `ipython` tool is a persistent Python REPL — the agent's long-lived control environment for reasoning, context management, state, tool orchestration, and recursive subcalls. Top-level `await` works directly. Use it to keep intermediate variables, inspect and transform outputs, and write small helper functions. Compaction removes individual variables whose serialized form exceeds 16 MiB; keep large source data on disk and reload it when needed.",
+		"",
+		"Python is the orchestration language: use Python for loops, conditionals, parsing, and state. Use `bash()` to invoke programs, not to write shell programs — no shell loops or heredocs; do those in Python.",
+		"",
+		"Do not assume the REPL is the native runtime of the external thing being investigated. A repository, package, service, dataset, paper, website, benchmark, or API may have its own environment and normal interface. Evaluate external systems through their own interface, then use the REPL to coordinate the process and analyze what comes back.",
+		"",
+		"`bash(command)` starts a shell command in the background and returns a handle immediately: `h = bash('npm test')`. Use `h.pid` / `h.running` for liveness, `h.tail(n)` / `h.output()` for combined stdout+stderr so far, `h.poll()` for a non-blocking result, `h.kill()` to terminate (SIGTERM, escalating to SIGKILL; on Windows kill() uses taskkill /T and detached or reparented descendants may survive), and `await h` (or `await bash('cmd')`) for the completed result with exit_code, output, and duration. Prefer bash() for long-running commands so the turn keeps working. Run shell commands with `bash()`, not `subprocess`/`os.system`: subprocess calls block the kernel, show the user nothing while they run, and spawn processes the harness cannot see or stop.",
+		"",
+		"Important: do not install dependencies into the kernel just to make an external project import or run there. If a project import, test, script, CLI, or dependency check is needed, run it through that project's own environment and normal command interface. For example, in a Python repo use its documented commands, `uv run ...`, `.venv/bin/python ...`, or the active project interpreter from the repo root. Treat failures from that native environment as the relevant result.",
+		"",
+		"Use Python for reading, searching, and editing files — it gives you reusable variables you can slice, filter, and act on without re-reading. Always assign read/search results to named variables so you can revisit them later.",
+		"",
+		"Each `bash()` call is its own process, so shell state does not persist between calls; use `os.chdir(...)` for the working directory and `os.environ[...]` for environment variables — both persist in the REPL and apply to later `bash()` calls.",
+		"",
+		"Python state in the kernel persists across cells: named variables, helper functions, classes, imports, notes, parsed outputs, and helper data structures all remain available in every later turn. Tool calls are themselves Python `await` expressions, so their return values can be bound to variables and composed into program logic just like any other call.",
+		"",
+		"Continual harness state is available as `rlm.harness` and `rlm.get_harness_state()`. CRUD calls are local to this Prime Agent session by default: `rlm.harness.create_memory(...)`, `rlm.harness.update_memory(...)`, `rlm.harness.delete_memory(...)`, `rlm.harness.create_skill(...)`, `rlm.harness.update_skill(...)`, `rlm.harness.delete_skill(...)`, `rlm.harness.create_subagent(...)`, `rlm.harness.update_subagent(...)`, `rlm.harness.delete_subagent(...)`, `rlm.harness.create_prompt_note(...)`, `rlm.harness.update_prompt_note(...)`, `rlm.harness.delete_prompt_note(...)`, plus `rlm.harness.record_refinement(...)` and `rlm.harness.overview()`. Use `global_=True` only for stable cross-session lessons; Python reserves `global`, so literal `global=True` is invalid syntax.",
+		"",
+		"Terminology: continual harness names the persisted prompt, memory, skill, and subagent layer; RLM names the runtime, Python REPL kernel, and native call interface exposed to the model.",
+		"",
+		"RLM-native call contract: installed Python skills are pre-imported modules. Read the matching SKILL.md and call its documented function, such as `await <skill_import>.<function>(...)`; when a CLI exists, use `<skill_import> ...` from shell. Continual harness skill entries are Python REPL skills with an explicit Python `reference` and `arguments` contract. Spawn a reusable delegation spec with `await rlm('sub-task')`; admission returns a child handle immediately. Results arrive only through an available messaging capability or files, never as an `rlm()` return value. Do not invent non-native wrappers such as `call_skill(...)` or `run_subagent(...)`.",
+	].join("\n");
 
 export interface ChildAgentDoctrineOptions {
 	depth?: number;
@@ -60,14 +63,17 @@ export interface ChildAgentDoctrineOptions {
 
 export function buildChildAgentDoctrine(options: ChildAgentDoctrineOptions): string | undefined {
 	const depth = options.depth ?? 0;
-	const hasIpython = options.activeTools === undefined || options.activeTools.includes("ipython");
+	const hasRepl =
+		options.activeTools === undefined ||
+		options.activeTools.includes("ipython") ||
+		options.activeTools.includes("xonsh");
 	const hasAgentMessage = options.installedSkills?.includes("agent_message") ?? false;
 	if (depth <= 0) return undefined;
 
 	const lines = [
 		`You are a child agent spawned by ${options.parentAgent ?? "your parent agent"}. Task prompts are labeled \`[task from parent]\`.`,
 	];
-	if (hasAgentMessage && hasIpython) {
+	if (hasAgentMessage && hasRepl) {
 		lines.push(
 			'When a task calls for an answer, reply explicitly with `await agent_message.send(message, receiver_role="parent")`. Not every message or task needs a reply; continue cleanup after sending and go idle normally.',
 		);
@@ -84,7 +90,10 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 	const depth = options.depth ?? 0;
 	const activeTools = options.activeTools ?? [];
 	const hasIpython = options.activeTools === undefined ? true : activeTools.includes("ipython");
-	const canRunShellSkills = hasIpython || activeTools.includes("bash");
+	const hasXonsh = options.activeTools?.includes("xonsh") ?? false;
+	const hasRepl = hasIpython || hasXonsh;
+	const replToolName: "ipython" | "xonsh" = hasXonsh ? "xonsh" : "ipython";
+	const canRunShellSkills = hasRepl || activeTools.includes("bash");
 	const parts = [
 		"You are a general purpose agent that uses code to solve tasks.",
 		"You solve tasks by breaking down problems into sub-tasks, writing and executing code, observing results, and iterating one step at a time.",
@@ -113,7 +122,7 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 	}
 	if (installedSkills.length > 0) {
 		const installed = installedSkills.map((skill) => `\`${skill}\``).join(", ");
-		if (hasIpython) {
+		if (hasRepl) {
 			skillLines.push(`Installed Python skill modules (pre-imported): ${installed}.`);
 			skillLines.push(
 				"Read each skill's SKILL.md for its API. Inspect a module with `help(<skill>)` or `dir(<skill>)`, then inspect a documented callable with `inspect.signature(<skill>.<function>)`.",
@@ -126,7 +135,7 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 				"Each skill is also available as a shell command by the same name: `<skill> ...`. Discover its CLI usage with `<skill> --help`.",
 			);
 		}
-		if (hasIpython && installedSkills.includes("edit")) {
+		if (hasRepl && installedSkills.includes("edit")) {
 			skillLines.push(
 				"For targeted existing-file edits, prefer the pre-imported async `edit` skill from the REPL: `old = '''...'''; new = '''...'''; await edit(path=\"pkg/file.py\", old_str=old, new_str=new)`. Use exact old/new strings; if the text contains triple double quotes, use triple single-quoted variables or build `old`/`new` from inspected file slices.",
 			);
@@ -146,14 +155,14 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 		);
 	}
 
-	if (depth === 0 && hasIpython) {
+	if (depth === 0 && hasRepl) {
 		parts.push(
 			"",
 			"From a daemon-backed depth-0 session, use `await rlm.create_session('task', name='researcher')` to start a separate top-level session. The call returns after the daemon creates the session and accepts its first prompt. Inline and nested sessions cannot use it. `rlm(...)` still creates a child.",
 		);
 	}
 
-	if (allowRecursion && hasIpython) {
+	if (allowRecursion && hasRepl) {
 		parts.push(
 			"",
 			"A callable `rlm` is already in your global namespace. `await rlm('sub-task')` spawns a child and returns immediately after task admission with `rlm_child_id`, `name`, `session_dir`, and `model`; it never waits for or returns the child's answer.",
@@ -180,8 +189,8 @@ export function buildRlmPrompt(options: RlmPromptOptions): string {
 		);
 	}
 
-	if (hasIpython) {
-		parts.push("", REPL_CONTROL_PROMPT);
+	if (hasRepl) {
+		parts.push("", REPL_CONTROL_PROMPT(replToolName));
 		if (installedSkills.includes("refine")) {
 			parts.push(
 				"",

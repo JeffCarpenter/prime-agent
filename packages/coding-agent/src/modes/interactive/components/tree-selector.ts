@@ -884,6 +884,14 @@ class TreeList implements Component {
 					.slice(0, 50);
 				return `[ipython: ${code}${rawCode.length > 50 ? "..." : ""}]`;
 			}
+			case "xonsh": {
+				const rawCode = String(args.code || "");
+				const code = rawCode
+					.replace(/[\n\t]/g, " ")
+					.trim()
+					.slice(0, 50);
+				return `[xonsh: ${code}${rawCode.length > 50 ? "..." : ""}]`;
+			}
 			default: {
 				// Custom tool - show name and truncated JSON args
 				const argsStr = JSON.stringify(args).slice(0, 40);

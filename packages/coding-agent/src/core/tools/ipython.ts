@@ -579,6 +579,7 @@ async function executeWithBusyKernelChoice(
 		try {
 			return {
 				result: await m.execute(code, {
+					mode: "python",
 					signal,
 					onStream,
 					onLateSentAgentMessage: onLateSentAgentMessage

@@ -1,4 +1,4 @@
-import { parseIpythonBashCell } from "./ipython-cell-code.js";
+import { parseReplBashCell } from "./ipython-cell-code.js";
 
 const DESCRIPTOR_MAX_WIDTH = 64;
 
@@ -25,7 +25,7 @@ const HEREDOC_PATTERN = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/;
 const PATH_ASSIGN_PATTERN = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:Path|pathlib\.Path)\(["']([^"']+)["']\)/;
 const STRING_ASSIGN_PATTERN = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*["']([^"']+)["']/;
 
-export type CodePreviewLanguage = "bash" | "python";
+export type CodePreviewLanguage = "bash" | "python" | "xonsh";
 
 export interface CodePreview {
 	language: CodePreviewLanguage;
@@ -531,9 +531,80 @@ export function previewPythonCode(code: string): CodePreview {
 
 export function previewIpythonCode(code: string): CodePreview {
 	const trimmedCode = code.trimEnd();
-	const bashCell = parseIpythonBashCell(trimmedCode);
+	const bashCell = parseReplBashCell(trimmedCode);
 	if (bashCell) {
 		return previewBashCommand(bashCell.body);
 	}
+	return previewPythonCode(trimmedCode);
+}
+
+const XONSH_ENV_ASSIGNMENT_PATTERN = /^\s*\$[A-Za-z_][A-Za-z0-9_]*\s*(?:\+?=)/;
+const XONSH_SUBPROCESS_PATTERN = /^\s*(\$\(|!\(|@\(|\$\[)/;
+const XONSH_BANG_COMMAND_PATTERN = /^\s*!\s*\S/;
+const XONSH_SHELL_COMMAND_PATTERN =
+	/^\s*(?:cd|echo|exec|export|git|grep|ls|make|mkdir|npm|pnpm|pip|printf|pwd|rm|rmdir|sed|source|tee|touch|uv|which|whoami|cat|cp|mv|python(?:3)?|node|pytest|vitest)\b/;
+const XONSH_PYTHON_STATEMENT_PATTERN =
+	/^\s*(?:assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|lambda|nonlocal|pass|raise|return|try|while|with|yield)\b/;
+const XONSH_ASSIGNMENT_PATTERN = /^\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*\[[^\]]+\])?\s*=/;
+const XONSH_PYTHON_OPERATOR_PATTERN =
+	/(?:==|!=|<=|>=|:=|\*\*|(?:^|\s)[+*%](?:\s|$)|(?:^|\s)-(?:\s|$)|\s\/\s|\b(?:in|is|and|or)\b)/;
+
+function isLikelyXonshShellCommand(code: string): boolean {
+	const firstLine = code.split(/\r?\n/, 1)[0]?.trim() ?? "";
+	if (!firstLine || XONSH_PYTHON_STATEMENT_PATTERN.test(firstLine) || XONSH_ASSIGNMENT_PATTERN.test(firstLine)) {
+		return false;
+	}
+	if (XONSH_SHELL_COMMAND_PATTERN.test(firstLine)) {
+		return true;
+	}
+	// Native Xonsh permits any executable, not only a fixed set of common tools.
+	// Require an argument or shell path to avoid treating a Python name as a command.
+	if (!/^(?:[A-Za-z_][A-Za-z0-9_.-]*|[.~/][^\s]*)\s+\S/.test(firstLine)) {
+		return false;
+	}
+	return !XONSH_PYTHON_OPERATOR_PATTERN.test(firstLine);
+}
+
+function xonshSubprocessBody(code: string): string | undefined {
+	const match = code.match(XONSH_SUBPROCESS_PATTERN);
+	if (!match) return undefined;
+	const body = code.slice(match[0].length);
+	const closing = (match[1] ?? "").endsWith("[") ? "]" : ")";
+	return body.endsWith(closing) ? body.slice(0, -1).trim() : body.trim();
+}
+
+/**
+ * Preview a cell executed by the native Xonsh REPL.
+ *
+ * Xonsh accepts ordinary Python as well as shell commands and subprocess
+ * expressions. Keep Python previews on the existing heuristics, while making
+ * the shell form explicit so the cell renderer can show the right language.
+ */
+export function previewXonshCode(code: string): CodePreview {
+	const trimmedCode = code.trimEnd();
+	if (!trimmedCode.trim()) {
+		return { language: "xonsh", text: "" };
+	}
+
+	if (XONSH_ENV_ASSIGNMENT_PATTERN.test(trimmedCode)) {
+		return { language: "xonsh", text: descriptor(trimmedCode.split(/\r?\n/, 1)[0] ?? trimmedCode) };
+	}
+
+	const subprocessBody = xonshSubprocessBody(trimmedCode);
+	if (subprocessBody !== undefined) {
+		const preview = previewBashCommand(subprocessBody);
+		return { language: "xonsh", text: preview.text || descriptor(subprocessBody) };
+	}
+
+	if (XONSH_BANG_COMMAND_PATTERN.test(trimmedCode)) {
+		const preview = previewBashCommand(trimmedCode.replace(/^\s*!\s*/, ""));
+		return { language: "xonsh", text: preview.text || descriptor(trimmedCode) };
+	}
+
+	if (isLikelyXonshShellCommand(trimmedCode)) {
+		const preview = previewBashCommand(trimmedCode);
+		return { language: "xonsh", text: preview.text || descriptor(trimmedCode) };
+	}
+
 	return previewPythonCode(trimmedCode);
 }

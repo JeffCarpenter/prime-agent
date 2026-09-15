@@ -18,7 +18,13 @@ import { DefaultResourceLoader } from "./resource-loader.js";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
 import { time } from "./timings.js";
-import { createBashTool, createEditTool, createIpythonTool, withFileMutationQueue } from "./tools/index.js";
+import {
+	createBashTool,
+	createEditTool,
+	createIpythonTool,
+	createXonshTool,
+	withFileMutationQueue,
+} from "./tools/index.js";
 
 export interface CreateAgentSessionOptions extends AgentSessionCreationOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
@@ -42,14 +48,14 @@ export interface CreateAgentSessionOptions extends AgentSessionCreationOptions {
 	 * Optional default tool suppression mode when no explicit allowlist is provided.
 	 *
 	 * - "all": start with no tools enabled
-	 * - "builtin": disable the default built-in tool (ipython)
+	 * - "builtin": disable the default built-in tools (xonsh and ipython)
 	 *   but keep extension/custom tools enabled
 	 */
 	noTools?: "all" | "builtin";
 	/**
 	 * Optional allowlist of tool names.
 	 *
-	 * When omitted, pi enables the default built-in tool (ipython)
+	 * When omitted, pi enables the default built-in tool (xonsh); ipython remains available when explicitly selected
 	 * and leaves extension/custom tools enabled unless `noTools` changes that default.
 	 * When provided, only the listed tool names are enabled.
 	 */
@@ -101,7 +107,7 @@ export type { CreateRlmSubagentRuntimeOptions, RlmSubagentRuntime, SubagentRunti
 export type { Skill } from "./skills.js";
 export type { Tool } from "./tools/index.js";
 
-export { createBashTool, createEditTool, createIpythonTool, withFileMutationQueue };
+export { createBashTool, createEditTool, createIpythonTool, createXonshTool, withFileMutationQueue };
 
 function getDefaultAgentDir(): string {
 	return getAgentDir();
@@ -136,7 +142,7 @@ function getDefaultAgentDir(): string {
  * await loader.reload();
  * const { session } = await createAgentSession({
  *   model: myModel,
- *   tools: ["ipython"],
+ *   tools: ["xonsh"],
  *   resourceLoader: loader,
  *   sessionManager: SessionManager.inMemory(),
  * });
@@ -235,7 +241,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const allowedToolNames = options.allowedToolNames ?? options.tools ?? (options.noTools === "all" ? [] : undefined);
 	const includeGoals = options.includeGoals ?? (options.tools !== undefined || options.noTools !== "all");
 	const initialActiveToolNames: string[] =
-		options.initialActiveToolNames ?? (options.tools ? [...options.tools] : options.noTools ? [] : ["ipython"]);
+		options.initialActiveToolNames ?? (options.tools ? [...options.tools] : options.noTools ? [] : ["xonsh"]);
 
 	let agent: Agent;
 
@@ -372,6 +378,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		subagentRuntimeHost: options.subagentRuntimeHost,
 		sessionStartEvent: options.sessionStartEvent,
 		prewarmIpythonKernel: options.prewarmIpythonKernel,
+		prewarmXonshKernel: options.prewarmXonshKernel,
 		autonomous: options.autonomous,
 		serializedRefine: options.serializedRefine,
 		initialGoal: options.initialGoal,

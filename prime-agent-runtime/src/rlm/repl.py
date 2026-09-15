@@ -31,6 +31,13 @@ from typing import Any
 
 from .bash import _kill_live_handles
 
+try:
+    from xonsh.built_ins import XSH as _XONSH_SESSION
+    from xonsh.execer import Execer as _XONSH_EXECER
+except ImportError:  # xonsh is an optional kernel extra, loaded only for xonsh cells.
+    _XONSH_SESSION = None
+    _XONSH_EXECER = None
+
 PROTOCOL_VERSION = 3
 
 DEFAULT_SNAPSHOT_MAX_BYTES = 256 * 1024 * 1024
@@ -65,6 +72,8 @@ _pending_host: dict[str, "asyncio.Future[dict[str, Any]]"] = {}
 # Set on the loop thread once stdin hits EOF or a shutdown request arrives; no
 # host reply can arrive after that, so waiting (and future) host_request calls fail.
 _host_closed = False
+_xonsh_execer: Any = None
+_xonsh_namespace: dict[str, Any] | None = None
 
 # Interrupt bookkeeping shared between the reader thread and the loop thread.
 _interrupt_lock = threading.Lock()
@@ -494,9 +503,39 @@ def _interrupt_event(cell_id: str, exc: BaseException) -> dict[str, Any]:
     return {"event": "error", "id": cell_id, "ename": "KeyboardInterrupt", "evalue": "", "traceback": lines}
 
 
-def _compile_cell(code: str, filename: str) -> tuple[list[types.CodeType], bool]:
-    """Compile a cell; a trailing expression compiles separately in eval mode."""
+def _compile_xonsh_cell(code: str, filename: str, ns: dict[str, Any]) -> tuple[list[types.CodeType], bool]:
+    """Compile native Xonsh syntax against the persistent Xonsh session."""
+    global _xonsh_execer, _xonsh_namespace
+    if _XONSH_EXECER is None or _XONSH_SESSION is None:
+        raise RuntimeError("xonsh is not installed in this kernel")
+    if _xonsh_execer is None:
+        _xonsh_execer = _XONSH_EXECER(filename=filename)
+        _XONSH_SESSION.load(execer=_xonsh_execer, ctx=ns)
+        _xonsh_namespace = ns
+    elif _xonsh_namespace is not ns:
+        raise RuntimeError("Xonsh session namespace changed")
+    tree = _xonsh_execer.parse(code, ns, filename=filename, transform=True)
+    trailing: ast.Expression | None = None
+    if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[-1], ast.Expr):
+        trailing = ast.Expression(tree.body.pop().value)
+    flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+    codes: list[types.CodeType] = []
+    if tree is not None and (not isinstance(tree, ast.Module) or tree.body):
+        codes.append(compile(tree, filename, "exec", flags=flags, dont_inherit=True))
+    if trailing is not None:
+        codes.append(compile(trailing, filename, "eval", flags=flags, dont_inherit=True))
+    return codes, trailing is not None
+
+
+def _compile_cell(code: str, filename: str, mode: str = "python", ns: dict[str, Any] | None = None) -> tuple[list[types.CodeType], bool]:
+    """Compile a cell; Xonsh mode transforms shell syntax before Python compilation."""
     linecache.cache[filename] = (len(code), None, code.splitlines(keepends=True), filename)
+    if mode == "xonsh":
+        if ns is None:
+            raise RuntimeError("Xonsh compilation requires a namespace")
+        return _compile_xonsh_cell(code, filename, ns)
+    if mode != "python":
+        raise ValueError(f"unknown execution mode: {mode!r}")
     tree = ast.parse(code, filename)
     trailing: ast.Expression | None = None
     if tree.body and isinstance(tree.body[-1], ast.Expr):
@@ -559,7 +598,10 @@ async def _handle_execute(req: dict[str, Any], ns: dict[str, Any]) -> None:
     cell_token = _current_cell.set(cell_id)
     execution_token = _current_cell_execution.set(execution)
     try:
-        codes, has_trailing = _compile_cell(req["code"], filename)
+        mode = req.get("mode", "python")
+        if not isinstance(mode, str):
+            raise ValueError("execute mode must be a string")
+        codes, has_trailing = _compile_cell(req["code"], filename, mode, ns)
         assert _loop is not None
         task = _loop.create_task(_run_codes(codes, ns))
         execution.owner = task
@@ -999,6 +1041,9 @@ def _handle_request_line(raw: bytes, queue: asyncio.Queue[dict[str, Any]]) -> No
     if not isinstance(req, dict):
         raise ValueError("request is not a JSON object")
     rtype = req.get("type")
+    if rtype == "execute" and req.get("mode", "python") not in ("python", "xonsh"):
+        _protocol_error(f"unknown execution mode: {req.get('mode')!r}")
+        return
     if rtype == "interrupt":
         if "id" in req and not isinstance(req["id"], str):
             _protocol_error("interrupt request id must be a string")

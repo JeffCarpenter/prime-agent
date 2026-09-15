@@ -22,6 +22,8 @@ import {
 	RLM_CHILD_TERMINAL_NOTICE_CUSTOM_TYPE,
 	type RlmChildFailureDetails,
 	type RlmChildTerminalNoticeDetails,
+	XONSH_STATE_RESTORED_CUSTOM_TYPE,
+	type XonshStateRestoredDetails,
 } from "../../../core/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { agentMessageSummaryLine } from "./agent-message.js";
@@ -43,6 +45,7 @@ export function isInjectedPromptMessage(message: AgentMessage): message is Injec
 			message.customType === HEARTBEAT_PROMPT_CUSTOM_TYPE ||
 			message.customType === GOAL_CONTEXT_CUSTOM_TYPE ||
 			message.customType === IPYTHON_STATE_RESTORED_CUSTOM_TYPE ||
+			message.customType === XONSH_STATE_RESTORED_CUSTOM_TYPE ||
 			message.customType === RLM_CHILD_FAILURE_CUSTOM_TYPE ||
 			message.customType === RLM_CHILD_TERMINAL_NOTICE_CUSTOM_TYPE)
 	);
@@ -117,7 +120,11 @@ export class InjectedPromptMessageComponent extends Container {
 		this.content.clear();
 		this.header.setText(this.headerText());
 		this.content.addChild(this.header);
-		if (this.expanded && this.message.customType !== IPYTHON_STATE_RESTORED_CUSTOM_TYPE) {
+		if (
+			this.expanded &&
+			this.message.customType !== IPYTHON_STATE_RESTORED_CUSTOM_TYPE &&
+			this.message.customType !== XONSH_STATE_RESTORED_CUSTOM_TYPE
+		) {
 			this.content.addChild(
 				new Markdown(readCustomText(this.message), 1, 0, this.markdownTheme, {
 					color: (text: string) => theme.fg("customMessageText", text),
@@ -140,9 +147,14 @@ export class InjectedPromptMessageComponent extends Container {
 				agentMessageSummaryLine(ASYNC_BASH_COMPLETION_PREVIEW_LABEL, participant, status) + theme.fg("dim", hint)
 			);
 		}
-		if (this.message.customType === IPYTHON_STATE_RESTORED_CUSTOM_TYPE) {
-			const details = this.message.details as IpythonStateRestoredDetails | undefined;
-			const label = details?.restored === false ? "Started fresh Python kernel" : "Restored Python kernel state";
+		if (
+			this.message.customType === IPYTHON_STATE_RESTORED_CUSTOM_TYPE ||
+			this.message.customType === XONSH_STATE_RESTORED_CUSTOM_TYPE
+		) {
+			const details = this.message.details as IpythonStateRestoredDetails | XonshStateRestoredDetails | undefined;
+			const kernelName = this.message.customType === XONSH_STATE_RESTORED_CUSTOM_TYPE ? "Xonsh" : "Python";
+			const label =
+				details?.restored === false ? `Started fresh ${kernelName} kernel` : `Restored ${kernelName} kernel state`;
 			return `${theme.fg("accent", "◆")} ${theme.fg("muted", label)}`;
 		}
 		if (

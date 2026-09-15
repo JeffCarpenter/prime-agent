@@ -3030,7 +3030,7 @@ export class InteractiveMode {
 	}
 
 	private registerIpythonToolComponent(toolName: string, toolCallId: string, component: ToolExecutionComponent): void {
-		if (toolName !== "ipython") {
+		if (toolName !== "ipython" && toolName !== "xonsh") {
 			return;
 		}
 		this.ipythonToolComponents.set(toolCallId, component);
@@ -5671,6 +5671,7 @@ export class InteractiveMode {
 				break;
 			}
 
+			case "xonsh_sent_agent_message":
 			case "ipython_sent_agent_message": {
 				const messages = this.lateIpythonSentAgentMessages.get(event.toolCallId) ?? [];
 				if (!messages.some((message) => message.id === event.message.id)) {

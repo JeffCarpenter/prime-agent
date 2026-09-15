@@ -65,7 +65,11 @@ export interface KernelStartOptions {
 	signal?: AbortSignal;
 }
 
+export type KernelExecutionMode = "python" | "xonsh";
+
 export interface ExecuteOptions {
+	/** Syntax used to compile this cell in the persistent kernel. */
+	mode?: KernelExecutionMode;
 	/** Aborting interrupts the kernel out-of-band. */
 	signal?: AbortSignal;
 	onStream?: (chunk: string, name: "stdout" | "stderr") => void;

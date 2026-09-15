@@ -449,7 +449,7 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
 
 	const lines = [
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		"Use ipython to inspect a skill's file when the task matches its description.",
+		"Use xonsh to inspect a skill's file when the task matches its description. Use ipython to inspect a skill's file in IPython sessions.",
 		"Skills with a python_import are prepared in the persistent Python kernel when available and can be called directly by that import name.",
 		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
 		"",

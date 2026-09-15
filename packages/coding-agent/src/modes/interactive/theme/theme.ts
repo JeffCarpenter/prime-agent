@@ -1233,6 +1233,7 @@ export function getLanguageFromPath(filePath: string): string | undefined {
 		mjs: "javascript",
 		cjs: "javascript",
 		py: "python",
+		xsh: "python",
 		rb: "ruby",
 		rs: "rust",
 		go: "go",

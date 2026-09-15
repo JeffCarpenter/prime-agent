@@ -64,13 +64,15 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const contextFiles = providedContextFiles ?? [];
 	const skills = providedSkills ?? [];
-	const tools = selectedTools ?? ["ipython"];
+	const tools = selectedTools ?? ["xonsh"];
 	const hasIpython = tools.includes("ipython");
+	const hasXonsh = tools.includes("xonsh");
+	const hasRepl = hasIpython || hasXonsh;
 	const hasBash = tools.includes("bash");
 	const visibleSkills = skills.filter((skill) => !skill.disableModelInvocation);
 	const visiblePythonSkillImportNames = getPythonSkillRuntimeInfo(visibleSkills).map((skill) => skill.importName);
 	const hasRefineSkill = visibleSkills.some((skill) => skill.name === REFINE_SKILL_NAME);
-	const genericMcpSection = hasIpython ? formatGenericMcpGuidance(options.genericMcpServers) : "";
+	const genericMcpSection = hasRepl ? formatGenericMcpGuidance(options.genericMcpServers) : "";
 
 	if (customPrompt) {
 		let prompt = customPrompt;
@@ -86,7 +88,10 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 		// Append skills section only when the model has a way to inspect skill files.
 		const customPromptHasFileAccess =
-			!selectedTools || selectedTools.includes("ipython") || selectedTools.includes("bash");
+			!selectedTools ||
+			selectedTools.includes("ipython") ||
+			selectedTools.includes("xonsh") ||
+			selectedTools.includes("bash");
 		if (customPromptHasFileAccess && skills.length > 0) {
 			prompt += formatSkillsForPrompt(skills);
 		}
@@ -106,7 +111,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		}
 
 		if (harnessState) {
-			prompt += `\n\n${formatHarnessStateForPrompt(harnessState, { includeIpythonExamples: hasIpython, includeShellExamples: hasBash, includeRefineExamples: hasIpython && hasRefineSkill })}`;
+			prompt += `\n\n${formatHarnessStateForPrompt(harnessState, { includeIpythonExamples: hasIpython, includeXonshExamples: hasXonsh, includeShellExamples: hasBash, includeRefineExamples: hasRepl && hasRefineSkill })}`;
 		}
 
 		if (genericMcpSection) {
@@ -124,7 +129,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		cwd: promptCwd,
 		messagesPath: promptMessagesPath,
 		installedSkills: visiblePythonSkillImportNames,
-		activeTools: tools.filter((name) => name === "ipython" || name === "bash" || name === "edit"),
+		activeTools: tools.filter((name) => name === "ipython" || name === "xonsh" || name === "bash" || name === "edit"),
 		allowRecursion,
 		depth: options.rlmDepth,
 		parentAgent: options.rlmParentAgent,
@@ -133,7 +138,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	// Appended AFTER the trained buildRlmPrompt prefix, and before the harness-state
 	// menu, so the model reads when/why to delegate and then sees the concrete subagent
 	// specs it can match against — the same ordering as Claude Code's Agent tool.
-	if ((allowRecursion ?? true) && hasIpython) {
+	if ((allowRecursion ?? true) && hasRepl) {
 		const visiblePythonSkillNames = new Set(
 			getPythonSkillRuntimeInfo(visibleSkills).map((skill) => skill.importName),
 		);
@@ -145,7 +150,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	}
 
 	if (harnessState) {
-		prompt += `\n\n${formatHarnessStateForPrompt(harnessState, { includeIpythonExamples: hasIpython, includeShellExamples: hasBash, includeRefineExamples: hasIpython && hasRefineSkill })}`;
+		prompt += `\n\n${formatHarnessStateForPrompt(harnessState, { includeIpythonExamples: hasIpython, includeXonshExamples: hasXonsh, includeShellExamples: hasBash, includeRefineExamples: hasRepl && hasRefineSkill })}`;
 	}
 
 	if (genericMcpSection) {
@@ -167,7 +172,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	}
 
 	// Append skills section only when the model has a way to inspect skill files.
-	const hasFileAccess = tools.includes("ipython") || tools.includes("bash");
+	const hasFileAccess = hasRepl || tools.includes("bash");
 	if (hasFileAccess && skills.length > 0) {
 		prompt += formatSkillsForPrompt(skills);
 	}

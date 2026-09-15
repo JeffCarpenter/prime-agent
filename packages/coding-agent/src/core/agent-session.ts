@@ -187,6 +187,7 @@ import {
 	isSessionSlashCommandMessage,
 	RLM_CHILD_FAILURE_CUSTOM_TYPE,
 	RLM_CHILD_TERMINAL_NOTICE_CUSTOM_TYPE,
+	XONSH_STATE_RESTORED_CUSTOM_TYPE,
 } from "./messages.js";
 import type { ModelRegistry } from "./model-registry.js";
 import { throwIfPromptAdmissionCancelled } from "./prompt-admission.js";
@@ -349,7 +350,7 @@ export type CompactionReason = "manual" | "threshold" | "overflow" | "requested"
 export type AgentSessionEvent =
 	| AgentEvent
 	| {
-			type: "ipython_sent_agent_message";
+			type: "ipython_sent_agent_message" | "xonsh_sent_agent_message";
 			toolCallId: string;
 			message: KernelSentAgentMessage;
 	  }
@@ -787,6 +788,7 @@ function visibleSessionActionProjection(actions: readonly QueuedSessionAction[])
 }
 
 const IPYTHON_SENT_AGENT_MESSAGE_CUSTOM_ENTRY = "ipython_sent_agent_message";
+const XONSH_SENT_AGENT_MESSAGE_CUSTOM_ENTRY = "xonsh_sent_agent_message";
 
 interface PersistedIpythonSentAgentMessage {
 	toolCallId: string;
@@ -1237,6 +1239,8 @@ export class AgentSession {
 	private _xonshKernelProvisioner?: XonshKernelProvisioner;
 	/** Artifact dir backing the current provisioner's kernel snapshot, if any. */
 	private _ipythonKernelSnapshotDir?: string;
+	/** Separate artifact dir for Xonsh so dual active REPLs cannot overwrite state or logs. */
+	private _xonshKernelSnapshotDir?: string;
 	/** True once the runtime has been built once; later builds are in-process rebuilds (/reload). */
 	private _ipythonRuntimeBuilt = false;
 	private readonly _prewarmIpythonKernel: boolean;
@@ -1664,7 +1668,11 @@ export class AgentSession {
 	private _restoreLateIpythonSentAgentMessages(): void {
 		this._lateIpythonSentAgentMessages.clear();
 		for (const entry of this.sessionManager.getBranch()) {
-			if (entry.type !== "custom" || entry.customType !== IPYTHON_SENT_AGENT_MESSAGE_CUSTOM_ENTRY) {
+			if (
+				entry.type !== "custom" ||
+				(entry.customType !== IPYTHON_SENT_AGENT_MESSAGE_CUSTOM_ENTRY &&
+					entry.customType !== XONSH_SENT_AGENT_MESSAGE_CUSTOM_ENTRY)
+			) {
 				continue;
 			}
 			const persisted = parsePersistedIpythonSentAgentMessage(entry.data);
@@ -1698,13 +1706,19 @@ export class AgentSession {
 		}
 	}
 
-	private _recordLateIpythonSentAgentMessage(toolCallId: string, message: KernelSentAgentMessage): void {
+	private _recordLateIpythonSentAgentMessage(
+		toolCallId: string,
+		message: KernelSentAgentMessage,
+		toolName: "ipython" | "xonsh" = "ipython",
+	): void {
 		const record = () => {
 			if (this._disposed || !this._rememberLateIpythonSentAgentMessage(toolCallId, message)) {
 				return;
 			}
-			this.sessionManager.appendCustomEntry(IPYTHON_SENT_AGENT_MESSAGE_CUSTOM_ENTRY, { toolCallId, message });
-			this._emit({ type: "ipython_sent_agent_message", toolCallId, message });
+			const customType =
+				toolName === "xonsh" ? XONSH_SENT_AGENT_MESSAGE_CUSTOM_ENTRY : IPYTHON_SENT_AGENT_MESSAGE_CUSTOM_ENTRY;
+			this.sessionManager.appendCustomEntry(customType, { toolCallId, message });
+			this._emit({ type: customType, toolCallId, message });
 		};
 		this._agentEventQueue = this._agentEventQueue.then(record, record);
 		this._agentEventQueue.catch(() => {});
@@ -7527,14 +7541,15 @@ export class AgentSession {
 			pruned && pruned.length > 0
 				? ` Variables above the per-variable snapshot limit were removed: ${pruned.join(", ")}.`
 				: "";
+		const stateName = this.getActiveToolNames().includes("xonsh") ? "xonsh" : "ipython";
 		const content = [
-			"<ipython_state>",
-			`Your Python kernel persisted through compaction; its remaining variables, imports, and helpers are still available.${prunedDetail}${detail}`,
-			"</ipython_state>",
+			`<${stateName}_state>`,
+			`Your ${stateName === "xonsh" ? "Xonsh" : "Python"} kernel persisted through compaction; its remaining variables, imports, and helpers are still available.${prunedDetail}${detail}`,
+			`</${stateName}_state>`,
 		].join("\n");
 		const message = {
 			role: "custom" as const,
-			customType: "ipython_state",
+			customType: `${stateName}_state`,
 			content,
 			display: false,
 			timestamp: Date.now(),
@@ -7552,15 +7567,22 @@ export class AgentSession {
 		this._emit({ type: "message_end", message });
 	}
 
+	/** @deprecated Kept for IPython session transcripts and integrations. */
 	private _onIpythonStateRestored(result: RestoreResult): void {
-		const lines = ["<ipython_state_restored>"];
+		this._onReplStateRestored(result, "ipython");
+	}
+
+	private _onReplStateRestored(result: RestoreResult, toolName: "ipython" | "xonsh"): void {
+		const stateTag = toolName === "xonsh" ? "xonsh_state_restored" : "ipython_state_restored";
+		const stateType = toolName === "xonsh" ? XONSH_STATE_RESTORED_CUSTOM_TYPE : IPYTHON_STATE_RESTORED_CUSTOM_TYPE;
+		const lines = [`<${stateTag}>`];
 		if (result.restored.length > 0) {
 			lines.push(
-				`Your Python kernel state was revived from your previous session. These names are available again: ${result.restored.join(", ")}.`,
+				`Your ${toolName === "xonsh" ? "Xonsh" : "Python"} kernel state was revived from your previous session. These names are available again: ${result.restored.join(", ")}.`,
 			);
 		} else {
 			lines.push(
-				"Your previous Python kernel state could not be revived; the kernel is starting fresh, so re-create any variables, imports, or loaded data you need.",
+				`Your previous ${toolName === "xonsh" ? "Xonsh" : "Python"} kernel state could not be revived; the kernel is starting fresh, so re-create any variables, imports, or loaded data you need.`,
 			);
 		}
 		if (result.failed.length > 0) {
@@ -7568,10 +7590,10 @@ export class AgentSession {
 				`These could not be restored and must be recreated if needed: ${result.failed.map((f) => f.name).join(", ")}.`,
 			);
 		}
-		lines.push("</ipython_state_restored>");
+		lines.push(`</${stateTag}>`);
 		void this.sendCustomMessage(
 			{
-				customType: IPYTHON_STATE_RESTORED_CUSTOM_TYPE,
+				customType: stateType,
 				content: lines.join("\n"),
 				display: true,
 				details: { restored: result.restored.length > 0 },
@@ -9376,6 +9398,12 @@ export class AgentSession {
 			const previousIpythonDispose = this._ipythonKernelProvisioner?.dispose();
 			const previousXonshDispose = this._xonshKernelProvisioner?.dispose();
 			this._ipythonKernelSnapshotDir = this.sessionManager.getSessionArtifactDir();
+			this._xonshKernelSnapshotDir = this._ipythonKernelSnapshotDir
+				? join(this._ipythonKernelSnapshotDir, "xonsh")
+				: undefined;
+			if (this._xonshKernelSnapshotDir) {
+				mkdirSync(this._xonshKernelSnapshotDir, { recursive: true });
+			}
 			// Only surface the "revived from your previous session" notice on the first
 			// build (a genuine resume). A later rebuild (/reload) restores state silently
 			// for continuity — the conversation is unchanged, so there's nothing to flag.
@@ -9398,9 +9426,9 @@ export class AgentSession {
 				sessionId: this.sessionId,
 				hostHandlers: this._createKernelHostHandlers(),
 				pythonSkills,
-				snapshotDir: this._ipythonKernelSnapshotDir,
+				snapshotDir: this._xonshKernelSnapshotDir,
 				readyGate: previousXonshDispose,
-				onRestore: notifyRestore ? (result) => this._onIpythonStateRestored(result) : undefined,
+				onRestore: notifyRestore ? (result) => this._onReplStateRestored(result, "xonsh") : undefined,
 			});
 			configuredBaseToolDefinitions = createAllToolDefinitions(this._cwd, {
 				ipython: {
@@ -9415,7 +9443,7 @@ export class AgentSession {
 					commandPrefix: this.settingsManager.getShellCommandPrefix(),
 					shellPath: this.settingsManager.getShellPath(),
 					onLateSentAgentMessage: (toolCallId, message) =>
-						this._recordLateIpythonSentAgentMessage(toolCallId, message),
+						this._recordLateIpythonSentAgentMessage(toolCallId, message, "xonsh"),
 				},
 			});
 		}
@@ -9474,15 +9502,15 @@ export class AgentSession {
 			// An active goal needs a primary REPL tool so the model can reach the goal skill.
 			if (!baseActiveToolNames.includes("ipython") && !baseActiveToolNames.includes("xonsh")) {
 				if (
-					this._baseToolDefinitions.has("xonsh") &&
-					this._allowedToolNames?.has("xonsh") &&
-					!this._allowedToolNames.has("ipython")
+					this._baseToolDefinitions.has("ipython") &&
+					this._allowedToolNames?.has("ipython") &&
+					!this._allowedToolNames.has("xonsh")
 				) {
-					baseActiveToolNames.push("xonsh");
-				} else if (this._baseToolDefinitions.has("ipython")) {
 					baseActiveToolNames.push("ipython");
 				} else if (this._baseToolDefinitions.has("xonsh")) {
 					baseActiveToolNames.push("xonsh");
+				} else if (this._baseToolDefinitions.has("ipython")) {
+					baseActiveToolNames.push("ipython");
 				}
 			}
 		}
@@ -9495,13 +9523,15 @@ export class AgentSession {
 		// has a kernel snapshot — so its state is revived and the model is told what
 		// came back before the first turn, rather than a turn later when the kernel
 		// would otherwise lazily start on first use.
-		const hasSnapshot =
+		const hasIpythonSnapshot =
 			!!this._ipythonKernelSnapshotDir && existsSync(snapshotPathIn(this._ipythonKernelSnapshotDir));
+		const hasXonshSnapshot =
+			!!this._xonshKernelSnapshotDir && existsSync(snapshotPathIn(this._xonshKernelSnapshotDir));
 		const activeNames = this.getActiveToolNames();
-		if ((this._prewarmIpythonKernel || hasSnapshot) && activeNames.includes("ipython")) {
+		if ((this._prewarmIpythonKernel || hasIpythonSnapshot) && activeNames.includes("ipython")) {
 			this._ipythonKernelProvisioner?.prewarm();
 		}
-		if ((this._prewarmXonshKernel || this._prewarmIpythonKernel || hasSnapshot) && activeNames.includes("xonsh")) {
+		if ((this._prewarmXonshKernel || hasXonshSnapshot) && activeNames.includes("xonsh")) {
 			this._xonshKernelProvisioner?.prewarm();
 		}
 

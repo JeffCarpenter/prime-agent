@@ -584,6 +584,7 @@ async function executeWithBusyKernelChoice(
 		try {
 			return {
 				result: await m.execute(code, {
+					mode: "xonsh",
 					signal,
 					onStream,
 					onLateSentAgentMessage: onLateSentAgentMessage

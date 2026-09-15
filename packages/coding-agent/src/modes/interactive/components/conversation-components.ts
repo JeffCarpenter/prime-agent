@@ -19,7 +19,7 @@ import {
 	MalformedCompactionOutcomeMessageComponent,
 } from "./compaction-outcome-message.js";
 import { InjectedPromptMessageComponent, isInjectedPromptMessage } from "./injected-prompt-message.js";
-import { IPythonCellComponent } from "./ipython-cell.js";
+import { ReplCellComponent } from "./ipython-cell.js";
 import {
 	MalformedRefinementOutcomeMessageComponent,
 	RefinementOutcomeMessageComponent,
@@ -52,7 +52,7 @@ export function isCompactAgentMessageNeighbor(component: Component | undefined):
 	return (
 		component instanceof AgentMessageComponent ||
 		component instanceof ToolExecutionComponent ||
-		component instanceof IPythonCellComponent ||
+		component instanceof ReplCellComponent ||
 		component instanceof BashExecutionComponent
 	);
 }
