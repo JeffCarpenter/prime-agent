@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { previewBashCommand, previewIpythonCode, previewPythonCode } from "../src/core/tools/code-preview.js";
+import {
+	previewBashCommand,
+	previewIpythonCode,
+	previewPythonCode,
+	previewXonshCode,
+} from "../src/core/tools/code-preview.js";
 
 describe("code preview", () => {
 	it("skips bash setup and previews the real command", () => {
@@ -35,6 +40,28 @@ data = json.loads("{}")
 print(data.keys())
 PY`;
 		expect(previewIpythonCode(code)).toEqual({ language: "python", text: "data.keys()" });
+	});
+
+	it("previews native xonsh shell commands", () => {
+		expect(previewXonshCode("echo hello")).toEqual({ language: "xonsh", text: "echo hello" });
+		expect(previewXonshCode("$(git status --porcelain)")).toEqual({
+			language: "xonsh",
+			text: "git status --porcelain",
+		});
+		expect(previewXonshCode("$[echo phase6]")).toEqual({
+			language: "xonsh",
+			text: "echo phase6",
+		});
+		expect(previewXonshCode("cargo test")).toEqual({ language: "xonsh", text: "cargo test" });
+		expect(previewXonshCode("cargo test --manifest-path ./Cargo.toml")).toEqual({
+			language: "xonsh",
+			text: "cargo test --manifest-path ./Cargo.toml",
+		});
+	});
+
+	it("retains python previews for xonsh-compatible Python cells", () => {
+		expect(previewXonshCode("value = 1 + 2\nprint(value)")).toEqual({ language: "python", text: "value = 1 + 2" });
+		expect(previewXonshCode("value = 1\necho @(value)")).toEqual({ language: "python", text: "value = 1" });
 	});
 
 	it("prefers meaningful python effects over setup assignments", () => {

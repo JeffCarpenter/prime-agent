@@ -2038,6 +2038,37 @@ describe("InteractiveMode key handlers", () => {
 });
 
 describe("InteractiveMode tool event rendering", () => {
+	test("routes late Xonsh agent messages to their cell component", async () => {
+		const component = { appendSentAgentMessage: vi.fn() };
+		const fakeThis = Object.assign(Object.create(InteractiveMode.prototype), {
+			isInitialized: true,
+			footer: { invalidate: vi.fn() },
+			updateConnectionStateFromEvent: vi.fn(),
+			activityTracker: { handleEvent: vi.fn() },
+			updateWorkingLoaderMessage: vi.fn(),
+			ipythonToolComponents: new Map([["xonsh-call", component]]),
+			lateIpythonSentAgentMessages: new Map(),
+			ui: { requestRender: vi.fn() },
+		});
+		const message = {
+			id: "xonsh-agent-message",
+			message: "Background output",
+			deliveryStatus: "delivered" as const,
+			target: { activeSessionId: "active", sessionId: "session" },
+		};
+		const handleEvent = (
+			InteractiveMode.prototype as unknown as {
+				handleEvent(this: typeof fakeThis, event: AgentConnectionSessionEvent): Promise<void>;
+			}
+		).handleEvent;
+
+		await handleEvent.call(fakeThis, { type: "xonsh_sent_agent_message", toolCallId: "xonsh-call", message });
+
+		expect(component.appendSentAgentMessage).toHaveBeenCalledWith(message);
+		expect(fakeThis.lateIpythonSentAgentMessages.get("xonsh-call")).toEqual([message]);
+		expect(fakeThis.ui.requestRender).toHaveBeenCalledOnce();
+	});
+
 	test("reserves streaming tool call ids before loading tool definitions", async () => {
 		let resolveDefinition!: () => void;
 		const definitionPromise = new Promise<undefined>((resolve) => {

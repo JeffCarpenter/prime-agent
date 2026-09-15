@@ -3496,6 +3496,75 @@ describe("DaemonAgentConnection", () => {
 		});
 	});
 
+	it("forwards schema-27 legacy session events from an old daemon to a new client", async () => {
+		const oldDaemonClient = new FakeDaemonClient();
+		oldDaemonClient.hello = { ...oldDaemonClient.hello!, schemaRevision: 27 };
+		const connection = new DaemonAgentConnection(asDaemonClient(oldDaemonClient), "active-1");
+		const events: AgentConnectionEvent[] = [];
+		connection.subscribe((event) => {
+			events.push(event);
+		});
+		await connection.attach();
+
+		oldDaemonClient.emitMessage({
+			type: "session_event",
+			activeSessionId: "active-1",
+			event: { type: "session_action_update", actions: { queuedCount: 0, steering: [], followUps: [] } },
+		});
+		await vi.waitFor(() =>
+			expect(events).toEqual([
+				{
+					type: "session_event",
+					event: { type: "session_action_update", actions: { queuedCount: 0, steering: [], followUps: [] } },
+				},
+			]),
+		);
+	});
+
+	it("forwards schema-28 Xonsh session events through an old-client-compatible JSON boundary", async () => {
+		const newDaemonClient = new FakeDaemonClient();
+		const connection = new DaemonAgentConnection(asDaemonClient(newDaemonClient), "active-1");
+		const events: AgentConnectionEvent[] = [];
+		connection.subscribe((event) => {
+			events.push(event);
+		});
+		await connection.attach();
+
+		const wireEvent = JSON.stringify({
+			type: "session_event",
+			activeSessionId: "active-1",
+			event: {
+				type: "xonsh_sent_agent_message",
+				toolCallId: "call-xonsh",
+				message: {
+					id: "agentmsg-xonsh",
+					message: "done",
+					deliveryStatus: "queued",
+					target: { activeSessionId: "active-1", sessionId: "session-1" },
+				},
+			},
+		});
+		// Old clients parse and forward the event without validating its unknown discriminant.
+		newDaemonClient.emitMessage(JSON.parse(wireEvent) as DaemonOutbound);
+		await vi.waitFor(() =>
+			expect(events).toEqual([
+				{
+					type: "session_event",
+					event: {
+						type: "xonsh_sent_agent_message",
+						toolCallId: "call-xonsh",
+						message: {
+							id: "agentmsg-xonsh",
+							message: "done",
+							deliveryStatus: "queued",
+							target: { activeSessionId: "active-1", sessionId: "session-1" },
+						},
+					},
+				},
+			]),
+		);
+	});
+
 	it("ignores delayed events from a retired daemon generation", async () => {
 		const fakeClient = new FakeDaemonClient();
 		const connection = new DaemonAgentConnection(asDaemonClient(fakeClient), "active-1");

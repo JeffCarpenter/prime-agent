@@ -41,6 +41,10 @@ describe("package commands", () => {
 		return `${major}.${minor}.${Number.parseInt(patch, 10) + 1}`;
 	}
 
+	function withIsolatedDaemonSocket(args: string[]): string[] {
+		return [...args, "--daemon-socket", join(tempDir, "daemon.sock")];
+	}
+
 	beforeEach(() => {
 		tempDir = join(tmpdir(), `pi-package-commands-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
@@ -217,7 +221,9 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
-			await expect(runSelfUpdateInstallChild(["update", "--self", "--force"])).resolves.toBeUndefined();
+			await expect(
+				runSelfUpdateInstallChild(withIsolatedDaemonSocket(["update", "--self", "--force"])),
+			).resolves.toBeUndefined();
 
 			expect(process.exitCode).toBeUndefined();
 			expect(errorSpy).not.toHaveBeenCalled();
@@ -261,7 +267,9 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
-			await expect(runSelfUpdateInstallChild(["update", "--self"])).resolves.toBeUndefined();
+			await expect(
+				runSelfUpdateInstallChild(withIsolatedDaemonSocket(["update", "--self"])),
+			).resolves.toBeUndefined();
 
 			expect(process.exitCode).toBeUndefined();
 			expect(errorSpy).not.toHaveBeenCalled();
@@ -310,7 +318,9 @@ else {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
-			await expect(runSelfUpdateInstallChild(["update", "--self"])).resolves.toBeUndefined();
+			await expect(
+				runSelfUpdateInstallChild(withIsolatedDaemonSocket(["update", "--self"])),
+			).resolves.toBeUndefined();
 
 			expect(process.exitCode).toBeUndefined();
 			expect(errorSpy).not.toHaveBeenCalled();
@@ -363,7 +373,9 @@ else {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
-			await expect(runSelfUpdateInstallChild(["update", "--self"])).resolves.toBeUndefined();
+			await expect(
+				runSelfUpdateInstallChild(withIsolatedDaemonSocket(["update", "--self"])),
+			).resolves.toBeUndefined();
 
 			expect(process.exitCode).toBeUndefined();
 			expect(errorSpy).not.toHaveBeenCalled();

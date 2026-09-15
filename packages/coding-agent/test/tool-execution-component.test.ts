@@ -47,6 +47,21 @@ describe("ToolExecutionComponent parity", () => {
 		initTheme("dark");
 	});
 
+	test("uses the shared self-rendered cell for native Xonsh calls", () => {
+		const component = new ToolExecutionComponent(
+			"xonsh",
+			"tool-xonsh",
+			{ code: "echo hello" },
+			{},
+			undefined,
+			createFakeTui(),
+			process.cwd(),
+		);
+		const rendered = stripAnsi(component.render(120).join("\n"));
+		expect(rendered).toContain("xonsh · bash");
+		expect(rendered).toContain("echo hello");
+	});
+
 	test("stacks custom call and result renderers like the old implementation", () => {
 		const toolDefinition: ToolDefinition = {
 			...createBaseToolDefinition(),

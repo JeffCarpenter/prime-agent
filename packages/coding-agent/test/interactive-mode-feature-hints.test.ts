@@ -65,6 +65,13 @@ describe("feature hint deck", () => {
 		expect(deck.next(context)?.id).not.toBe(firstCycle.at(-1)?.id);
 	});
 
+	it("describes persistent state without choosing one REPL dialect", () => {
+		const hint = FEATURE_HINTS.find((entry) => entry.id === "persistent-repl");
+		expect(hint?.getText({ getKeybinding: () => undefined, isResidentSession: true })).toBe(
+			"Compaction removes REPL variables over 16 MiB; smaller state persists.",
+		);
+	});
+
 	it("uses configured shortcuts in keybinding-based hints", () => {
 		const context = {
 			getKeybinding: (action: string) => {

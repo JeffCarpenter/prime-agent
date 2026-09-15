@@ -61,6 +61,17 @@ describe("edit summaries", () => {
 		).toEqual([{ path: "b.ts", added: 1, removed: 1 }]);
 	});
 
+	test("reports diffs from native Xonsh executions", () => {
+		expect(
+			getToolFileChanges(
+				"xonsh",
+				{},
+				{ details: { diffs: [{ path: "x.sh", oldStr: "old", newStr: "new" }] }, isError: false },
+				"/tmp",
+			),
+		).toEqual([{ path: "x.sh", added: 1, removed: 1 }]);
+	});
+
 	test("renders one total line for all changed files in an agent run", () => {
 		const line = formatTotalChangeSummary([
 			{ path: "a.ts", added: 2, removed: 1 },

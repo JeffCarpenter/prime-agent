@@ -499,13 +499,25 @@ describe("parseArgs", () => {
 			expect(result.tools).toEqual(["ipython", "dynamic_tool"]);
 		});
 
+		test("accepts xonsh as a built-in tool", () => {
+			const result = parseArgs(["--tools", "xonsh,dynamic_tool"]);
+			expect(result.tools).toEqual(["xonsh", "dynamic_tool"]);
+			expect(result.diagnostics).toEqual([]);
+		});
+
 		test("rejects removed built-in tools", () => {
 			const result = parseArgs(["--tools", "read,bash,edit"]);
 			expect(result.tools).toEqual(["read", "bash", "edit"]);
 			expect(result.diagnostics).toContainEqual({
 				type: "error",
-				message: "Unknown built-in tool(s): read. Available built-in tools: ipython",
+				message: "Unknown built-in tool(s): read. Available built-in tools: ipython, xonsh",
 			});
+		});
+
+		test("keeps ipython available alongside xonsh", () => {
+			const result = parseArgs(["--tools", "ipython,xonsh"]);
+			expect(result.tools).toEqual(["ipython", "xonsh"]);
+			expect(result.diagnostics).toEqual([]);
 		});
 	});
 

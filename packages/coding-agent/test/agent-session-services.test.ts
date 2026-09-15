@@ -194,11 +194,11 @@ describe("createAgentSessionFromServices", () => {
 			const waitForIdle = vi.spyOn(session.agent, "waitForIdle");
 			await session.releaseAcpMcpServers("unknown-owner", ["task"]);
 			expect(waitForIdle).not.toHaveBeenCalled();
-			const originalProvisioner = Reflect.get(session, "_ipythonKernelProvisioner");
+			const originalProvisioner = Reflect.get(session, "_xonshKernelProvisioner");
 			const execute = vi.fn(async (_code: string) => ({ status: "ok" }));
-			Reflect.set(session, "_ipythonKernelProvisioner", { manager: { isRunning: true, execute } });
+			Reflect.set(session, "_xonshKernelProvisioner", { manager: { isRunning: true, execute } });
 			await session.releaseAcpMcpServers("owner-a", ["task"]);
-			Reflect.set(session, "_ipythonKernelProvisioner", originalProvisioner);
+			Reflect.set(session, "_xonshKernelProvisioner", originalProvisioner);
 			expect(rebuildRuntime).not.toHaveBeenCalled();
 			expect(execute).toHaveBeenCalledOnce();
 			expect(execute.mock.calls[0]?.[0]).toContain("await _prime_mcp.reload(_prime_mcp_name)");
