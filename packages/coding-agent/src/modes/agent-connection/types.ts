@@ -580,6 +580,7 @@ export interface AgentConnectionRlmChildAgentSnapshot {
 
 export type AgentConnectionSessionEvent =
 	| AgentEvent
+	| { type: "xonsh_sent_agent_message"; toolCallId: string; message: KernelSentAgentMessage }
 	| { type: "ipython_sent_agent_message"; toolCallId: string; message: KernelSentAgentMessage }
 	| { type: "session_action_update"; actions: SessionActionSnapshot }
 	| {

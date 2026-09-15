@@ -137,6 +137,8 @@ export type {
 	UserBashEventResult,
 	WidgetPlacement,
 	WorkingIndicatorOptions,
+	XonshToolCallEvent,
+	XonshToolResultEvent,
 } from "./types.js";
 export {
 	defineTool,
@@ -144,5 +146,6 @@ export {
 	isEditToolResult,
 	isIpythonToolResult,
 	isToolCallEventType,
+	isXonshToolResult,
 } from "./types.js";
 export { wrapRegisteredTool, wrapRegisteredTools } from "./wrapper.js";

@@ -61,7 +61,7 @@ export interface Args {
 }
 
 const REMOVED_BUILTIN_TOOL_NAMES = new Set(["read", "write", "grep", "find", "ls"]);
-const BUILTIN_TOOL_NAMES = ["ipython"];
+const BUILTIN_TOOL_NAMES = ["ipython", "xonsh"];
 /** Value flags whose free-form text (an objective, a gate command) may legitimately start with a dash. */
 const FREEFORM_VALUE_FLAGS = new Set(["--goal", "--autonomous-gate"]);
 /** Prompt value flags whose text may start with a long-option-looking token, e.g. YAML frontmatter ("---"). */
