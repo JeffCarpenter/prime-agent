@@ -1139,7 +1139,11 @@ export class ReplKernelManager {
 				this.lastCellCode = code;
 			}
 			try {
-				const sendPromise = this.writeLine({ ...requestFields, id: requestId });
+				const sendPromise = this.writeLine({
+					...requestFields,
+					id: requestId,
+					...(opts.mode ? { mode: opts.mode } : {}),
+				});
 				sendPromise.catch(() => undefined);
 				await Promise.race([sendPromise, result.promise.then(() => undefined)]);
 				if (this.activeExecution === execution && execution.status !== "aborted") {

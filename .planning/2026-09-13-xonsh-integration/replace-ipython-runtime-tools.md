@@ -43,7 +43,18 @@ To fully replace `ipython` with `xonsh` across the runtime and agent tools, we m
 #### A. State Serialization Skip Sets (`prime-agent-runtime/src/rlm/repl.py`)
 - **Current code**:
   ```python
-  _ALWAYS_SKIP = {"rlm", "mcp", "bash", "asyncio", "In", "Out", "get_ipython", "exit", "quit", "open"}
+  _ALWAYS_SKIP = {
+      "rlm",
+      "mcp",
+      "bash",
+      "asyncio",
+      "In",
+      "Out",
+      "get_ipython",
+      "exit",
+      "quit",
+      "open",
+  }
   _RESTORE_SKIP = {"In", "Out", "get_ipython"}
   ```
 - **Modifications required**:
@@ -62,7 +73,9 @@ To fully replace `ipython` with `xonsh` across the runtime and agent tools, we m
       if tree.body:
           codes.append(compile(tree, filename, "exec", flags=flags, dont_inherit=True))
       if trailing is not None:
-          codes.append(compile(trailing, filename, "eval", flags=flags, dont_inherit=True))
+          codes.append(
+              compile(trailing, filename, "eval", flags=flags, dont_inherit=True)
+          )
       return codes, trailing is not None
   ```
 - **Modifications required**:

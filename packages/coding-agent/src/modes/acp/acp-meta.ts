@@ -31,18 +31,23 @@ export interface PrimeAgentAutonomousMeta {
 	gateFailure?: string;
 }
 
-export interface PrimeAgentIpythonAttachmentMeta {
+export interface PrimeAgentXonshAttachmentMeta {
 	mimeType?: string;
 	path?: string;
 	bytes?: number;
 }
 
-export interface PrimeAgentIpythonMeta {
-	/** Media the cell loaded into context, as reported by the ipython tool. */
-	attachments?: PrimeAgentIpythonAttachmentMeta[];
+export interface PrimeAgentXonshMeta {
+	/** Media the cell loaded into context, as reported by the Xonsh tool. */
+	attachments?: PrimeAgentXonshAttachmentMeta[];
 	/** Number of diffs the cell displayed. */
 	diffCount?: number;
 }
+
+/** @deprecated Use PrimeAgentXonshAttachmentMeta. */
+export type PrimeAgentIpythonAttachmentMeta = PrimeAgentXonshAttachmentMeta;
+/** @deprecated Use PrimeAgentXonshMeta. */
+export type PrimeAgentIpythonMeta = PrimeAgentXonshMeta;
 
 export interface PrimeAgentGoalMeta {
 	status: string;
@@ -122,6 +127,8 @@ export interface PrimeAgentSessionMeta {
 	autonomous?: PrimeAgentAutonomousMeta;
 	/** Observed subagent and autonomous-continuation counts at completion. */
 	quiescence?: PrimeAgentQuiescenceMeta;
+	xonsh?: PrimeAgentXonshMeta;
+	/** @deprecated Use xonsh for Xonsh tool metadata. */
 	ipython?: PrimeAgentIpythonMeta;
 }
 
