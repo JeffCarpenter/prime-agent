@@ -27,7 +27,7 @@ event.
 
 | Request | Fields |
 |---|---|
-| `execute` | `{"type":"execute","id":str,"code":str}` |
+| `execute` | `{"type":"execute","id":str,"code":str,"mode"?:"python"|"xonsh"}` — mode defaults to `python`; `xonsh` uses the persistent native Xonsh session. |
 | `interrupt` | `{"type":"interrupt","id"?:str}` — no reply |
 | `host_reply` | `{"type":"host_reply","id":str,"data":{"status":"ok","result":{...}}}` or an error envelope — no reply |
 | `snapshot` | `{"type":"snapshot","id":str,"path":str,"manifest_path":str,"max_bytes"?:int,"max_variable_bytes"?:int,"prune_oversized"?:bool}` |
@@ -77,8 +77,12 @@ between a cell's Python-level writes and its raw fd writes is not guaranteed
 
 ## Execution
 
-Cells compile with `PyCF_ALLOW_TOP_LEVEL_AWAIT` and run as tasks on the
-persistent event loop, so `await` works at top level and background tasks
+Python-mode cells compile with `PyCF_ALLOW_TOP_LEVEL_AWAIT` and run as tasks on the
+persistent event loop, so `await` works at top level. Xonsh-mode cells use the
+provisioned Xonsh `Execer` and one persistent Xonsh session before compiling the
+transformed AST with the same top-level-await flag. This enables native Xonsh
+syntax such as `$VAR = "value"`, `$(command)`, and `$[command]` while retaining
+Python statements and expressions. Background tasks
 created by a cell keep running between cells. Each cell's source is registered
 in `linecache` under `<cell-N>`, so tracebacks show the offending source line.
 Tracebacks are plain `traceback` formatting with the runtime's own frames

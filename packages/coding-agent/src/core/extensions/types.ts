@@ -68,6 +68,8 @@ import type {
 	EditToolInput,
 	IpythonToolDetails,
 	IpythonToolInput,
+	XonshToolDetails,
+	XonshToolInput,
 } from "../tools/index.js";
 
 export type { ExecOptions, ExecResult } from "../exec.js";
@@ -791,6 +793,11 @@ export interface EditToolCallEvent extends ToolCallEventBase {
 	input: EditToolInput;
 }
 
+export interface XonshToolCallEvent extends ToolCallEventBase {
+	toolName: "xonsh";
+	input: XonshToolInput;
+}
+
 export interface IpythonToolCallEvent extends ToolCallEventBase {
 	toolName: "ipython";
 	input: IpythonToolInput;
@@ -807,7 +814,12 @@ export interface CustomToolCallEvent extends ToolCallEventBase {
  * `event.input` is mutable. Mutate it in place to patch tool arguments before execution.
  * Later `tool_call` handlers see earlier mutations. No re-validation is performed after mutation.
  */
-export type ToolCallEvent = BashToolCallEvent | EditToolCallEvent | IpythonToolCallEvent | CustomToolCallEvent;
+export type ToolCallEvent =
+	| BashToolCallEvent
+	| EditToolCallEvent
+	| XonshToolCallEvent
+	| IpythonToolCallEvent
+	| CustomToolCallEvent;
 
 interface ToolResultEventBase {
 	type: "tool_result";
@@ -827,6 +839,11 @@ export interface EditToolResultEvent extends ToolResultEventBase {
 	details: EditToolDetails | undefined;
 }
 
+export interface XonshToolResultEvent extends ToolResultEventBase {
+	toolName: "xonsh";
+	details: XonshToolDetails | undefined;
+}
+
 export interface IpythonToolResultEvent extends ToolResultEventBase {
 	toolName: "ipython";
 	details: IpythonToolDetails | undefined;
@@ -841,6 +858,7 @@ export interface CustomToolResultEvent extends ToolResultEventBase {
 export type ToolResultEvent =
 	| BashToolResultEvent
 	| EditToolResultEvent
+	| XonshToolResultEvent
 	| IpythonToolResultEvent
 	| CustomToolResultEvent;
 
@@ -849,6 +867,9 @@ export function isBashToolResult(e: ToolResultEvent): e is BashToolResultEvent {
 }
 export function isEditToolResult(e: ToolResultEvent): e is EditToolResultEvent {
 	return e.toolName === "edit";
+}
+export function isXonshToolResult(e: ToolResultEvent): e is XonshToolResultEvent {
+	return e.toolName === "xonsh";
 }
 export function isIpythonToolResult(e: ToolResultEvent): e is IpythonToolResultEvent {
 	return e.toolName === "ipython";
@@ -876,6 +897,7 @@ export function isIpythonToolResult(e: ToolResultEvent): e is IpythonToolResultE
  */
 export function isToolCallEventType(toolName: "bash", event: ToolCallEvent): event is BashToolCallEvent;
 export function isToolCallEventType(toolName: "edit", event: ToolCallEvent): event is EditToolCallEvent;
+export function isToolCallEventType(toolName: "xonsh", event: ToolCallEvent): event is XonshToolCallEvent;
 export function isToolCallEventType(toolName: "ipython", event: ToolCallEvent): event is IpythonToolCallEvent;
 export function isToolCallEventType<TName extends string, TInput extends Record<string, unknown>>(
 	toolName: TName,

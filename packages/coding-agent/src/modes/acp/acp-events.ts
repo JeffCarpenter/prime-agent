@@ -1,6 +1,6 @@
 import type { AssistantMessageEvent } from "@earendil-works/pi-ai";
 import type { AgentConnectionSessionEvent } from "../agent-connection/types.js";
-import type { PrimeAgentIpythonMeta, PrimeAgentSessionMeta } from "./acp-meta.js";
+import type { PrimeAgentSessionMeta, PrimeAgentXonshMeta } from "./acp-meta.js";
 import { primeAgentMeta } from "./acp-meta.js";
 
 /**
@@ -19,11 +19,22 @@ export interface AcpSessionUpdate {
 	[key: string]: unknown;
 }
 
-/** prime-agent's model-facing tool is the Python REPL; bash is the secondary escape hatch. */
+/** prime-agent's model-facing tools are persistent REPLs; bash is the secondary escape hatch. */
+export const XONSH_TOOL_NAME = "xonsh";
+/** @deprecated Xonsh is the primary REPL; retained for IPython sessions. */
 export const IPYTHON_TOOL_NAME = "ipython";
+
+function isReplTool(toolName: string): boolean {
+	return toolName === XONSH_TOOL_NAME || toolName === IPYTHON_TOOL_NAME;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 export function acpToolKind(toolName: string): AcpToolKind {
 	switch (toolName) {
+		case XONSH_TOOL_NAME:
 		case IPYTHON_TOOL_NAME:
 		case "bash":
 			return "execute";
@@ -64,26 +75,24 @@ function assistantDeltaUpdates(event: AssistantMessageEvent, messageId: string):
 	return [];
 }
 
-/** Extract the Python cell source so a client can show what is executing. */
-function ipythonCellSource(args: unknown): string | undefined {
-	if (!args || typeof args !== "object") return undefined;
-	const code = (args as { code?: unknown }).code;
-	return typeof code === "string" ? code : undefined;
+/** Extract REPL cell source so a client can show what is executing. */
+function replCellSource(args: unknown): string | undefined {
+	if (!isRecord(args)) return undefined;
+	return typeof args.code === "string" ? args.code : undefined;
 }
 
 function toolResultText(result: unknown): string | undefined {
 	if (typeof result === "string") return result;
-	if (!result || typeof result !== "object") return undefined;
-	const output = (result as { output?: unknown }).output;
+	if (!isRecord(result)) return undefined;
+	const output = result.output;
 	if (typeof output === "string") return output;
-	const content = (result as { content?: unknown }).content;
+	const content = result.content;
 	if (Array.isArray(content)) {
 		const parts = content
-			.map((block) =>
-				block && typeof block === "object" && (block as { type?: string }).type === "text"
-					? ((block as { text?: string }).text ?? "")
-					: "",
-			)
+			.map((block) => {
+				if (!isRecord(block) || block.type !== "text" || typeof block.text !== "string") return "";
+				return block.text;
+			})
 			.filter(Boolean);
 		if (parts.length > 0) return parts.join("\n");
 	}
@@ -93,23 +102,23 @@ function toolResultText(result: unknown): string | undefined {
 /**
  * Rich kernel output that ACP has no content type for.
  *
- * The ipython tool reports media and diffs under `details` (images additionally
- * ride along as ACP image content blocks); mirror those exact fields rather than
- * inventing a MIME bundle the tool never produces.
+ * REPL tools report media and diffs under `details` (images additionally ride
+ * along as ACP image content blocks); mirror those exact fields rather than
+ * inventing a MIME bundle the tools never produce.
  */
-function ipythonRichOutput(result: unknown): PrimeAgentIpythonMeta | undefined {
-	if (!result || typeof result !== "object") return undefined;
-	const details = (result as { details?: unknown }).details;
-	if (!details || typeof details !== "object") return undefined;
-	const { attachments, diffs } = details as { attachments?: unknown; diffs?: unknown };
-	const meta: PrimeAgentIpythonMeta = {};
+function replRichOutput(result: unknown): PrimeAgentXonshMeta | undefined {
+	if (!isRecord(result)) return undefined;
+	const details = result.details;
+	if (!isRecord(details)) return undefined;
+	const { attachments, diffs } = details;
+	const meta: PrimeAgentXonshMeta = {};
 	if (Array.isArray(attachments) && attachments.length > 0) {
 		meta.attachments = attachments.map((attachment) => {
 			// KernelAttachment exposes mimeType, base64 `data`, and an optional path.
 			// Report the decoded size rather than a `bytes` field the kernel never
 			// sends, and never inline the payload: ACP already carries images as
 			// content blocks, so duplicating them here would bloat every update.
-			const typed = (attachment ?? {}) as { mimeType?: unknown; path?: unknown; data?: unknown };
+			const typed = isRecord(attachment) ? attachment : {};
 			return {
 				...(typeof typed.mimeType === "string" ? { mimeType: typed.mimeType } : {}),
 				...(typeof typed.path === "string" ? { path: typed.path } : {}),
@@ -156,12 +165,18 @@ export function acpUpdatesForSessionEvent(
 			return [];
 
 		case "tool_execution_start": {
-			const cell = event.toolName === IPYTHON_TOOL_NAME ? ipythonCellSource(event.args) : undefined;
+			const cell = isReplTool(event.toolName) ? replCellSource(event.args) : undefined;
+			const title =
+				event.toolName === XONSH_TOOL_NAME
+					? "Xonsh cell"
+					: event.toolName === IPYTHON_TOOL_NAME
+						? "Python cell"
+						: event.toolName;
 			return [
 				{
 					sessionUpdate: "tool_call",
 					toolCallId: event.toolCallId,
-					title: event.toolName === IPYTHON_TOOL_NAME ? "Python cell" : event.toolName,
+					title,
 					kind: acpToolKind(event.toolName),
 					status: "in_progress" satisfies AcpToolStatus,
 					rawInput: cell !== undefined ? { code: cell } : event.args,
@@ -171,14 +186,16 @@ export function acpUpdatesForSessionEvent(
 
 		case "tool_execution_end": {
 			const text = toolResultText(event.result);
-			const rich = event.toolName === IPYTHON_TOOL_NAME ? ipythonRichOutput(event.result) : undefined;
+			const rich = isReplTool(event.toolName) ? replRichOutput(event.result) : undefined;
 			return [
 				{
 					sessionUpdate: "tool_call_update",
 					toolCallId: event.toolCallId,
 					status: (event.isError ? "failed" : "completed") satisfies AcpToolStatus,
 					...(text ? { content: [{ type: "content", content: textContent(text) }] } : {}),
-					...(rich ? { _meta: primeAgentMeta({ ipython: rich }) } : {}),
+					...(rich
+						? { _meta: primeAgentMeta(event.toolName === XONSH_TOOL_NAME ? { xonsh: rich } : { ipython: rich }) }
+						: {}),
 				},
 			];
 		}
@@ -295,6 +312,7 @@ export function acpUpdatesForSessionEvent(
 				},
 			];
 
+		case "xonsh_sent_agent_message":
 		case "ipython_sent_agent_message":
 			return [
 				{

@@ -6,9 +6,9 @@ import {
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { formatAgentMessageParticipant } from "../../../core/agent-messages.js";
-import { previewIpythonCode, pythonStatementLines } from "../../../core/tools/code-preview.js";
+import { previewIpythonCode, previewXonshCode, pythonStatementLines } from "../../../core/tools/code-preview.js";
 import { generateDiffString } from "../../../core/tools/edit-diff.js";
-import { parseIpythonBashCell } from "../../../core/tools/ipython-cell-code.js";
+import { parseReplBashCell } from "../../../core/tools/ipython-cell-code.js";
 import { getLanguageFromPath, highlightCode, theme } from "../theme/theme.js";
 import { getWorkingPulseFrame, WORKING_ICON_FRAMES, workingIconFrame } from "../theme/working-icon.js";
 import { agentMessageBodyLines, agentMessageSummaryLine } from "./agent-message.js";
@@ -17,19 +17,21 @@ import { renderDiffSeparator, renderRichDiff } from "./diff.js";
 import { countChangedLines, FILE_CHANGE_DIFF_INDENT, formatFileChangeSummaryLine } from "./edit-summary.js";
 import type { BackgroundShellHandle, ShellCompletion } from "./shell-completion.js";
 
-export interface IPythonCellContentBlock {
+export interface XonshCellContentBlock {
 	type: string;
 	text?: string;
 	data?: string;
 	mimeType?: string;
 }
 
-export interface IPythonCellState {
+export interface XonshCellState {
 	code: string;
 	backgroundShell?: BackgroundShellHandle;
 	shellCompletion?: ShellCompletion;
 	shellCompletionAmbiguous?: boolean;
-	content?: readonly IPythonCellContentBlock[];
+	/** REPL dialect used for preview and source highlighting. */
+	toolName?: "xonsh" | "ipython";
+	content?: readonly XonshCellContentBlock[];
 	details?: unknown;
 	isPartial?: boolean;
 	isError?: boolean;
@@ -42,6 +44,10 @@ export interface IPythonCellState {
 	/** Session cwd — edit paths nested under it render relative, else absolute. */
 	cwd?: string;
 }
+
+/** Backward-compatible IPython names for the shared REPL cell state. */
+export type IPythonCellContentBlock = XonshCellContentBlock;
+export type IPythonCellState = XonshCellState;
 
 interface DiffDisplay {
 	path: string;
@@ -129,13 +135,16 @@ function closeOpenSgr(line: string): string {
 	return fgOpen || bgOpen ? `${line}\x1b[0m` : line;
 }
 
-export function getIpythonCodeFromArgs(args: unknown): string {
+export function getXonshCodeFromArgs(args: unknown): string {
 	if (!args || typeof args !== "object" || !("code" in args)) {
 		return "";
 	}
 	const code = (args as { code?: unknown }).code;
 	return typeof code === "string" ? code : "";
 }
+
+/** @deprecated Use getXonshCodeFromArgs. */
+export const getIpythonCodeFromArgs = getXonshCodeFromArgs;
 
 function readDetails(details: unknown): IpythonDetails {
 	if (!details || typeof details !== "object") {
@@ -288,11 +297,11 @@ function formatDuration(durationMs: number | undefined): string | undefined {
 	return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
-function isImageBlock(block: IPythonCellContentBlock): boolean {
+function isImageBlock(block: XonshCellContentBlock): boolean {
 	return block.type === "image" && typeof block.data === "string" && typeof block.mimeType === "string";
 }
 
-function textFromBlocks(blocks: readonly IPythonCellContentBlock[] | undefined): string {
+function textFromBlocks(blocks: readonly XonshCellContentBlock[] | undefined): string {
 	if (!blocks) {
 		return "";
 	}
@@ -335,16 +344,16 @@ function formatIpythonErrorSummary(error: IpythonErrorDetails): string {
 	return visibleWidth(value) <= 48 ? `${error.ename}: ${value}` : error.ename;
 }
 
-export class IPythonCellComponent implements Component {
+export class ReplCellComponent implements Component {
 	private readonly renderCache = new VersionedRenderCache();
-	private state: IPythonCellState;
+	private state: XonshCellState;
 	private stateVersion = 0;
 
-	constructor(state: IPythonCellState) {
+	constructor(state: XonshCellState) {
 		this.state = state;
 	}
 
-	update(state: IPythonCellState): void {
+	update(state: XonshCellState): void {
 		this.state = state;
 		this.stateVersion += 1;
 	}
@@ -392,15 +401,28 @@ export class IPythonCellComponent implements Component {
 
 	private collapsedLine(details: IpythonDetails): string {
 		const code = this.state.code.trimEnd();
-		const isBashCell = parseIpythonBashCell(code) !== undefined;
-		const preview = previewIpythonCode(code);
-		const languageLabel = isBashCell && preview.language !== "bash" ? `bash · ${preview.language}` : preview.language;
+		const isBashCell = parseReplBashCell(code) !== undefined;
+		const preview = this.state.toolName === "xonsh" ? previewXonshCode(code) : previewIpythonCode(code);
+		const isXonshShell =
+			this.state.toolName === "xonsh" &&
+			preview.language === "xonsh" &&
+			!/^\s*\$[A-Za-z_][A-Za-z0-9_]*\s*(?:\+?=)/.test(code);
+		const languageLabel =
+			isBashCell && preview.language !== "bash"
+				? `bash · ${preview.language}`
+				: isXonshShell
+					? "xonsh · bash"
+					: preview.language;
 		const parts = [`${this.marker(details)} ${theme.fg("muted", languageLabel)}`];
 
 		if (preview.text) {
+<<<<<<< HEAD
 			// Collapsed preview stays plain and dim so the one-line summary reads as
 			// quiet metadata; the expanded block below keeps full highlighting.
 			parts.push(theme.fg("dim", preview.text));
+=======
+			parts.push(this.highlightInputLine(preview.text, preview.language === "bash" || isXonshShell));
+>>>>>>> ab8756746 (feat(coding-agent): deliver native xonsh REPL alongside ipython)
 		} else if (!this.state.executionStarted) {
 			parts.push(theme.fg("dim", "waiting for code"));
 		}
@@ -448,7 +470,7 @@ export class IPythonCellComponent implements Component {
 	// `↑in ↓out lines` — the "lines" unit disambiguates from the token counts on
 	// the activity line. Output is omitted for edits (the diff shows on expand).
 	private lineCounts(details: IpythonDetails): string | undefined {
-		const bashCell = parseIpythonBashCell(this.state.code);
+		const bashCell = parseReplBashCell(this.state.code);
 		const body = (bashCell?.body ?? this.state.code).split(/\r?\n/);
 		const input = body.filter((line) => line.trim().length > 0).length;
 
@@ -517,7 +539,7 @@ export class IPythonCellComponent implements Component {
 			return false;
 		}
 
-		const isBashCell = parseIpythonBashCell(code) !== undefined;
+		const isBashCell = parseReplBashCell(code) !== undefined;
 		const rawLines = code.split("\n");
 		// Reopen inherited ANSI styles on each source line before gutters reset them.
 		const sourceWidth = rawLines.reduce((max, line) => Math.max(max, visibleWidth(line)), 1);
@@ -527,10 +549,15 @@ export class IPythonCellComponent implements Component {
 		const statementLines = isBashCell ? rawLines : pythonStatementLines(code);
 		for (const [index, rawLine] of rawLines.entries()) {
 			const prefix = index === 0 ? theme.fg("dim", "╰─ ") : OUTPUT_INDENT;
+			const isXonshShellLine =
+				this.state.toolName === "xonsh" &&
+				(previewXonshCode(rawLine).language === "xonsh" || /^\s*[!$@](?:[!(]|\w)/.test(rawLine));
+			const statement = statementLines[index] ?? "";
 			const highlighted =
 				isBashCell ||
-				MAGIC_LINE_PATTERN.test(statementLines[index] ?? "") ||
-				parseIpythonBashCell(statementLines[index] ?? "") !== undefined
+				isXonshShellLine ||
+				MAGIC_LINE_PATTERN.test(statement) ||
+				parseReplBashCell(statement) !== undefined
 					? theme.fg("bashMode", rawLine)
 					: (highlightedLines[index] ?? theme.fg("mdCodeBlock", rawLine));
 			this.addWrapped(lines, prefix, highlighted || " ", width);
@@ -538,7 +565,6 @@ export class IPythonCellComponent implements Component {
 
 		return true;
 	}
-
 	// Only runs when expanded — shows full output below the code, no previews.
 	private renderOutput(lines: string[], width: number, details: IpythonDetails, hasCode: boolean): void {
 		const blocks = this.state.content ?? [];
@@ -765,5 +791,27 @@ export class IPythonCellComponent implements Component {
 	// No-background line, indented one space to align with the summary line above.
 	private addPlain(lines: string[], text: string): void {
 		lines.push(` ${text}`);
+	}
+}
+
+/** Native Xonsh cell renderer. The implementation is shared with IPython. */
+export class XonshCellComponent extends ReplCellComponent {
+	constructor(state: XonshCellState) {
+		super({ ...state, toolName: "xonsh" });
+	}
+
+	override update(state: XonshCellState): void {
+		super.update({ ...state, toolName: "xonsh" });
+	}
+}
+
+/** Legacy Python/IPython cell renderer retained for existing sessions. */
+export class IPythonCellComponent extends ReplCellComponent {
+	constructor(state: XonshCellState) {
+		super({ ...state, toolName: "ipython" });
+	}
+
+	override update(state: XonshCellState): void {
+		super.update({ ...state, toolName: "ipython" });
 	}
 }

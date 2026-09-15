@@ -125,6 +125,8 @@ export type {
 	UserBashEventResult,
 	WidgetPlacement,
 	WorkingIndicatorOptions,
+	XonshToolCallEvent,
+	XonshToolResultEvent,
 } from "./core/extensions/index.js";
 export {
 	createExtensionRuntime,
@@ -135,6 +137,7 @@ export {
 	isEditToolResult,
 	isIpythonToolResult,
 	isToolCallEventType,
+	isXonshToolResult,
 	wrapRegisteredTool,
 	wrapRegisteredTools,
 } from "./core/extensions/index.js";
@@ -184,6 +187,7 @@ export {
 	// Tool factories (for custom cwd)
 	createEditTool,
 	createIpythonTool,
+	createXonshTool,
 	type PromptTemplate,
 	type RlmSubagentRuntime,
 	type SubagentRuntimeHost,
@@ -254,6 +258,7 @@ export {
 	createEditToolDefinition,
 	createIpythonToolDefinition,
 	createLocalBashOperations,
+	createXonshToolDefinition,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type EditOperations,
@@ -272,6 +277,10 @@ export {
 	truncateLine,
 	truncateTail,
 	withFileMutationQueue,
+	XonshKernelProvisioner,
+	type XonshToolDetails,
+	type XonshToolInput,
+	type XonshToolOptions,
 } from "./core/tools/index.js";
 // Main entry point
 export { type MainOptions, main } from "./main.js";
