@@ -30,10 +30,25 @@ import traceback
 import types
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from xonsh.built_ins import XonshSession
+    from xonsh.execer import Execer
 
 from . import factory as factory_module
 from .bash import _kill_live_handles
+
+_XONSH_SESSION: "XonshSession | None" = None
+_XONSH_EXECER: "type[Execer] | None" = None
+try:
+    from xonsh.built_ins import XSH as _XONSH_RAW_SESSION
+    from xonsh.execer import Execer as _XONSH_RAW_EXECER
+
+    _XONSH_SESSION = _XONSH_RAW_SESSION
+    _XONSH_EXECER = _XONSH_RAW_EXECER
+except ImportError:  # xonsh is an optional kernel extra, loaded only for xonsh cells.
+    pass
 
 PROTOCOL_VERSION = 3
 
@@ -89,6 +104,8 @@ _current_cell_execution: contextvars.ContextVar[_CellExecution | None] = context
 )
 _active: dict[str, Any] = {"task": None, "rid": None, "interrupted": False}
 _cell_counter = 0
+_xonsh_execer: "Execer | None" = None
+_xonsh_namespace: dict[str, Any] | None = None
 _pending_host: dict[str, "asyncio.Future[dict[str, Any]]"] = {}
 # Set on the loop thread once stdin hits EOF or a shutdown request arrives; no
 # host reply can arrive after that, so waiting (and future) host_request calls fail.
@@ -594,13 +611,69 @@ def _interrupt_event(cell_id: str, exc: BaseException) -> dict[str, Any]:
     return {"event": "error", "id": cell_id, "ename": "KeyboardInterrupt", "evalue": "", "traceback": lines}
 
 
-def _compile_cell(code: str, filename: str) -> tuple[list[types.CodeType], bool]:
-    """Compile a cell; a trailing expression compiles separately in eval mode."""
+def _compile_xonsh_cell(code: str, filename: str, ns: dict[str, Any]) -> tuple[list[types.CodeType], bool]:
+    """Compile native Xonsh syntax against the persistent Xonsh session."""
+    global _xonsh_execer, _xonsh_namespace
+    if _XONSH_EXECER is None or _XONSH_SESSION is None:
+        raise RuntimeError("xonsh is not installed in this kernel")
+    if _xonsh_execer is None:
+        _xonsh_execer = _XONSH_EXECER(filename=filename)
+        _XONSH_SESSION.load(execer=_xonsh_execer, ctx=ns)
+        _xonsh_namespace = ns
+    elif _xonsh_namespace is not ns:
+        _XONSH_SESSION.load(execer=_xonsh_execer, ctx=ns)
+        _xonsh_namespace = ns
+    tree = _xonsh_execer.parse(code, ns, filename=filename, transform=True)
+    if tree is not None and not isinstance(tree, ast.Module):
+        body: list[Any]
+        if isinstance(tree, list):
+            body = tree
+        elif isinstance(tree, ast.Interactive):
+            body = tree.body
+        else:
+            raw_body = getattr(tree, "body", None)
+            if isinstance(raw_body, list):
+                body = raw_body
+            elif isinstance(raw_body, ast.expr):
+                body = [ast.Expr(value=raw_body)]
+            elif raw_body is not None:
+                body = [raw_body]
+            elif isinstance(tree, ast.expr):
+                body = [ast.Expr(value=tree)]
+            else:
+                body = [tree]
+        tree = ast.Module(body=body, type_ignores=[])  # type: ignore[arg-type] # pyright: ignore[reportArgumentType]
+    elif isinstance(tree, ast.Module) and not hasattr(tree, "type_ignores"):
+        tree.type_ignores = []
+    trailing: ast.Expression | None = None
+    if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[-1], ast.Expr):
+        last_expr = tree.body.pop()
+        assert isinstance(last_expr, ast.Expr)
+        trailing = ast.Expression(last_expr.value)
+    flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
+    codes: list[types.CodeType] = []
+    if tree is not None and (not isinstance(tree, ast.Module) or tree.body):
+        codes.append(compile(tree, filename, "exec", flags=flags, dont_inherit=True))  # type: ignore[call-overload] # pyright: ignore[reportCallIssue,reportArgumentType]
+    if trailing is not None:
+        codes.append(compile(trailing, filename, "eval", flags=flags, dont_inherit=True))
+    return codes, trailing is not None
+
+
+def _compile_cell(code: str, filename: str, mode: str = "python", ns: dict[str, Any] | None = None) -> tuple[list[types.CodeType], bool]:
+    """Compile a cell; Xonsh mode transforms shell syntax before Python compilation."""
     linecache.cache[filename] = (len(code), None, code.splitlines(keepends=True), filename)
+    if mode == "xonsh":
+        if ns is None:
+            raise RuntimeError("Xonsh compilation requires a namespace")
+        return _compile_xonsh_cell(code, filename, ns)
+    if mode != "python":
+        raise ValueError(f"unknown execution mode: {mode!r}")
     tree = ast.parse(code, filename)
     trailing: ast.Expression | None = None
     if tree.body and isinstance(tree.body[-1], ast.Expr):
-        trailing = ast.Expression(tree.body.pop().value)
+        last_expr = tree.body.pop()
+        assert isinstance(last_expr, ast.Expr)
+        trailing = ast.Expression(last_expr.value)
     flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     codes: list[types.CodeType] = []
     if tree.body:
@@ -659,7 +732,10 @@ async def _handle_execute(req: dict[str, Any], ns: dict[str, Any]) -> None:
     cell_token = _current_cell.set(cell_id)
     execution_token = _current_cell_execution.set(execution)
     try:
-        codes, has_trailing = _compile_cell(req["code"], filename)
+        mode = req.get("mode", "python")
+        if not isinstance(mode, str):
+            raise TypeError("execute mode must be a string")
+        codes, has_trailing = _compile_cell(req["code"], filename, mode, ns)
         assert _loop is not None
         task = _loop.create_task(_run_codes(codes, ns))
         execution.owner = task
@@ -1512,6 +1588,9 @@ def _handle_request_line(raw: bytes, queue: asyncio.Queue[dict[str, Any]]) -> No
     missing = [f for f in _REQUIRED_FIELDS[rtype] if not isinstance(req.get(f), str)]
     if missing:
         _protocol_error(f"{rtype} request needs string fields: {', '.join(missing)}")
+        return
+    if rtype == "execute" and req.get("mode", "python") not in ("python", "xonsh"):
+        _protocol_error(f"unknown execution mode: {req.get('mode')!r}")
         return
     if rtype == "bash_activity":
         if req["action"] not in ("list", "tail", "kill"):
