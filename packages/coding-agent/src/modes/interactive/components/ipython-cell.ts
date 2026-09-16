@@ -416,13 +416,9 @@ export class ReplCellComponent implements Component {
 		const parts = [`${this.marker(details)} ${theme.fg("muted", languageLabel)}`];
 
 		if (preview.text) {
-<<<<<<< HEAD
 			// Collapsed preview stays plain and dim so the one-line summary reads as
 			// quiet metadata; the expanded block below keeps full highlighting.
 			parts.push(theme.fg("dim", preview.text));
-=======
-			parts.push(this.highlightInputLine(preview.text, preview.language === "bash" || isXonshShell));
->>>>>>> ab8756746 (feat(coding-agent): deliver native xonsh REPL alongside ipython)
 		} else if (!this.state.executionStarted) {
 			parts.push(theme.fg("dim", "waiting for code"));
 		}
