@@ -9,13 +9,7 @@ import { getTextOutput as getRenderedTextOutput } from "../../../core/tools/rend
 import type { AgentConnectionToolDefinition } from "../../agent-connection/index.js";
 import { type Theme, theme } from "../theme/theme.js";
 import { getWorkingPulseFrame, workingIconFrame } from "../theme/working-icon.js";
-import {
-	getIpythonCodeFromArgs,
-	getXonshCodeFromArgs,
-	IPythonCellComponent,
-	ReplCellComponent,
-	type XonshCellState,
-} from "./ipython-cell.js";
+import { getXonshCodeFromArgs, ReplCellComponent, type XonshCellState } from "./ipython-cell.js";
 import { expandCollapseHint } from "./keybinding-hints.js";
 import {
 	type BackgroundShellHandle,
@@ -389,9 +383,7 @@ export class ToolExecutionComponent extends Container {
 			this.contentPanel.setHeader(this.panelHeader());
 		}
 		const lines = super.render(width);
-		return this.expanded && this.shouldUseReplRenderer() && this.shouldAddLeadingSpace?.()
-			? ["", ...lines]
-			: lines;
+		return this.expanded && this.shouldUseReplRenderer() && this.shouldAddLeadingSpace?.() ? ["", ...lines] : lines;
 	}
 
 	private isStatusAnimating(): boolean {
