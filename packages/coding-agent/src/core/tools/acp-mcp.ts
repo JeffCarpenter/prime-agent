@@ -2,6 +2,9 @@ import type { ToolDefinition } from "../extensions/types.js";
 import type { ExecuteResult } from "../kernel/index.js";
 import type { AcpMcpServerConfig } from "../mcp/acp-mcp-types.js";
 import type { IpythonKernelProvisioner } from "./ipython.js";
+import type { XonshKernelProvisioner } from "./xonsh.js";
+
+export type AcpMcpKernelProvisioner = IpythonKernelProvisioner | XonshKernelProvisioner;
 
 // 48 keeps `mcp_list_tools_<name>` within providers' 64-char tool-name limits.
 const ACP_MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,48}$/;
@@ -42,14 +45,14 @@ function executionResult(result: ExecuteResult) {
 	};
 }
 
-async function executeMcpCode(provisioner: IpythonKernelProvisioner, code: string, signal: AbortSignal | undefined) {
+async function executeMcpCode(provisioner: AcpMcpKernelProvisioner, code: string, signal: AbortSignal | undefined) {
 	const manager = await provisioner.ensure(() => {}, signal);
 	return executionResult(await manager.execute(code, { signal }));
 }
 
 export function createAcpMcpToolDefinitions(
 	servers: readonly AcpMcpServerConfig[],
-	provisioner: IpythonKernelProvisioner,
+	provisioner: AcpMcpKernelProvisioner,
 ): ToolDefinition[] {
 	const names = acpMcpToolNames(servers);
 	const definitions: ToolDefinition[] = [];
