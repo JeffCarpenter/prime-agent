@@ -615,5 +615,6 @@ export function previewXonshCode(code: string): CodePreview {
 		return { language: "xonsh", text: preview.text || descriptor(trimmedCode) };
 	}
 
-	return previewPythonCode(trimmedCode);
+	const preview = previewPythonCode(trimmedCode);
+	return { language: "xonsh", text: preview.text };
 }
