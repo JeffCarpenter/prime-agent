@@ -65,7 +65,6 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	const hasIpython = tools.includes("ipython");
 	const hasXonsh = tools.includes("xonsh");
 	const hasRepl = hasIpython || hasXonsh;
-	const hasBash = tools.includes("bash");
 	const visibleSkills = skills.filter((skill) => !skill.disableModelInvocation);
 	const visiblePythonSkillImportNames = getPythonSkillRuntimeInfo(visibleSkills).map((skill) => skill.importName);
 	const hasRefineSkill = visibleSkills.some((skill) => skill.name === REFINE_SKILL_NAME);
@@ -106,7 +105,6 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		if (childDoctrine) {
 			prompt += `\n\n${childDoctrine}`;
 		}
-
 
 		if (genericMcpSection) {
 			prompt += `\n\n${genericMcpSection}`;
