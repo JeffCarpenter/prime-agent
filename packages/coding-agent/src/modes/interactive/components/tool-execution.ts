@@ -9,13 +9,7 @@ import { getTextOutput as getRenderedTextOutput } from "../../../core/tools/rend
 import type { AgentConnectionToolDefinition } from "../../agent-connection/index.js";
 import { type Theme, theme } from "../theme/theme.js";
 import { getWorkingPulseFrame, workingIconFrame } from "../theme/working-icon.js";
-import {
-	getIpythonCodeFromArgs,
-	getXonshCodeFromArgs,
-	IPythonCellComponent,
-	ReplCellComponent,
-	type XonshCellState,
-} from "./ipython-cell.js";
+import { getXonshCodeFromArgs, ReplCellComponent, type XonshCellState } from "./ipython-cell.js";
 import { expandCollapseHint } from "./keybinding-hints.js";
 import {
 	type BackgroundShellHandle,
@@ -388,7 +382,7 @@ export class ToolExecutionComponent extends Container {
 		// as panelStatus() is still animating (including partial streaming results).
 		if (this.isStatusAnimating() && !this.usesSelfRenderShell()) {
 			this.contentPanel.setHeader(this.panelHeader());
-		}
+		const lines = super.render(width);
 		// The header row toggles only this component: panel header line for the
 		// default shell, the fixed summary line for self-rendered ipython/xonsh cells.
 		// That REPL shell prepends a blank row, so aggregated child regions
