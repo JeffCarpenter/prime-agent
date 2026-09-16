@@ -27,16 +27,24 @@ import traceback
 import types
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from xonsh.built_ins import XonshSession
+    from xonsh.execer import Execer
 
 from .bash import _kill_live_handles
 
+_XONSH_SESSION: XonshSession | None = None
+_XONSH_EXECER: type[Execer] | None = None
 try:
-    from xonsh.built_ins import XSH as _XONSH_SESSION
-    from xonsh.execer import Execer as _XONSH_EXECER
+    from xonsh.built_ins import XSH as _XONSH_RAW_SESSION
+    from xonsh.execer import Execer as _XONSH_RAW_EXECER
+
+    _XONSH_SESSION = _XONSH_RAW_SESSION
+    _XONSH_EXECER = _XONSH_RAW_EXECER
 except ImportError:  # xonsh is an optional kernel extra, loaded only for xonsh cells.
-    _XONSH_SESSION = None
-    _XONSH_EXECER = None
+    pass
 
 PROTOCOL_VERSION = 3
 
@@ -68,11 +76,11 @@ _current_cell_execution: contextvars.ContextVar[_CellExecution | None] = context
 )
 _active: dict[str, Any] = {"task": None, "rid": None, "interrupted": False}
 _cell_counter = 0
-_pending_host: dict[str, "asyncio.Future[dict[str, Any]]"] = {}
+_pending_host: dict[str, asyncio.Future[dict[str, Any]]] = {}
 # Set on the loop thread once stdin hits EOF or a shutdown request arrives; no
 # host reply can arrive after that, so waiting (and future) host_request calls fail.
 _host_closed = False
-_xonsh_execer: Any = None
+_xonsh_execer: Execer | None = None
 _xonsh_namespace: dict[str, Any] | None = None
 
 # Interrupt bookkeeping shared between the reader thread and the loop thread.
@@ -316,13 +324,8 @@ class _TaggedWriter(io.TextIOBase):
     def buffer(self) -> _TaggedBuffer:
         return self._buffer
 
-    @property
-    def encoding(self) -> str:
-        return "utf-8"
-
-    @property
-    def errors(self) -> str:
-        return "replace"
+    encoding: str = "utf-8"
+    errors: str | None = "replace"
 
 
 def _consume_task_exception(task: asyncio.Task[Any]) -> None:
@@ -397,11 +400,13 @@ def _request_interrupt(target: str | None) -> None:
     # (sync-blocked cells and the finishing repr/drain cannot be broken there;
     # best-effort parity).
     if hasattr(signal, "pthread_kill"):
-        signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)
-        if _loop is not None:
-            # Wake the selector so a cancel scheduled by the handler runs promptly.
-            _loop.call_soon_threadsafe(lambda: None)
-        return
+        ident = threading.main_thread().ident
+        if ident is not None:
+            signal.pthread_kill(ident, signal.SIGINT)
+            if _loop is not None:
+                # Wake the selector so a cancel scheduled by the handler runs promptly.
+                _loop.call_soon_threadsafe(lambda: None)
+            return
     if _loop is not None:
 
         def cancel_active() -> None:
@@ -517,11 +522,13 @@ def _compile_xonsh_cell(code: str, filename: str, ns: dict[str, Any]) -> tuple[l
     tree = _xonsh_execer.parse(code, ns, filename=filename, transform=True)
     trailing: ast.Expression | None = None
     if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[-1], ast.Expr):
-        trailing = ast.Expression(tree.body.pop().value)
+        last_expr = tree.body.pop()
+        assert isinstance(last_expr, ast.Expr)
+        trailing = ast.Expression(last_expr.value)
     flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     codes: list[types.CodeType] = []
     if tree is not None and (not isinstance(tree, ast.Module) or tree.body):
-        codes.append(compile(tree, filename, "exec", flags=flags, dont_inherit=True))
+        codes.append(compile(tree, filename, "exec", flags=flags, dont_inherit=True))  # type: ignore[call-overload] # pyright: ignore[reportCallIssue,reportArgumentType]
     if trailing is not None:
         codes.append(compile(trailing, filename, "eval", flags=flags, dont_inherit=True))
     return codes, trailing is not None
@@ -539,7 +546,9 @@ def _compile_cell(code: str, filename: str, mode: str = "python", ns: dict[str, 
     tree = ast.parse(code, filename)
     trailing: ast.Expression | None = None
     if tree.body and isinstance(tree.body[-1], ast.Expr):
-        trailing = ast.Expression(tree.body.pop().value)
+        last_expr = tree.body.pop()
+        assert isinstance(last_expr, ast.Expr)
+        trailing = ast.Expression(last_expr.value)
     flags = ast.PyCF_ALLOW_TOP_LEVEL_AWAIT
     codes: list[types.CodeType] = []
     if tree.body:
@@ -552,7 +561,7 @@ def _compile_cell(code: str, filename: str, mode: str = "python", ns: dict[str, 
 async def _run_codes(codes: list[types.CodeType], ns: dict[str, Any]) -> Any:
     value: Any = None
     for code_obj in codes:
-        value = eval(code_obj, ns)  # noqa: S307 - executing the model's cell is the runtime's job
+        value = eval(code_obj, ns)
         if code_obj.co_flags & inspect.CO_COROUTINE:
             value = await value
     return value
@@ -600,7 +609,7 @@ async def _handle_execute(req: dict[str, Any], ns: dict[str, Any]) -> None:
     try:
         mode = req.get("mode", "python")
         if not isinstance(mode, str):
-            raise ValueError("execute mode must be a string")
+            raise TypeError("execute mode must be a string")
         codes, has_trailing = _compile_cell(req["code"], filename, mode, ns)
         assert _loop is not None
         task = _loop.create_task(_run_codes(codes, ns))
@@ -801,7 +810,7 @@ def _snapshot_state(
             fh, manifest_tmp = stage_temp(manifest_path, "w")
             with fh:
                 json.dump(manifest, fh)
-        except BaseException as err:  # noqa: BLE001 - Exception -> error dict, rest propagates
+        except BaseException as err:
             if not isinstance(err, Exception):
                 raise  # e.g. KeyboardInterrupt: clean up (outer finally), then propagate
             return {"error": f"{stage} failed: {err}"}
@@ -953,6 +962,9 @@ async def _handle_state(req: dict[str, Any], ns: dict[str, Any]) -> None:
         )
         _send({"event": "done", "id": rid, "status": "error", "reason": reason})
         return
+    if not isinstance(result, dict):
+        _send({"event": "done", "id": rid, "status": "error", "reason": "failed"})
+        return
     if "error" in result:
         _send({"event": "done", "id": rid, "status": "error", "reason": result["error"]})
         return
@@ -1007,7 +1019,7 @@ async def _serve(queue: asyncio.Queue[dict[str, Any]], ns: dict[str, Any]) -> No
             if mcp_mod is not None:
                 try:
                     await mcp_mod.close()
-                except BaseException as exc:
+                except Exception as exc:  # noqa: BLE001 - log failure and continue shutdown
                     print(f"MCP shutdown failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             # Kill live bash children now; atexit would wait on parked executor threads.
             _kill_live_handles()
@@ -1039,7 +1051,7 @@ def _handle_request_line(raw: bytes, queue: asyncio.Queue[dict[str, Any]]) -> No
     assert _loop is not None
     req = json.loads(raw)
     if not isinstance(req, dict):
-        raise ValueError("request is not a JSON object")
+        raise TypeError("request is not a JSON object")
     rtype = req.get("type")
     if rtype == "execute" and req.get("mode", "python") not in ("python", "xonsh"):
         _protocol_error(f"unknown execution mode: {req.get('mode')!r}")
@@ -1133,7 +1145,10 @@ def _wait_owner_windows(owner: int) -> None:
 
     SYNCHRONIZE = 0x00100000
     INFINITE = 0xFFFFFFFF
-    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    win_dll = getattr(ctypes, "WinDLL", None)
+    if win_dll is None:
+        return
+    k32 = win_dll("kernel32", use_last_error=True)
     k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     k32.OpenProcess.restype = wintypes.HANDLE
     k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
@@ -1159,7 +1174,7 @@ def _owner_watchdog(owner: int, initial_ppid: int) -> None:
     # loop, so the queued EOF shutdown can never run; hard-exit from here.
     try:
         _kill_live_handles()
-    except BaseException:  # noqa: BLE001
+    except BaseException:  # noqa: BLE001, S110
         pass
     os._exit(1)
 
@@ -1191,7 +1206,7 @@ def _setup_fds() -> int:
     devnull = os.open(os.devnull, os.O_RDONLY)
     os.dup2(devnull, 0)
     os.close(devnull)
-    sys.stdin = open(os.devnull, "r")  # user input() sees EOF, never protocol frames
+    sys.stdin = open(os.devnull, "r")  # noqa: SIM115 - user input() sees EOF, never protocol frames
     _pump_out = _Pump(out_r, 1, "stdout")
     _pump_err = _Pump(err_r, 2, "stderr")
     return stdin_fd
