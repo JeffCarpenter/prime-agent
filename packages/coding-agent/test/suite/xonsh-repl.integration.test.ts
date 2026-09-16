@@ -4,9 +4,10 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
+import type { AgentSession } from "../../src/core/agent-session.js";
 import { AuthStorage } from "../../src/core/auth-storage.js";
 import { createExtensionRuntime } from "../../src/core/extensions/index.js";
-import type { ExtensionContext, ToolDefinition } from "../../src/core/extensions/types.js";
+import type { ExtensionContext } from "../../src/core/extensions/types.js";
 import { ModelRegistry } from "../../src/core/model-registry.js";
 import type { ResourceLoader } from "../../src/core/resource-loader.js";
 import { createAgentSession } from "../../src/core/sdk.js";
@@ -149,81 +150,80 @@ describe("real Xonsh REPL integration", () => {
 
 	it("executes real Xonsh cells in an AgentSession configured like the full-control SDK example", async () => {
 		const tempAgentDir = join(tmpdir(), `pi-full-control-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		mkdirSync(tempAgentDir, { recursive: true });
-
-		const provisioner = new XonshKernelProvisioner(packageRoot, {
-			env: { PYTHONPATH: runtimeSource },
-		});
-		const xonshTool = createXonshToolDefinition(packageRoot, { provisioner });
-
-		const faux = registerFauxProvider();
-		faux.setResponses([
-			fauxAssistantMessage(
-				[
-					fauxToolCall(
-						"xonsh",
-						{
-							code: [
-								"import sys",
-								'$XONSH_REPL_FULL_CONTROL = "full-control-native"',
-								"persisted_vals = [20, 22]",
-								`captured = $(@(sys.executable) -c "import sys; sys.stdout.write('proc-output')")`,
-								'print(f"full-control-stdout:{sum(persisted_vals)}")',
-								"($XONSH_REPL_FULL_CONTROL, captured, sum(persisted_vals))",
-							].join("\n"),
-						},
-						{ id: "call-full-control-1" },
-					),
-				],
-				{ stopReason: "toolUse" },
-			),
-			fauxAssistantMessage("Native xonsh computed 42 in full-control session."),
-		]);
-
-		const model = faux.getModel();
-		const authStorage = AuthStorage.create(join(tempAgentDir, "auth.json"));
-		authStorage.setRuntimeApiKey(model.provider, "faux-key");
-		const modelRegistry = ModelRegistry.inMemory(authStorage);
-		modelRegistry.registerProvider(model.provider, {
-			baseUrl: model.baseUrl,
-			apiKey: "faux-key",
-			api: faux.api,
-			models: faux.models.map((m) => ({
-				id: m.id,
-				name: m.name,
-				api: m.api,
-				reasoning: m.reasoning,
-				input: m.input,
-				cost: m.cost,
-				contextWindow: m.contextWindow,
-				maxTokens: m.maxTokens,
-				baseUrl: m.baseUrl,
-			})),
-		});
-
-		const settingsManager = SettingsManager.inMemory({
-			compaction: { enabled: false },
-			retry: { enabled: true, maxRetries: 2 },
-		});
-
-		const cwd = packageRoot;
-
-		const resourceLoader: ResourceLoader = {
-			getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-			getSkills: () => ({ skills: [], diagnostics: [] }),
-			getPrompts: () => ({ prompts: [], diagnostics: [] }),
-			getThemes: () => ({ themes: [], diagnostics: [] }),
-			getAgentsFiles: () => ({ agentsFiles: [] }),
-			getSystemPrompt: () => "You are a minimal assistant.\nAvailable: xonsh. Be concise.",
-			getAppendSystemPrompt: () => [],
-			extendResources: () => {},
-			reload: async () => {},
-		};
-
-		const textDeltas: string[] = [];
+		const previousPythonPath = process.env.PYTHONPATH;
+		let session: AgentSession | undefined;
 
 		try {
-			const { session } = await createAgentSession({
+			mkdirSync(tempAgentDir, { recursive: true });
+			process.env.PYTHONPATH = runtimeSource;
+
+			const faux = registerFauxProvider();
+			faux.setResponses([
+				fauxAssistantMessage(
+					[
+						fauxToolCall(
+							"xonsh",
+							{
+								code: [
+									"import sys",
+									'$XONSH_REPL_FULL_CONTROL = "full-control-native"',
+									"persisted_vals = [20, 22]",
+									`captured = $(@(sys.executable) -c "import sys; sys.stdout.write('proc-output')")`,
+									'print(f"full-control-stdout:{sum(persisted_vals)}")',
+									"($XONSH_REPL_FULL_CONTROL, captured, sum(persisted_vals))",
+								].join("\n"),
+							},
+							{ id: "call-full-control-1" },
+						),
+					],
+					{ stopReason: "toolUse" },
+				),
+				fauxAssistantMessage("Native xonsh computed 42 in full-control session."),
+			]);
+
+			const model = faux.getModel();
+			const authStorage = AuthStorage.create(join(tempAgentDir, "auth.json"));
+			authStorage.setRuntimeApiKey(model.provider, "faux-key");
+			const modelRegistry = ModelRegistry.inMemory(authStorage);
+			modelRegistry.registerProvider(model.provider, {
+				baseUrl: model.baseUrl,
+				apiKey: "faux-key",
+				api: faux.api,
+				models: faux.models.map((m) => ({
+					id: m.id,
+					name: m.name,
+					api: m.api,
+					reasoning: m.reasoning,
+					input: m.input,
+					cost: m.cost,
+					contextWindow: m.contextWindow,
+					maxTokens: m.maxTokens,
+					baseUrl: m.baseUrl,
+				})),
+			});
+
+			const settingsManager = SettingsManager.inMemory({
+				compaction: { enabled: false },
+				retry: { enabled: true, maxRetries: 2 },
+			});
+
+			const cwd = packageRoot;
+
+			const resourceLoader: ResourceLoader = {
+				getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+				getSkills: () => ({ skills: [], diagnostics: [] }),
+				getPrompts: () => ({ prompts: [], diagnostics: [] }),
+				getThemes: () => ({ themes: [], diagnostics: [] }),
+				getAgentsFiles: () => ({ agentsFiles: [] }),
+				getSystemPrompt: () => "You are a minimal assistant.\nAvailable: xonsh. Be concise.",
+				getAppendSystemPrompt: () => [],
+				extendResources: () => {},
+				reload: async () => {},
+			};
+
+			const textDeltas: string[] = [];
+
+			const created = await createAgentSession({
 				cwd,
 				agentDir: tempAgentDir,
 				model,
@@ -231,11 +231,10 @@ describe("real Xonsh REPL integration", () => {
 				authStorage,
 				modelRegistry,
 				resourceLoader,
-				tools: ["xonsh"],
-				customTools: [xonshTool as unknown as ToolDefinition],
 				sessionManager: SessionManager.inMemory(cwd),
 				settingsManager,
 			});
+			session = created.session;
 
 			session.subscribe((event) => {
 				if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
@@ -244,13 +243,6 @@ describe("real Xonsh REPL integration", () => {
 			});
 
 			await session.prompt("Run native xonsh calculation");
-
-			const manager = provisioner.manager;
-			if (!manager) {
-				throw new Error("Xonsh provisioner did not retain its started manager");
-			}
-			expect(manager.isRunning).toBe(true);
-			expect(manager.isDefunct).toBe(false);
 
 			const toolResultMessages = session.messages.filter((m) => m.role === "toolResult");
 			expect(toolResultMessages).toHaveLength(1);
@@ -266,11 +258,24 @@ describe("real Xonsh REPL integration", () => {
 				result: "('full-control-native', 'proc-output', 42)",
 			});
 
+			expect(session.getKernelProvisioner("xonsh")?.hasRunningKernel).toBe(true);
+
 			const joinedDeltas = textDeltas.join("");
 			expect(joinedDeltas).toContain("Native xonsh computed 42 in full-control session.");
 		} finally {
-			await provisioner.dispose({ snapshot: false });
-			rmSync(tempAgentDir, { recursive: true, force: true });
+			try {
+				session?.dispose();
+			} finally {
+				try {
+					rmSync(tempAgentDir, { recursive: true, force: true });
+				} finally {
+					if (previousPythonPath !== undefined) {
+						process.env.PYTHONPATH = previousPythonPath;
+					} else {
+						delete process.env.PYTHONPATH;
+					}
+				}
+			}
 		}
 	}, 60_000);
 });

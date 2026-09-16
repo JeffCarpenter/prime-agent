@@ -198,3 +198,20 @@
 - Second system interruption again stopped all four closure workers mid-tool; no orphaned Vitest process. Dispatched Luna log investigator `daemon-log-34e619e4` for `/home/jeff/.prime/agent/logs/daemon.sock.34e619e4.log`. Deleted interrupted workers and spawned third replacements: daemon sub-21a5eb3d, package sub-da6a8c82, recovery sub-fc13aa37, model sub-1ac34d9b. Prompts explicitly correct the unsupported `bash(cwd=...)`/`bash(timeout=...)` mistake. Package/recovery partial diffs preserved; prior 4649 env-clean run exited 0.
 
 - Session restore killed the third worker set; no orphaned Vitest processes remained. Prior log investigator had inspected EPIPE/session-worker-starting sequences but sent no synthesis. Deleted all five dead children and spawned fourth Luna replacements with mandatory explicit parent replies: log sub-7c1d3919, daemon sub-102ffa7d, package sub-28d28837, recovery sub-9ebb6551, model sub-19dff61b. Partial package/recovery diffs remain preserved.
+
+### SDK Full-Control & Default Tool Verification (2026-09-15)
+- Implemented and committed (`34e7b671b`) full-control `AgentSession` test in `packages/coding-agent/test/suite/xonsh-repl.integration.test.ts`.
+- Verified real Xonsh execution end-to-end through `session.prompt()` using in-memory `AuthStorage`, `ModelRegistry`, `SettingsManager`, `SessionManager`, and explicit `ResourceLoader`.
+- Confirmed that `createAgentSession` defaults `initialActiveToolNames` to `["xonsh"]` and `AgentSession` builds its own internal `XonshKernelProvisioner`.
+- Documented findings in `findings.md` regarding default tool resolution, `customTools` parameter contravariance under `strictFunctionTypes`, and faux provider auth validation.
+- Updated `packages/coding-agent/test/suite/xonsh-repl.integration.test.ts` to prove that `createAgentSession` requires neither `tools` nor `customTools` when executing real Xonsh cells.
+- Added `session.getKernelProvisioner("xonsh")` to `AgentSession` and ensured `session.dispose()` asynchronously and cleanly terminates kernel provisioners.
+
+### Hierarchical Delegation Rectifications (2026-09-15)
+- Executed hierarchical delegation pipeline over 4 bounded, disjoint tranches across runtime, tools, core session, and integration tests:
+  - `T1-repl-runtime`: Hardened `_compile_xonsh_cell` in `prime-agent-runtime/src/rlm/repl.py` to reload context on namespace change without `RuntimeError` and guarantee `ast.Module` AST root wrapping before `compile(tree, ..., "exec")`.
+  - `T2-acp-mcp-type`: Exported `AcpMcpKernelProvisioner = IpythonKernelProvisioner | XonshKernelProvisioner` in `packages/coding-agent/src/core/tools/acp-mcp.ts` and updated `createAcpMcpToolDefinitions` and `executeMcpCode` to accept both provisioners.
+  - `T3-agent-session`: Reconciled `AgentSession.dispose(): void` contract, closed re-entrant `dispose()` race, eliminated double-disposal in `close()`, aligned reload default tool resolution with `sdk.ts`, and removed `as any` and forced provisioner downcasts.
+  - `T4-test-isolation`: Aligned `test/suite/xonsh-repl.integration.test.ts` with synchronous `session.dispose()`, structured nested `finally` blocks for `PYTHONPATH` isolation.
+- Verified: `npm run check` clean (exit code 0); vitest `xonsh-repl.integration.test.ts` 2/2 passed (exit code 0).
+
