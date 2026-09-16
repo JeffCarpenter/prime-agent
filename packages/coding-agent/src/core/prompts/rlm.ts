@@ -78,7 +78,7 @@ export function buildChildAgentDoctrine(options: ChildAgentDoctrineOptions): str
 			'When a task calls for an answer, reply explicitly with `await agent_message.send(message, receiver_role="parent")`. Not every message or task needs a reply; continue cleanup after sending and go idle normally.',
 		);
 	}
-	if (hasIpython) {
+	if (hasRepl) {
 		lines.push(
 			"For long-running work, report brief progress with `await rlm.progress_note('...')` (at most 512 characters, throttled to about one note per 10 seconds); the parent sees notes without needing a reply.",
 		);
