@@ -518,8 +518,30 @@ def _compile_xonsh_cell(code: str, filename: str, ns: dict[str, Any]) -> tuple[l
         _XONSH_SESSION.load(execer=_xonsh_execer, ctx=ns)
         _xonsh_namespace = ns
     elif _xonsh_namespace is not ns:
-        raise RuntimeError("Xonsh session namespace changed")
+        _XONSH_SESSION.load(execer=_xonsh_execer, ctx=ns)
+        _xonsh_namespace = ns
     tree = _xonsh_execer.parse(code, ns, filename=filename, transform=True)
+    if tree is not None and not isinstance(tree, ast.Module):
+        body: list[Any]
+        if isinstance(tree, list):
+            body = tree
+        elif isinstance(tree, ast.Interactive):
+            body = tree.body
+        else:
+            raw_body = getattr(tree, "body", None)
+            if isinstance(raw_body, list):
+                body = raw_body
+            elif isinstance(raw_body, ast.expr):
+                body = [ast.Expr(value=raw_body)]
+            elif raw_body is not None:
+                body = [raw_body]
+            elif isinstance(tree, ast.expr):
+                body = [ast.Expr(value=tree)]
+            else:
+                body = [tree]
+        tree = ast.Module(body=body, type_ignores=[])  # type: ignore[arg-type] # pyright: ignore[reportArgumentType]
+    elif isinstance(tree, ast.Module) and not hasattr(tree, "type_ignores"):
+        tree.type_ignores = []
     trailing: ast.Expression | None = None
     if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[-1], ast.Expr):
         last_expr = tree.body.pop()

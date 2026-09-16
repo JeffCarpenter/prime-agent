@@ -1117,6 +1117,20 @@ function attributeChildUsage(parentUsage: Usage, childUsage: Usage): void {
 	parentUsage.totalTokens = parentContextTokens;
 }
 
+interface ToolWithProvisioner<T> {
+	readonly provisioner?: T;
+}
+
+function getToolProvisioner<T>(tool: unknown): T | undefined {
+	if (typeof tool === "object" && tool !== null && "provisioner" in tool) {
+		const candidate = (tool as ToolWithProvisioner<T>).provisioner;
+		if (candidate && typeof candidate === "object") {
+			return candidate;
+		}
+	}
+	return undefined;
+}
+
 export class AgentSession {
 	readonly agent: Agent;
 	readonly sessionManager: SessionManager;
@@ -1231,6 +1245,8 @@ export class AgentSession {
 	private _disposed = false;
 	private readonly _disposeCallbacks = new Set<() => void | Promise<void>>();
 	private _disposeCallbacksPromise?: Promise<void>;
+	private _kernelProvisionersDisposed = false;
+	private _kernelDisposalPromises: Promise<void>[] = [];
 	// Set at the start of async teardown so a child finishing mid-disposeAsync doesn't
 	// re-populate the retained map after it's been cleared.
 	private _disposing = false;
@@ -1460,6 +1476,19 @@ export class AgentSession {
 
 	private get _primaryReplProvisioner(): IpythonKernelProvisioner | XonshKernelProvisioner | undefined {
 		return this._getReplProvisioner();
+	}
+
+	getKernelProvisioner(name: "ipython"): IpythonKernelProvisioner | undefined;
+	getKernelProvisioner(name: "xonsh"): XonshKernelProvisioner | undefined;
+	getKernelProvisioner(name: string): IpythonKernelProvisioner | XonshKernelProvisioner | undefined;
+	getKernelProvisioner(name: string): IpythonKernelProvisioner | XonshKernelProvisioner | undefined {
+		if (name === "xonsh") {
+			return this._xonshKernelProvisioner;
+		}
+		if (name === "ipython") {
+			return this._ipythonKernelProvisioner;
+		}
+		return undefined;
 	}
 
 	replaceAcpMcpServers(servers: readonly AcpMcpServerConfig[], ownerId: string): void {
@@ -4248,6 +4277,7 @@ export class AgentSession {
 		this._rlmChildSessions.clear();
 		this._rlmChildCleanupFailures.clear();
 		this._deletedRlmChildIds.clear();
+		this._kernelProvisionersDisposed = true;
 		try {
 			await this._ipythonKernelProvisioner?.dispose({ snapshot: kernelSnapshot });
 		} catch {
@@ -4267,6 +4297,10 @@ export class AgentSession {
 			return this._disposeCallbacksPromise;
 		}
 		const pending: Promise<void>[] = [];
+		for (const promise of this._kernelDisposalPromises) {
+			pending.push(promise.catch(() => undefined));
+		}
+		this._kernelDisposalPromises = [];
 		for (const callback of this._disposeCallbacks) {
 			try {
 				const result = callback();
@@ -4290,6 +4324,20 @@ export class AgentSession {
 		for (const run of this._unsettledRlmChildRuns) run.suppressTerminalNotice = true;
 		for (const controller of this._rlmQuiescenceWaitAborts) controller.abort();
 		this._sessionActionCommitDisposeAbortController.abort();
+		if (!this._kernelProvisionersDisposed) {
+			this._kernelProvisionersDisposed = true;
+			const ipythonDisposal = this._ipythonKernelProvisioner?.dispose({ snapshot: false });
+			if (ipythonDisposal) {
+				this._kernelDisposalPromises.push(ipythonDisposal);
+			}
+			void ipythonDisposal;
+			const xonshDisposal = this._xonshKernelProvisioner?.dispose({ snapshot: false });
+			if (xonshDisposal) {
+				this._kernelDisposalPromises.push(xonshDisposal);
+			}
+			void xonshDisposal;
+		}
+		void this._startDisposeCallbacks();
 		try {
 			// Invalidate scheduled timers and abort any in-flight review so a late
 			// resolution cannot write harness state or re-subscribe handlers.
@@ -9384,11 +9432,13 @@ export class AgentSession {
 					createToolDefinitionFromAgentTool(tool),
 				]),
 			);
-			if ((this._baseToolsOverride.ipython as any)?.provisioner) {
-				this._ipythonKernelProvisioner = (this._baseToolsOverride.ipython as any).provisioner;
+			const ipythonProvisioner = getToolProvisioner<IpythonKernelProvisioner>(this._baseToolsOverride.ipython);
+			if (ipythonProvisioner) {
+				this._ipythonKernelProvisioner = ipythonProvisioner;
 			}
-			if ((this._baseToolsOverride.xonsh as any)?.provisioner) {
-				this._xonshKernelProvisioner = (this._baseToolsOverride.xonsh as any).provisioner;
+			const xonshProvisioner = getToolProvisioner<XonshKernelProvisioner>(this._baseToolsOverride.xonsh);
+			if (xonshProvisioner) {
+				this._xonshKernelProvisioner = xonshProvisioner;
 			}
 		} else {
 			// Rebuilding (e.g. /reload) replaces the provisioner; drop the previous
@@ -9484,9 +9534,7 @@ export class AgentSession {
 		if (acpServers.length > 0 && !replProvisioner) {
 			throw new Error("ACP MCP servers require a primary REPL tool (ipython or xonsh)");
 		}
-		const acpMcpTools = replProvisioner
-			? createAcpMcpToolDefinitions(acpServers, replProvisioner as unknown as IpythonKernelProvisioner)
-			: [];
+		const acpMcpTools = replProvisioner ? createAcpMcpToolDefinitions(acpServers, replProvisioner) : [];
 		this._assertAcpMcpToolNamesAvailable(acpMcpTools.map((tool) => tool.name));
 		for (const name of previousAcpMcpToolNames) this._allowedToolNames?.delete(name);
 		for (const tool of acpMcpTools) this._allowedToolNames?.add(tool.name);
@@ -9494,9 +9542,12 @@ export class AgentSession {
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
-			: this._allowedToolNames?.has("xonsh") && !this._allowedToolNames.has("ipython")
+			: this._baseToolDefinitions.has("xonsh") && (!this._allowedToolNames || this._allowedToolNames.has("xonsh"))
 				? ["xonsh"]
-				: ["ipython"];
+				: this._baseToolDefinitions.has("ipython") &&
+						(!this._allowedToolNames || this._allowedToolNames.has("ipython"))
+					? ["ipython"]
+					: [];
 		const baseActiveToolNames = [...(options.activeToolNames ?? defaultActiveToolNames)];
 		if (this._goalState.status === "active" && this._includeGoals) {
 			// An active goal needs a primary REPL tool so the model can reach the goal skill.

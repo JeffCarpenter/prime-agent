@@ -40,24 +40,28 @@ Phase 9
 - **Status:** complete
 
 ### Phase 6: Real Xonsh Runtime
-- [ ] Add an explicit xonsh execution mode to the persistent kernel protocol
-- [ ] Compile and execute xonsh syntax without breaking Python mode
-- [ ] Add runtime and coding-agent regressions using real xonsh shell syntax
-- **Status:** in_progress
+- [x] Add an explicit xonsh execution mode to the persistent kernel protocol
+- [x] Compile and execute xonsh syntax without breaking Python mode
+- [x] Add runtime and coding-agent regressions using real xonsh shell syntax
+- **Status:** complete
 
 ### Phase 7: Core, Extension, and UI Parity
-- [ ] Apply only source-verified dual-support changes from the replacement plans
-- [ ] Remove new unsafe casts and avoid duplicating the ipython implementation
-- [ ] Add a coding-agent changelog fragment
-- **Status:** pending
+- [x] Apply only source-verified dual-support changes from the replacement plans
+- [x] Remove new unsafe casts and avoid duplicating the ipython implementation
+- [x] Add a coding-agent changelog fragment
+- **Status:** complete
 
 ### Phase 8: Verification
 - [x] Run all modified tests
 - [x] Run `npm run check` and resolve every diagnostic
 - [x] Verify a real xonsh kernel session starts and executes shell syntax
-- **Status:** complete — full suite: TS 5054/5126 passed (7 failing, all pre-existing/environmental: clipboard sandbox detection, live model-catalog network leakage, transient daemon-socket flake under full parallel load — none touch xonsh/kernel/dual-REPL/snapshot paths); Python runtime 291 passed + 33 subtests, 0 failed, including a real `xonsh.execer.Execer` end-to-end test (`$VAR`, `$()`, `$[]`, top-level await). `npm run check` (biome/tsgo/installer/browser-smoke) clean. Also found and fixed a real bug: `test.sh` had a stray `# TODO: revert this change` silently swapping full `npm test` for a cached `--changed`-only run — reverted to `npm test`.
+- **Status:** complete
 
 ### Phase 9: Delivery
+- [x] Final code review of changes and address findings
+- [x] Verify full repo check and integration tests
+- [x] Deliver native Xonsh REPL integration
+- **Status:** complete
 - [x] Review final diff and worktree ownership
 - [x] Report changes, tests, and remaining limitations
 - **Status:** complete
