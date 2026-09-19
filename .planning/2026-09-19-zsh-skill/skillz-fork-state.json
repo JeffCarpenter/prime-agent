@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "last_updated": "2026-09-19T08:46:21.195776+00:00",
+  "repository": "/home/jeff/code/fork/prime-agent",
+  "branch": "xonsh-repl",
+  "task": "zsh skill promotion",
+  "phase": "W3 pending",
+  "state": "w2a_accepted_w3_final_battery_pending",
+  "commits": [
+    {
+      "hash": "3ab601872",
+      "subject": "Add zsh skill package"
+    },
+    {
+      "hash": "afa7e4270",
+      "subject": "Add zsh skill tests"
+    },
+    {
+      "hash": "67e1d6038",
+      "subject": "Add zsh builtin skill validation"
+    }
+  ],
+  "completed": {
+    "fork_package": true,
+    "pytest_and_branch_coverage": "100% line and branch",
+    "personal_skill_sync": "whole-directory symlink to fork package",
+    "builtin_registration": "focused Vitest 23/23",
+    "commit_hooks": "formatting, lint/type, installer, browser-smoke passed",
+    "findings_attribution": "Co-authored review: gpt-5.6-luna (high)."
+  },
+  "ratification": {
+    "w2a_worker": {
+      "name": "w2a-validation-sol",
+      "model": "openai-codex/gpt-5.6-sol",
+      "thinking": "high",
+      "state": "done"
+    },
+    "w2a_root_review": "scoped diff and focused gate independently rerun",
+    "luna_review": {
+      "name": "luna-findings-coauthor",
+      "model": "openai-codex/gpt-5.6-luna",
+      "thinking": "high",
+      "state": "complete"
+    }
+  },
+  "next": [
+    "run final zsh battery: import/loader, one-shot, background tail, kill, pin/restore, error branches",
+    "rerun coverage and inspect final diff/status",
+    "mark W3 complete only after evidence is fresh"
+  ],
+  "protected_uncommitted": [
+    ".planning/2026-09-13-xonsh-integration/**",
+    "scripts/install.xsh",
+    "report/",
+    "scripts/install-xsh.test.xsh",
+    "packages/coding-agent/skills/zsh/uv.lock"
+  ],
+  "workspace_note": "Shared dirty tree. Do not broad-clean or stage unrelated files."
+}

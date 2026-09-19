@@ -1,0 +1,744 @@
+{
+  "branch": "xonsh-repl",
+  "goal": "real xonsh runtime + dual-support parity",
+  "graph": {
+    "T6-runtime": {
+      "deps": [],
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-runtime-luna",
+      "post_report_change": "ipython.ts explicitly sends mode: python; xonsh suite 22 passed; npm run check passed with no fixes",
+      "previous_owner": "worker-runtime-nova",
+      "reported_tests": "runtime pytest 105 passed + 25 subtests; coding-agent xonsh 22 passed; npm run check passed but wrote formatting into shared files",
+      "scope_self_review": "8 intended files; tools/index.ts unchanged; no destructive git, commit, or delegation",
+      "state": "done_pending_ratification",
+      "thinking": "high",
+      "writes": [
+        "prime-agent-runtime/src/rlm/{repl.py,repl.md}",
+        "prime-agent-runtime/test/test_repl.py",
+        "packages/coding-agent/src/core/kernel/{repl-manager.ts,shared.ts}",
+        "packages/coding-agent/src/core/tools/{xonsh.ts,ipython.ts,index.ts}",
+        "packages/coding-agent/test/suite/xonsh.test.ts"
+      ]
+    },
+    "T6-runtime-review": {
+      "deps": [
+        "T6-runtime"
+      ],
+      "mode": "read_only_ratification",
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-runtime-review-codex-retry2",
+      "previous_failures": [
+        "xonsh-runtime-review-luna quiescence wait cancelled during ChatGPT usage limit",
+        "github-copilot retry completed with empty assistant response"
+      ],
+      "state": "accepted_completed",
+      "thinking": "high",
+      "verdict": "ACCEPT: pytest 105 + 25 subtests, focused Vitest 22, protocol/no-Xonsh smoke, scoped checks clean"
+    },
+    "T7-core": {
+      "blocking_regression": "4530 expects _onIpythonStateRestored compatibility method; 128 passed, 1 failed in 4-file command",
+      "conflicts": [],
+      "deps": [],
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-core-luna",
+      "post_report_change": "src/index.ts top-level re-exports XonshToolCallEvent, XonshToolResultEvent, isXonshToolResult",
+      "previous_owner": "worker-core-vume",
+      "ratification": "snapshot/log isolation, legacy IPython restore bridge, defaults/API/prompt parity; targeted tests and static checks clean",
+      "reported_tests": "5 files / 222 tests; targeted Biome clean; diff check clean; broader AgentSession failures claimed unrelated and under review",
+      "snapshot_fix": "Xonsh uses <artifact>/xonsh; IPython remains root; separate existence/prewarm; new snapshot-path test passed",
+      "state": "accepted",
+      "thinking": "high",
+      "writes": [
+        "CLI",
+        "core session/defaults",
+        "RLM prompts"
+      ]
+    },
+    "T7-core-review": {
+      "deps": [
+        "T7-core",
+        "T7-events"
+      ],
+      "mode": "read_only_ratification",
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-core-review-luna",
+      "state": "accepted_completed",
+      "thinking": "high"
+    },
+    "T7-daemon-protocol-audit": {
+      "concern": "new xonsh_sent_agent_message may traverse DaemonOutbound session_event without schema/capability change",
+      "deps": [
+        "T7-events"
+      ],
+      "owner": "xonsh-events-review-luna",
+      "state": "completed_repair_required"
+    },
+    "T7-daemon-protocol-repair": {
+      "classification": "backward-compatible additive",
+      "deps": [
+        "T7-events-review"
+      ],
+      "files": [
+        "packages/coding-agent/src/modes/daemon/daemon-protocol.ts",
+        "packages/coding-agent/test/daemon-protocol.test.ts",
+        "packages/coding-agent/test/agent-connection-daemon.test.ts (only if required)"
+      ],
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-events-review-luna",
+      "reported_tests": "daemon-protocol 26/26; agent-connection-daemon 93/93; targeted Biome clean",
+      "state": "accepted",
+      "thinking": "high"
+    },
+    "T7-daemon-protocol-review": {
+      "deps": [
+        "T7-daemon-protocol-repair"
+      ],
+      "focus": "explicit separate/parsed-wire new-client-old-daemon and old-client-new-daemon coverage",
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-daemon-protocol-luna",
+      "state": "accepted_completed",
+      "thinking": "high"
+    },
+    "T7-events": {
+      "conflicts": [],
+      "deps": [],
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-events-luna",
+      "post_report_cleanup": "removed ACP result-shape casts with isRecord; 23/23 focused tests passed",
+      "previous_owner": "worker-events-miko",
+      "ratifier_fix": "Biome export order fixed; targeted Biome clean; 23/23 focused tests",
+      "reported_tests": "pnpm exec vitest --run test/acp-events.test.ts test/xonsh-extension-events.test.ts => 23 passed",
+      "state": "accepted",
+      "thinking": "high",
+      "writes": [
+        "messages",
+        "extensions",
+        "ACP",
+        "agent-connection"
+      ]
+    },
+    "T7-events-review": {
+      "deps": [
+        "T7-events"
+      ],
+      "mode": "read_only_ratification",
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-events-review-luna",
+      "state": "accepted_completed",
+      "thinking": "high"
+    },
+    "T7-integration-agent-session": {
+      "change": "replace stale _onIpythonStateRestored call with _onReplStateRestored(result, \"ipython\")",
+      "deps": [
+        "T7-events",
+        "T7-core"
+      ],
+      "files": [
+        "packages/coding-agent/src/core/agent-session.ts"
+      ],
+      "owner": "bigboss",
+      "state": "implemented_pending_check"
+    },
+    "T7-parity": {
+      "deps": [
+        "T7-core",
+        "T7-events",
+        "T7-ui"
+      ],
+      "owner": null,
+      "state": "decomposed",
+      "writes": [
+        "core/CLI/prompts/UI/extensions"
+      ]
+    },
+    "T7-ui": {
+      "blocking_regression": "arbitrary shell fallback misclassifies Python comparisons, bitwise, conditional, augmented assignment as Xonsh",
+      "conflicts": [],
+      "deps": [],
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-ui-luna",
+      "owner_post_accept": "confirmed no file changes after ratifier ACCEPT",
+      "post_check_reread": "owner confirmed final semantic diffs; targeted Biome clean; 323/323 tests; tsgo clean",
+      "previous_owner": "worker-ui-rafa",
+      "ratification": "ACCEPT: actual Xonsh Execer treats disputed bare operator forms as subprocess syntax; 327 tests, Biome, tsgo clean",
+      "reported_tests": "final 12-file suite 327 passed; targeted Biome and tsgo clean",
+      "state": "accepted",
+      "thinking": "high",
+      "writes": [
+        "code-preview",
+        "interactive UI/theme"
+      ]
+    },
+    "T7-ui-review": {
+      "deps": [
+        "T7-ui"
+      ],
+      "mode": "read_only_ratification",
+      "model": "openai-codex/gpt-5.6-luna",
+      "owner": "xonsh-ui-review-luna",
+      "state": "accepted_completed",
+      "thinking": "high"
+    },
+    "T8-cached-changed-coverage": {
+      "command": "npx vitest --changed --cache --coverage --reporter json --outputFile report/vitest.json",
+      "duration_seconds": 239.385,
+      "exit_code": 1,
+      "knownLimitations": [
+        "Vitest warned tests still running while JSON generated",
+        "empty coverageMap under explicitly untouched mixed provider state",
+        "25 failures remain in previously triaged environment/concurrency/filesystem/model-state suites"
+      ],
+      "pid": 333262,
+      "reports": [
+        "packages/coding-agent/report/vitest.json",
+        "packages/coding-agent/report/drivel-describe.txt"
+      ],
+      "state": "final_run_completed_with_known_unrelated_failures",
+      "summary": {
+        "coverageFiles": 0,
+        "failed": 25,
+        "failedSuites": 8,
+        "passed": 3631,
+        "passedSuites": 714,
+        "pending": 93,
+        "pendingSuites": 348,
+        "totalSuites": 1070,
+        "totalTests": 5126,
+        "unaccountedDueToReporterWarning": 1377
+      },
+      "xonshEvidence": "kernel bootstrap, snapshot paths, xonsh suite, and three dual-REPL regression files all have zero failures in JSON"
+    },
+    "T8-changelog": {
+      "bullets": 2,
+      "path": "packages/coding-agent/.changes/xonsh-integration.md",
+      "state": "completed_pending_final_ratification"
+    },
+    "T8-failure-closure": {
+      "aggregateReport": {
+        "coverageFiles": 0,
+        "failedSuites": 8,
+        "report": "packages/coding-agent/report/vitest.json",
+        "testsFailed": 25
+      },
+      "closed": {
+        "agent-session-recursion.test.ts": "environment-only; focused pass with RLM_MAX_DEPTH unset; no edit"
+      },
+      "interruption": "third/session restore killed all prior workers; no orphaned Vitest processes; replacements explicitly required to message parent before ending",
+      "liveStatusBeforeCompaction": [
+        {
+          "name": "daemon-failure-resume2",
+          "status": "running"
+        },
+        {
+          "name": "package-failure-resume2",
+          "status": "running"
+        },
+        {
+          "name": "worker-recovery-resume2",
+          "status": "running"
+        },
+        {
+          "name": "model-failure-resume2",
+          "status": "running"
+        }
+      ],
+      "policy": "workers own assigned tests and directly exercised production modules; direct npx vitest; coordinate shared modules; no commit/stage",
+      "state": "active_fourth_resurrection_after_session_restore",
+      "workers": {
+        "daemon-failure-resume4": {
+          "id": "sub-102ffa7d",
+          "scope": "daemon 13-failure closure"
+        },
+        "daemon-log-34e619e4-resume": {
+          "id": "sub-7c1d3919",
+          "scope": "read-only exact log synthesis; prior investigator ended without reply"
+        },
+        "model-failure-resume4": {
+          "id": "sub-19dff61b",
+          "scope": "4620/4649 closure; prior env-clean 4649 exit0"
+        },
+        "package-failure-resume4": {
+          "id": "sub-28d28837",
+          "scope": "package-command closure; partial 10+/6- preserved"
+        },
+        "worker-recovery-resume4": {
+          "id": "sub-9ebb6551",
+          "scope": "4603 EXDEV closure; partial 9+/1- preserved"
+        }
+      }
+    },
+    "T8-failure-closure-recursion": {
+      "aggregateFailure": 1,
+      "cause": "root process RLM_MAX_DEPTH=2 overrides default source",
+      "edit": "none justified",
+      "finalRunAction": "remove RLM_MAX_DEPTH from inherited shell environment before exact aggregate command",
+      "isolatedPass": "env -u RLM_MAX_DEPTH npx vitest --run test/agent-session-recursion.test.ts -t <exact title>: 1 passed, 124 skipped",
+      "state": "closed_environment"
+    },
+    "T8-final-check": {
+      "command": "npm run check",
+      "evidence": "Biome checked 996 files, no fixes; tsgo noEmit passed; installer check passed; browser smoke exited 0",
+      "exit_code": 0,
+      "pid": 331629,
+      "state": "accepted_completed"
+    },
+    "T8-kernel-bootstrap-repair": {
+      "changes": "three schema fixtures 9\u219210 in test/kernel-bootstrap.test.ts; dynamic Xonsh package expectations already correct",
+      "state": "accepted_completed",
+      "validation": "npx vitest --run test/kernel-bootstrap.test.ts: 22/22; Biome clean"
+    },
+    "T8-obsolete-coverage-artifacts": {
+      "action": "deleted per explicit user instruction",
+      "paths": [
+        ".planning/2026-09-13-xonsh-integration/run-vitest-coverage.py",
+        ".planning/2026-09-13-xonsh-integration/test_run_vitest_coverage.py",
+        ".planning/2026-09-13-xonsh-integration/vitest-coverage-manifest.json"
+      ],
+      "state": "completed"
+    },
+    "T8-real-xonsh-smoke": {
+      "coverage_command_exit": 1,
+      "coverage_issue": "untouched mixed provider emitted coverageFilesDirectory required / empty coverageMap",
+      "covered": [
+        "$VAR",
+        "$()",
+        "$[]",
+        "top-level await",
+        "cross-cell Python state",
+        "default Python mode"
+      ],
+      "evidence": "direct npx vitest focused run passed 1/1 in 1.305s; coverage JSON success=true passed=1 failed=0",
+      "report": "packages/coding-agent/report/xonsh-smoke-vitest.json",
+      "state": "execution_passed_coverage_adapter_nonzero",
+      "test": "test/suite/xonsh.test.ts real XonshKernelProvisioner test enhanced for cross-cell state"
+    },
+    "T8-verify": {
+      "checks": [
+        "modified tests",
+        "npm run check",
+        "real xonsh smoke"
+      ],
+      "deps": [
+        "T6-runtime",
+        "T7-parity"
+      ],
+      "owner": null,
+      "state": "queued"
+    },
+    "T8-vitest-coverage": {
+      "dependency_repair": {
+        "instruction": "Leave provider symlink/version arrangement alone; do not run further dependency repair or judge coverage invalid solely from mixed-version warning.",
+        "state": "abandoned_per_user"
+      },
+      "deps": [
+        "T6-runtime-review",
+        "T7-core-review",
+        "T7-ui-review",
+        "T7-daemon-protocol-repair"
+      ],
+      "live": {
+        "coverage_root": "packages/coding-agent/coverage/xonsh-integration",
+        "coverage_runner": {
+          "exit": null,
+          "pid": 287905,
+          "running": true,
+          "tail": ""
+        },
+        "installer": {
+          "exit": null,
+          "pid": 286046,
+          "running": true,
+          "tail": "Downloading @rolldown/binding-openharmony-arm64@1.2.7: 3.19 MB/7.47 MB\nDownloading @rolldown/binding-openharmony-arm64@1.2.7: 3.27 MB/7.47 MB\nDownloading @rolldown/binding-openharmony-arm64@1.2.7: 3.37 MB/7.47 MB\nDownloading @rolldown/binding-openharmony-arm64@1.2.7: 3.44 MB/7.47 MB\n[WARN] GET https://registry.npmjs.org/@rolldown/binding-openharmony-arm64/-/binding-openharmony-arm64-1.2.7.tgz error (Failed to fetch https://registry.npmjs.org/@rolldown/binding-openharmony-arm64/-/binding-openharmony-arm64-1.2.7.tgz: error decoding response body: request or response body error: operation timed out) \u2014 1\nWill retry in 10s. 7 retries left."
+        },
+        "provider_exists": false
+      },
+      "manifest": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/vitest-coverage-manifest.json",
+      "manual_changed_run": {
+        "command": "npx vitest --changed --coverage --reporter json --outputFile report/vitest.json",
+        "cwd": "packages/coding-agent",
+        "pid": 295651,
+        "state": "running"
+      },
+      "owner": "xonsh-vitest-coverage-luna",
+      "provider_state": {
+        "node_modules": "provider absent",
+        "package_json": "currently adds @vitest/coverage-v8 ^4.1.10",
+        "pnpm_lock": "currently appears to resolve importer/provider 5.0.0; inconsistent with package json and Vitest 4.1.11",
+        "required": "repository-local matching 4.1.11 provider; package.json+pnpm-lock only; no package-lock; reports under packages/coding-agent/coverage/xonsh-integration/"
+      },
+      "requirement": "rerun every targeted Vitest with --coverage",
+      "runner": {
+        "drivel": "packages/coding-agent/coverage/xonsh-integration/drivel-describe.txt",
+        "output": "packages/coding-agent/coverage/xonsh-integration",
+        "pid": 287905,
+        "script": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/run-vitest-coverage.py",
+        "test": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/test_run_vitest_coverage.py"
+      },
+      "state": "abandoned_manifest_runner_per_user; direct cached changed command is authoritative workflow",
+      "user_constraints": [
+        "leave provider/symlink/lock arrangement alone",
+        "do not investigate uv/Python discovery",
+        "prefer npx vitest",
+        "with --coverage always add --reporter json and --outputFile"
+      ],
+      "workflow": {
+        "entries": 52,
+        "groups": 18,
+        "inspection": "read drivel output, then use jq directly on every coverage-final.json and run-summary.json",
+        "manifest": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/vitest-coverage-manifest.json",
+        "reports": "packages/coding-agent/coverage/xonsh-integration/<group>/coverage-final.json",
+        "runner": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/run-vitest-coverage.py",
+        "runner_test": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/test_run_vitest_coverage.py",
+        "single_drivel_output": "packages/coding-agent/coverage/xonsh-integration/drivel-describe.txt from one representative coverage-final.json"
+      }
+    },
+    "T9-deliver": {
+      "deps": [
+        "T8-verify"
+      ],
+      "owner": "bigboss",
+      "state": "queued"
+    }
+  },
+  "id": "2026-09-13-xonsh-integration",
+  "plan": {
+    "dir": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration",
+    "next": "accept T6-runtime; then Phase 7 parity",
+    "phase": 6,
+    "phases": {
+      "1": {
+        "items": [
+          [
+            "x",
+            "Understand user intent"
+          ],
+          [
+            "x",
+            "Identify constraints"
+          ],
+          [
+            "x",
+            "Document in findings.md"
+          ]
+        ],
+        "name": "Requirements & Discovery",
+        "status": "complete"
+      },
+      "2": {
+        "items": [
+          [
+            "x",
+            "Determine/guess which information/claims are germane to implementing a `xonsh` tool (alongside `ipython`)"
+          ],
+          [
+            "x",
+            "Check/verify the claims we figure are germane to the xonsh tool work"
+          ]
+        ],
+        "name": "Planning & Structure",
+        "status": "complete"
+      },
+      "3": {
+        "items": [
+          [
+            "x",
+            "Implement `packages/coding-agent/src/core/tools/xonsh.ts`"
+          ],
+          [
+            "x",
+            "Register `xonsh` in `packages/coding-agent/src/core/tools/index.ts`"
+          ],
+          [
+            "x",
+            "Append `xonsh` to `DEFAULT_RLM_EXTRA_PACKAGES` in `packages/coding-agent/src/core/kernel/bootstrap.ts` (and increment the schema version)"
+          ]
+        ],
+        "name": "Implementation",
+        "status": "complete"
+      },
+      "4": {
+        "items": [
+          [
+            "x",
+            "Verify requirements met"
+          ],
+          [
+            "x",
+            "Document test results"
+          ]
+        ],
+        "name": "Testing & Verification",
+        "status": "complete"
+      },
+      "5": {
+        "items": [
+          [
+            "x",
+            "Review committed outputs"
+          ],
+          [
+            "x",
+            "Re-run the saved xonsh test suite"
+          ],
+          [
+            "x",
+            "Identify the gap between tool/session parity and real xonsh execution"
+          ]
+        ],
+        "name": "Delivery Review",
+        "status": "complete"
+      },
+      "6": {
+        "items": [
+          [
+            " ",
+            "Add an explicit xonsh execution mode to the persistent kernel protocol"
+          ],
+          [
+            " ",
+            "Compile and execute xonsh syntax without breaking Python mode"
+          ],
+          [
+            " ",
+            "Add runtime and coding-agent regressions using real xonsh shell syntax"
+          ]
+        ],
+        "name": "Real Xonsh Runtime",
+        "status": "in_progress"
+      },
+      "7": {
+        "items": [
+          [
+            " ",
+            "Apply only source-verified dual-support changes from the replacement plans"
+          ],
+          [
+            " ",
+            "Remove new unsafe casts and avoid duplicating the ipython implementation"
+          ],
+          [
+            " ",
+            "Add a coding-agent changelog fragment"
+          ]
+        ],
+        "name": "Core, Extension, and UI Parity",
+        "status": "pending"
+      },
+      "8": {
+        "items": [
+          [
+            " ",
+            "Run all modified tests"
+          ],
+          [
+            " ",
+            "Run `npm run check` and resolve every diagnostic"
+          ],
+          [
+            " ",
+            "Verify a real xonsh kernel session starts and executes shell syntax"
+          ]
+        ],
+        "name": "Verification",
+        "status": "pending"
+      },
+      "9": {
+        "items": [
+          [
+            " ",
+            "Review final diff and worktree ownership"
+          ],
+          [
+            " ",
+            "Report changes, tests, and remaining limitations"
+          ]
+        ],
+        "name": "Delivery",
+        "status": "pending"
+      }
+    }
+  },
+  "resume": {
+    "accepted": [
+      "runtime",
+      "core",
+      "events/ACP",
+      "UI",
+      "daemon protocol",
+      "snapshot TS fix",
+      "three built-in regression updates",
+      "kernel bootstrap schema repair",
+      "real provisioned Xonsh execution smoke",
+      "npm run check",
+      "changelog draft"
+    ],
+    "first": [
+      "supervise five fourth-resurrection Luna workers and accept explicit replies/diffs",
+      "normalize RLM_MAX_DEPTH before next exact aggregate changed run",
+      "after accepted fixes run focused tests/npm run check/exact changed coverage command with JSON output",
+      "then finish full diff review and independent ratification"
+    ],
+    "pending": [
+      "independent final diff/scope ratification with implementation ownership if fixes found",
+      "planning state final update",
+      "deliver without commit"
+    ],
+    "phase": "Phase 8 \u2014 failure closure, final ratification/delivery",
+    "warnings": [
+      "four predecessor workers errored because requests were aborted; two left partial diffs preserved in package-command-paths.test.ts and 4603-worker-recovery.test.ts",
+      "do not touch provider/package.json/pnpm lock/symlink/uv per user",
+      "old daemon logs named by JSON were all missing; new worker must inspect newly generated logs",
+      "shared worktree; no destructive git, broad staging, or commit"
+    ]
+  },
+  "root": "/home/jeff/code/fork/prime-agent",
+  "rules": {
+    "context_owner_implements": true,
+    "final_check": "npm run check",
+    "shared_worktree": true,
+    "worker_reports": [
+      "DONE",
+      "SPLIT",
+      "BLOCKED"
+    ]
+  },
+  "scheduler": {
+    "check_write_side_effect": {
+      "command": "npm run check",
+      "fact": "Biome uses --write and formatted files across other active tranches",
+      "policy": "preserve; owners/reviewers reread final content; do not run full check again until work settles"
+    },
+    "coordinator": "bigboss",
+    "coverage_manifest": {
+      "entries": 52,
+      "groups": 18,
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-09-13-xonsh-integration/vitest-coverage-manifest.json",
+      "provider_setup": "in_flight_tmp",
+      "state": "queued"
+    },
+    "legacy_hcom": {
+      "listener": {
+        "pid": 173794,
+        "running": true,
+        "variable": "hcom_listener"
+      },
+      "preserve_processes": true,
+      "state": "parked_quota",
+      "workers": [
+        "worker-runtime-nova",
+        "worker-core-vume",
+        "worker-events-miko",
+        "worker-ui-rafa"
+      ]
+    },
+    "listener": {
+      "last_messages": [
+        "miko ready",
+        "rafa ready",
+        "nova ready"
+      ],
+      "state": "completed"
+    },
+    "native_workers": {
+      "core": {
+        "id": "sub-d675982b",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-core-luna",
+        "state": "completed_accepted"
+      },
+      "core-review": {
+        "id": "sub-31b61932",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-core-review-luna",
+        "state": "completed_accepted"
+      },
+      "coverage": {
+        "id": "sub-dc55d27e",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-vitest-coverage-luna",
+        "state": "completed_interrupted_partial_dependency_state"
+      },
+      "daemon-protocol": {
+        "id": "sub-2308f868",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-daemon-protocol-luna",
+        "state": "running"
+      },
+      "events": {
+        "id": "sub-27c2524e",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-events-luna",
+        "state": "completed"
+      },
+      "events-review": {
+        "id": "sub-0c640495",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-events-review-luna",
+        "state": "completed"
+      },
+      "runtime": {
+        "id": "sub-7998863a",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-runtime-luna",
+        "state": "reported_done"
+      },
+      "runtime-review": {
+        "id": "sub-550a3dcf",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-runtime-review-luna",
+        "state": "running"
+      },
+      "runtime-review-retry2": {
+        "id": "sub-49b8e4e0",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-runtime-review-codex-retry2",
+        "state": "running"
+      },
+      "ui": {
+        "id": "sub-c023c74b",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-ui-luna",
+        "state": "reported_done"
+      },
+      "ui-review": {
+        "id": "sub-4e7874cf",
+        "model": "openai-codex/gpt-5.6-luna",
+        "name": "xonsh-ui-review-luna",
+        "state": "running"
+      }
+    },
+    "no_recursive_spawn": true,
+    "note": "Four native GPT-5.6 Luna/high workers are actively reassessing and completing the original disjoint tranches. Legacy hcom/AGY workers remain alive but parked on quota; do not terminate.",
+    "pool": {
+      "active": 1,
+      "free": 4,
+      "max": 5
+    },
+    "serialize_conflicts": true,
+    "thread": "xonsh-integration",
+    "transport": "native-prime-rlm",
+    "wisdom_dispersion": {
+      "state": "sent",
+      "targets": [
+        "xonsh-runtime-luna",
+        "xonsh-core-luna",
+        "xonsh-events-luna",
+        "xonsh-ui-luna",
+        "xonsh-events-review-luna"
+      ],
+      "themes": [
+        "dual support, not replacement",
+        "JSON-lines runtime and Xonsh Execer",
+        "persistent late-message lifecycle",
+        "distinct typed event discriminants",
+        "UI parity beyond labels",
+        "advisory plans require source verification"
+      ]
+    }
+  },
+  "strategy": {
+    "current_exception": "root directly owns only coverage dependency repair; coverage execution may remain scripted/delegated",
+    "root": "owns hardest, highest-risk, most ambiguous, critical-path work in general; reclaim blocked delegated work",
+    "workers": "bounded implementation, research, repetitive validation, independent ratification"
+  }
+}

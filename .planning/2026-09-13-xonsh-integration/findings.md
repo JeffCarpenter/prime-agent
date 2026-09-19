@@ -338,3 +338,10 @@ Source: local worktree and Git history on 2026-09-13.
 - **`strictFunctionTypes` Parameter Contravariance**: `customTools?: ToolDefinition[]` on `CreateAgentSessionOptions` defaults `TSchema` to `TSchema`, expecting `renderCall` arguments of type `unknown`. Concrete definitions like `createXonshToolDefinition` type `args: { code: string }`, requiring an explicit cast (`as unknown as ToolDefinition`) under `strictFunctionTypes`.
 - **Integration Coverage**: Verified end-to-end in `packages/coding-agent/test/suite/xonsh-repl.integration.test.ts` with cell execution, state recovery across errors, process capture (`$()`), environment manipulation, and full-control SDK session execution without explicit tools.
 
+### Xonsh UI-label investigation (2026-09-16)
+- An explicit `xonsh` tool call was displayed as `python` because `previewXonshCode()` inferred a Python-shaped preview; dispatch remained `xonsh` and kernel execution used `mode: "xonsh"`.
+- The exact collapsed summary was reproduced through both `previewXonshCode()` and `ToolExecutionComponent`; replay metadata and legacy IPython rendering were ruled out.
+- Source-language regexes have broader false-negative and false-positive boundaries and should not replace authoritative tool identity in the UI.
+- Recommended design boundary: preserve `xonsh` as the primary label and treat inferred syntax only as a secondary hint or highlighting input.
+- Full evidence, validation, secondary findings, and current scope are recorded in `ui-label-investigation.md`.
+

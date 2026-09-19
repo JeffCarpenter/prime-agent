@@ -1,0 +1,245 @@
+#+title: Xonsh Installer Port Plan Rollup
+#+subtitle: Executable parity plan for the Prime Agent installer
+#+author: Jeff
+#+date: <2026-09-10 Thu>
+#+language: en
+#+options: toc:3 num:t ^:nil
+#+startup: content
+#+filetags: :process:artifact:installer:xonsh:prime-agent:
+
+:PROPERTIES:
+:ID:       6c1c76c6-2a06-4bda-ae67-4f1ef5c7cb4e
+:END:
+
+* 0. Contract Status
+This rollup records the implementation and validation state of the additive Xonsh installer port.
+
+** Conformance
+- Profile :: PROCESS/TODO, selected because ~:process:~ is present in ~#+filetags:~.
+- Contract status :: Conforming document; implementation work remains open where marked.
+- Source of truth :: The repository plan files and the current installer sources were reviewed before this rollup.
+- Release constraint :: The existing POSIX installer remains the release-facing entry point.
+- Review status :: The first GLM-5.3 review findings (its F1-F6) are historical and fixed; the strict process/documentation review F1-F8 is incorporated below as open actions only.
+
+** Status summary
+| Area | Status | Evidence | Next action |
+|-------+--------+----------+-------------|
+| Repository and release-surface review | complete | Existing installer, workflows, documentation, and checker reviewed | none |
+| Xonsh implementation | implemented, uncommitted | Root-level executable ~install.xsh~ added as an untracked file; nothing released | decide commit disposition; complete final review |
+| Syntax and static checks | complete | Xonsh parse, Python compilation, and Ruff checks passed | none |
+| Behavioral checks | in progress | Fake end-to-end path and render-width cases recorded in progress notes only; not yet reproducible | Run focused boundary, prompt, checksum-failure, installation-path, and remaining rendering tests |
+| Reproducible validation harness | pending | No persisted harness or evidence artifact exists | Build a rerunnable harness and persist its evidence |
+| Parity artifact | pending | 83-function parity conclusion recorded in notes only | Persist a function-by-function parity matrix |
+| Project check | pending | not yet run | Run ~npm run check~ |
+| Final review | pending | not yet run | Run diff check, inspect full diff, and inspect status |
+
+** Deviations
+No contract deviations are declared for this artifact.
+
+* 1. Scope
+
+** Goal
+Add a rigorous, executable Xonsh port of ~install.sh~ while preserving the existing POSIX installer and its public streamed-install behavior.
+
+** In scope
+- Resolve stable, beta, or explicit release versions.
+- Check Node.js and npm prerequisites.
+- Offer supported Node.js installation paths for Homebrew, apt, apk, and a standalone archive.
+- Download and verify release archives with SHA-256 checksums.
+- Apply npm policy required by the package and optional kernel bootstrap.
+- Configure standalone Node.js paths and shell profiles.
+- Preserve interactive confirmation, non-interactive behavior, cleanup, and terminal rendering.
+- Validate the port without changing release-facing POSIX workflows.
+
+** Out of scope
+- Replacing or editing ~install.sh~.
+- Changing release workflow references from ~install.sh~ to ~install.xsh~.
+- Adding a new runtime dependency to the package solely for the port.
+- Running prohibited development commands such as ~npm test~, ~npm run build~, or ~npm run dev~.
+
+* 2. Definitions
+- Xonsh installer :: The executable root-level file ~install.xsh~, invoked by Xonsh with optional release arguments.
+- POSIX installer :: The existing root-level ~install.sh~ script used by release-facing workflows and documentation.
+- Release channel :: Either ~stable~ or ~beta~ when resolving the latest published version.
+- Explicit version :: A user-supplied version accepted after removing an optional leading ~v~ and validating safe version characters.
+- Standalone Node.js :: A downloaded Node.js archive installed under the user data directory and exposed through a managed ~current/bin~ path.
+- Screen mode :: The terminal-rendering path used when stdout is a usable terminal and the terminal is not dumb.
+- Plain mode :: The non-rendered path used for non-TTY execution, dumb terminals, or an explicit plain-mode environment setting.
+- Preflight :: The checks that establish whether Node.js, npm, and an existing command are available before package installation.
+- Bootstrap :: Optional post-install setup controlled by the kernel bootstrap environment setting.
+
+* 3. Invariants / Constraints
+
+** Compatibility invariants
+- ~install.sh~ MUST remain unchanged by this port.
+- ~install.xsh~ MUST be directly executable and MUST accept the same release-selection concepts as the shell installer.
+- Release-facing workflows and documentation MUST continue to reference ~install.sh~.
+- Missing or invalid release configuration MUST fail explicitly.
+- Failed downloads, checksum verification, extraction, package installation, and required commands MUST produce a non-success result.
+
+** Command and data invariants
+- Dynamic external commands MUST use structured argument sequences rather than interpolated shell command strings.
+- Environment overrides MUST be scoped to subprocess calls or the installer environment map.
+- Temporary directories MUST be created with secure temporary-directory APIs and removed through scoped cleanup.
+- Archive names selected from manifests MUST be constrained to safe, expected names before use.
+- Package and Node.js downloads MUST be checked against the selected SHA-256 manifest entry before installation.
+- The installer MUST preserve the original PATH for command discovery after profile or standalone-path changes.
+
+** Terminal and interaction invariants
+- Screen rendering MUST account for Unicode display width and narrow terminal dimensions.
+- Terminal restoration MUST run on normal cleanup and signal cleanup.
+- A no-TTY prompt path MUST continue without confirmation when the shell installer specifies that behavior.
+- An interactive cancellation MUST exit without installing the package.
+- Plain mode MUST remain usable when screen rendering, terminal sizing, or /dev/tty access is unavailable.
+
+** Validation invariants
+- Xonsh syntax validation MUST pass with the installed Xonsh runtime.
+- Python compilation and Ruff validation MUST pass for ~install.xsh~.
+- The repository installer checker MUST pass.
+- Fake end-to-end tests MUST cover download, checksum verification, and npm installation without contacting a live release service.
+- The full project check MUST be run before the work is reported complete.
+
+* 4. Core model
+
+** 4.1 Entry points and control flow
+The executable path is:
+
+1. Parse an optional release argument.
+2. Resolve the release version from an explicit version, environment override, or channel endpoint.
+3. Register cleanup and signal handlers.
+4. Select screen or plain mode.
+5. Run Node.js and npm preflight checks.
+6. Offer or perform Node.js installation if prerequisites are missing.
+7. Download the release archive and its checksum manifest.
+8. Verify the selected archive checksum.
+9. Ask for confirmation when confirmation is possible.
+10. Run npm global installation with the package policy.
+11. Optionally bootstrap the kernel and tools.
+12. Restore the terminal and remove temporary state.
+
+** 4.2 Implemented components
+| Component | Responsibility | Current state |
+|-----------+----------------+---------------|
+| Release resolver | Channel and explicit-version selection, safe normalization | implemented |
+| Preflight runner | Node.js, npm, and existing-command discovery | implemented |
+| Node installer | Homebrew, apt, apk, and standalone installation dispatch | implemented |
+| Archive verifier | Manifest selection and SHA-256 verification | implemented |
+| npm installer | Global package install and policy environment | implemented |
+| PATH/profile manager | Standalone Node.js path persistence and instructions | implemented |
+| Prompt layer | TTY confirmation, cancellation, and no-TTY continuation | implemented |
+| Screen renderer | Layout, animation, width handling, and terminal restoration | implemented |
+| Cleanup layer | Temporary directories, exit paths, and signal handling | implemented |
+
+** 4.3 Porting decisions
+- The port is additive because release workflows and public documentation hard-code the POSIX installer.
+- The root filename is ~install.xsh~ so users can invoke ~xonsh --no-rc install.xsh [stable|beta|version]~.
+- Python ~pathlib.Path~ is used for filesystem operations.
+- Python subprocess calls receive argv-like sequences and do not use shell interpolation.
+- Unicode width calculation uses ~wcwidth.wcswidth~ when available and a length fallback when it is not.
+- Platform and effective-user detection use Python helpers for portability.
+- Xonsh-specific parser pitfalls are avoided where a Python expression could be interpreted as subprocess syntax.
+- The command-line wrapper converts expected filesystem, subprocess, parsing, and runtime failures into an explicit ~error:~ message and status 1.
+
+** 4.4 Interfaces and environment controls
+| Interface | Meaning | Domain |
+|-----------+---------+--------|
+| ~install.xsh [argument]~ | Select stable, beta, or an explicit version | zero or one argument |
+| ~PRIME_AGENT_DOWNLOAD_BASE_URL~ | Override the release base URL | non-empty configured URL |
+| ~PRIME_AGENT_RELEASE_CHANNEL~ | Select the default release channel | ~stable~ or ~beta~ |
+| ~PRIME_AGENT_VERSION~ | Override release resolution | validated version string |
+| ~PRIME_AGENT_INSTALLER_PLAIN=1~ | Disable screen mode | boolean setting |
+| ~PRIME_AGENT_BOOTSTRAP_KERNEL_ON_INSTALL=1~ | Enable kernel bootstrap | boolean setting |
+| ~PRIME_AGENT_SHELL_PROFILE~ | Select the profile to update | filesystem path |
+| ~PRIME_AGENT_PACKAGE~ and ~PRIME_AGENT_CMD~ | Override package and command names | package or command identifiers |
+
+* 5. Edge cases / failure modes
+
+** Release and archive failures
+- The release base URL defaults to an unreplaced release-workflow placeholder and fails explicitly unless ~PRIME_AGENT_DOWNLOAD_BASE_URL~ is set.
+- The requested channel is invalid.
+- The resolved version is empty or contains unsafe characters.
+- curl is unavailable or returns a failure.
+- The checksum manifest has no matching package or Node.js entry.
+- The archive name contains a path separator, parent-directory marker, or unexpected platform suffix.
+- The checksum does not match the downloaded archive.
+- The temporary directory cannot be created or removed.
+
+** Node.js failures
+- Node.js is absent.
+- Node.js is older than 20.6.0.
+- npm is absent.
+- No supported package-manager candidate is new enough.
+- The operating system or CPU architecture has no standalone archive mapping.
+- sudo is required but unavailable or rejected.
+- The standalone archive cannot be extracted because required tools are unavailable.
+
+** Interaction and terminal failures
+- stdout is not a TTY.
+- TERM is dumb.
+- /dev/tty cannot be opened.
+- Terminal sizing returns malformed output.
+- The user declines installation.
+- The process receives SIGINT or SIGTERM during a state-changing operation.
+
+** Failure handling
+Each failure path must leave temporary download state eligible for cleanup, restore terminal presentation when screen mode was active, and return a non-success status unless the documented cancellation or no-TTY path intentionally exits successfully.
+
+* 6. Comparisons / Alternatives
+
+** Preserve POSIX versus replace POSIX
+- Chosen :: Add ~install.xsh~ while preserving ~install.sh~.
+- Rejected :: Replace ~install.sh~ or redirect release workflows to Xonsh.
+- Reason :: The shell installer is the live release surface and changing it would alter the public ~curl | sh~ contract.
+
+** Structured subprocesses versus shell command text
+- Chosen :: Python subprocess argv sequences with scoped environment maps.
+- Rejected :: Reconstruct shell command strings and execute them through a shell.
+- Reason :: Structured arguments reduce quoting errors and avoid unnecessary shell interpretation.
+
+** Optional dependency versus fallback
+- Chosen :: Use ~wcswidth~ when installed and fall back to ~len~.
+- Rejected :: Require a new dependency before the installer can render.
+- Reason :: Rendering remains available in minimal environments while supporting correct Unicode width when possible.
+
+* 7. Tasks / Next Actions
+
+** Focused behavioral validation
+- [ ] Test version boundaries around 20.6.0, malformed versions, channel selection, and environment overrides.
+- [ ] Test interactive acceptance, cancellation, and no-TTY behavior.
+- [ ] Test checksum success, missing manifest entries, and checksum failure.
+- [ ] Test Homebrew, apt, apk, and standalone Node.js dispatch with fakes.
+- [ ] Test normal, narrow, compact, and short terminal rendering.
+
+** Reproducible evidence and parity artifacts
+- [ ] Build a rerunnable behavioral-validation harness and persist its evidence so a third party can re-execute the recorded checks (review F1).
+- [ ] Persist a parity matrix mapping all 83 shell functions to their Xonsh counterparts (review F2).
+
+** Project validation
+- [x] Run Xonsh no-compile syntax validation.
+- [x] Run Python compilation.
+- [x] Run Ruff on ~install.xsh~.
+- [x] Run the installer checker.
+- [ ] Run ~npm run check~ after recording its scope: it invokes ~biome check --write --error-on-warnings .~ (repository-wide and mutating), ~tsgo --noEmit~, ~check:installer~, and ~check:browser-smoke~ (review F3).
+
+** Final review
+- [ ] Run ~git diff --check~ and capture ~git status --porcelain~ plus ~git ls-files --others --exclude-standard~ so untracked files are visible (review F5).
+- [ ] Inspect the complete tracked diff and the untracked additions (~install.xsh~, ~.planning/~).
+- [ ] Confirm ~install.sh~ is unchanged.
+- [ ] Confirm unrelated tracked modifications (~package.json~, ~pnpm-lock.yaml~) are preserved (review F4).
+- [ ] Record the commit/no-commit disposition for ~install.xsh~ and ~.planning/~ while preserving unrelated user work (review F6).
+- [ ] Confirm final repository status and report remaining blockers.
+
+* 8. References
+
+** Repository sources
+- ~install.sh~ :: Existing POSIX implementation and parity baseline.
+- ~install.xsh~ :: Additive Xonsh implementation under review.
+- ~.planning/xonsh-installer/task_plan.md~ :: Phase plan and explicit open work.
+- ~.planning/xonsh-installer/findings.md~ :: Repository, tooling, and parity findings.
+- ~.planning/xonsh-installer/progress.md~ :: Recorded implementation and validation events.
+
+** Validation record
+The recorded completed checks include Xonsh no-compile parsing, Python compilation, Ruff, render-width cases, fake non-interactive download and installation through the successful checksum path, and the repository installer checker. Prompt behavior, checksum-failure behavior, Node installation dispatch, additional rendering cases, the project-wide check, and final diff review remain open in the task plan.
+
+This evidence currently lives as prose in the planning notes; it is not yet reproducible by a third party, and the parity conclusion lacks a persisted matrix (review F1/F2). Nothing is committed or released: ~install.xsh~ and ~.planning/~ are untracked, unrelated tracked modifications exist in ~package.json~ and ~pnpm-lock.yaml~, and ~install.sh~ remains the sole release-facing installer.
+
