@@ -1,0 +1,1 @@
+- Added Context7 skills discovery module and headless CLI driver.
