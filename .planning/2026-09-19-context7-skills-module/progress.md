@@ -22,8 +22,10 @@
 - Initialized and recorded PWF artifacts under `.planning/2026-09-19-context7-skills-module/`.
 - Dispatched code review subagent (`9db1281a`) to rigorously critique code and planning commits.
 - Evaluated review findings (CLI arg poisoning, 404 unhandled rejection, filter inconsistencies, Node 20+ requirement).
-- Documented technical debt and personal session observations in `findings.md`.
 - Synchronized planning files to resolve duplicate `## Next Step` and update phase statuses.
+- Created project `future_work.md` and active plan `future_work.md` cataloging technical debt and proposed rectifications.
+- Completed Phase 8 (Backlog & Technical Debt Cataloging) with complexity/risk ratings (0-10 scale) integrated across planning files.
+- Relocated comprehensive `future_work.md` backlog into `.planning/2026-09-19-context7-skills-module/future_work.md`.
 
 ### Test Results
 | Test | Expected | Actual | Status |

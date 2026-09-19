@@ -72,6 +72,18 @@ A dedicated code review identified several edge cases and potential improvements
 5. **Runtime Node.js Version Clarification**:
    - The use of `AbortSignal.any()` requires Node.js >= 20.0.0. The repository's engine constraint (`>=22.8.0`) satisfies this, but documentation should cite Node 20+ rather than Node 18+.
 
+## Complexity & Risk Assessment
+Identified technical debt and backlog items were evaluated on a 0-10 complexity/risk scale:
+1. **Context7 Module Hardening & Security (Score: 2.5/10 - Low):**
+   - Modifying [`packages/coding-agent/scripts/lib/context7-skills.mjs`](file:///home/jeff/code/fork/prime-agent/packages/coding-agent/scripts/lib/context7-skills.mjs) is localized to a single file with zero runtime or daemon dependencies.
+   - Fixes for positional argument poisoning, 404 rejections, SSRF checks, and stream byte capping carry minimal risk.
+2. **Context7 Integration, Tests, & Types (Score: 4.5/10 - Moderate):**
+   - Writing Vitest test suites with mock fetch streams requires deterministic isolation without network calls.
+   - Porting to strict TypeScript requires matching repository Biome and compiler settings.
+3. **Shell Environments & Runtime Parity (Score: 7.5/10 - High):**
+   - Involves cross-process lifecycle coordination across Python daemon, Xonsh subshells, and Zsh PTYs.
+   - Process tree termination on abort signals and session recovery in [`AgentSession`](file:///home/jeff/code/fork/prime-agent/packages/coding-agent/src/core/agent-session.ts) carry concurrency and platform compatibility risks.
+
 ## Issues Encountered
 | Issue | Resolution |
 |---|---|
