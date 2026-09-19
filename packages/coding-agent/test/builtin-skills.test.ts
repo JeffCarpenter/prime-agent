@@ -269,6 +269,15 @@ describe("builtin skills", () => {
 			expect(edit?.kind === "python" && edit.python.importName).toBe("edit");
 		});
 
+		it("ships the zsh skill as a python skill importable as `zsh`", () => {
+			const { skills } = loadSkillsFromDir({ dir: getBundledSkillsDir(), source: "builtin" });
+
+			const zsh = skills.find((s) => s.name === "zsh");
+			expect(zsh).toBeDefined();
+			expect(zsh?.kind).toBe("python");
+			expect(zsh?.kind === "python" && zsh.python.importName).toBe("zsh");
+		});
+
 		it("loads the skill-creator python template as a valid python skill", () => {
 			const referencePath = join(getBundledSkillsDir(), "skill-creator", "references", "python-skills.md");
 			const reference = readFileSync(referencePath, "utf-8");
