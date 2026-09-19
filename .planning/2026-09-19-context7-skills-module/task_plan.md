@@ -8,7 +8,7 @@
 Research Context7 skill discovery mechanics, identify changelog specification skills, extract ephemeral driver commands into a cohesive, loosely coupled Node/ESM module of functions within `packages/coding-agent`, and verify with project checks.
 
 ## Next Step
-Review findings documented. Ready for follow-up refactoring if desired.
+Technical debt and follow-up rectifications cataloged in `future_work.md`. Ready for implementation.
 
 ## Current Phase
 Complete
@@ -56,6 +56,13 @@ Complete
 - [x] Analyze reviewer findings (CLI arg poisoning, 404 unhandled rejection, filter inconsistencies)
 - [x] Document architectural reflections and technical debt in findings.md
 - [x] Clean up planning artifacts
+- **Status:** complete
+
+### Phase 8: Backlog & Technical Debt Cataloging
+- [x] Create project-wide backlog in `future_work.md`
+- [x] Create active plan `future_work.md`
+- [x] Conduct difficulty & complexity evaluation (0-10 scale)
+- [x] Synchronize PWF planning files
 - **Status:** complete
 
 ## Decisions Made
