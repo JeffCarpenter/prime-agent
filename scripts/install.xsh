@@ -9,33 +9,83 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import hashlib
+import json
 import os
 import platform
 import re
+import secrets
 import shlex
 import shutil
+import string
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
+from typing import IO, TextIO
+
+from xonsh.built_ins import XSH
 
 try:
     from wcwidth import wcswidth
 except ImportError:
     def wcswidth(text: str) -> int:
         return len(text)
-from collections.abc import Callable, Sequence
-from pathlib import Path
-from typing import IO, TextIO
 
 MIN_NODE_VERSION = (20, 6, 0)
 NODE_DIST_BASE = "https://nodejs.org/dist/latest-v22.x"
+NATIVE_OWNER = "prime-agent-native-v1"
+NATIVE_ASSETS = (
+    "prime-agent",
+    "package.json",
+    "install.sh",
+    "prime-agent-runtime/pyproject.toml",
+    "prime-agent-runtime/src/rlm/repl.py",
+    "theme/prime.json",
+    "export-html/template.html",
+    "photon_rs_bg.wasm",
+)
+NATIVE_PLATFORMS = (
+    "linux-x64-musl-baseline",
+    "linux-x64-musl",
+    "linux-x64-baseline",
+    "linux-arm64-musl",
+    "darwin-arm64",
+    "darwin-x64",
+    "linux-arm64",
+    "linux-x64",
+)
+NATIVE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$")
+TTY_PATH = p"/dev/tty"
 RUNTIME_INSTALL_ENV = {
     "PRIME_AGENT_BOOTSTRAP_TOOLS_ON_INSTALL": "1",
 }
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+
+    def __bool__(self) -> bool:
+        return self.returncode == 0
+
+
+@dataclass(frozen=True)
+class NativeTarget:
+    target: str
+    name: str
+    digest: str
+    platform: str
+    version: str
+    directory: Path
 
 
 @dataclass
@@ -64,19 +114,33 @@ class Installer:
     original_path: str = field(default_factory=lambda: os.environ.get("PATH", ""))
     download_dir: Path | None = None
     bootstrap_kernel: bool = False
+    native_root: Path | None = None
+    native_stage: Path | None = None
+    native_lock: Path | None = None
+    native_public_bin: Path | None = None
+    native_root_adopted: bool = False
+    native_recovered: bool = False
+    native_activation_target: str = ""
+    native_activation_previous: str = ""
+    allow_insecure_http: bool = False
     _cleanup_registered: bool = False
+    _quiet_output: TextIO | None = field(default=None, init=False, repr=False)
+    _active_process: subprocess.Popen[str] | None = field(default=None, init=False, repr=False)
+    _process_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        # Keep these sentinels split so release publishing only rewrites the
-        # configured values below.
+        # Release publishing rewrites only the unsplit configured literals.
         self.unconfigured_base_url = "__PRIME_AGENT_DOWNLOAD_BASE" + "_URL__"
         self.unconfigured_channel = "__PRIME_AGENT_DEFAULT_RELEASE_" + "CHANNEL__"
-        self.base_url = self.env.get("PRIME_AGENT_DOWNLOAD_BASE_URL", self.unconfigured_base_url).rstrip("/")
-        configured_channel = "__PRIME_AGENT_DEFAULT_RELEASE_" + "CHANNEL__"
+        configured_base_url = "__PRIME_AGENT_DOWNLOAD_BASE_URL__"
+        configured_channel = "__PRIME_AGENT_DEFAULT_RELEASE_CHANNEL__"
+        self.base_url = (self.env.get("PRIME_AGENT_DOWNLOAD_BASE_URL") or configured_base_url).rstrip("/")
         self.default_channel = "stable" if configured_channel == self.unconfigured_channel else configured_channel
-        self.release_channel = self.env.get("PRIME_AGENT_RELEASE_CHANNEL", self.default_channel)
+        self.release_channel = self.env.get("PRIME_AGENT_RELEASE_CHANNEL") or self.default_channel
         self.package = self.env.get("PRIME_AGENT_PACKAGE", "prime-agent")
         self.command = self.env.get("PRIME_AGENT_CMD", "prime-agent")
+        sysroot = self.env.get("PRIME_AGENT_NATIVE_SYSROOT_FOR_TESTS", "")
+        self.native_sysroot = Path(sysroot) if sysroot else Path("/")
         esc = "\x1b"
         self.reset = f"{esc}[0m"
         self.bold = f"{esc}[1m"
@@ -93,10 +157,71 @@ class Installer:
         self.color_primary = f"{esc}[38;2;127;91;213m"
         self.color_scan = f"{esc}[38;2;14;165;233m"
         self.color_warning = f"{esc}[38;2;245;158;11m"
-        self._quiet_output = None
 
     def command_path(self, name: str, path: str | None = None) -> str | None:
-        return shutil.which(name, path=path)
+        return shutil.which(name, path=path if path is not None else self.env.get("PATH", ""))
+
+    def validate_install_method(self) -> str:
+        method = self.env.get("PRIME_AGENT_INSTALL_METHOD", "auto")
+        if method not in {"auto", "binary", "node"}:
+            print("error: PRIME_AGENT_INSTALL_METHOD must be auto, binary or node.", file=sys.stderr)
+            raise SystemExit(1)
+        return method
+
+    @staticmethod
+    def is_loopback_test_base_url(url: str) -> bool:
+        return re.fullmatch(r"http://127\.0\.0\.1:[0-9]+", url) is not None
+
+    def validate_download_base_url(self) -> None:
+        if self.base_url.startswith("https://"):
+            self.allow_insecure_http = False
+            return
+        if self.base_url.startswith("http://"):
+            if self.env.get("PRIME_AGENT_ALLOW_INSECURE_HTTP_FOR_TESTS", "0") == "1" and self.is_loopback_test_base_url(self.base_url):
+                self.allow_insecure_http = True
+                return
+            print("error: Prime Agent downloads require an HTTPS base URL.", file=sys.stderr)
+            print("Local loopback test feeds require PRIME_AGENT_ALLOW_INSECURE_HTTP_FOR_TESTS=1.", file=sys.stderr)
+            raise SystemExit(1)
+        print("error: Prime Agent download base URL must use HTTPS.", file=sys.stderr)
+        raise SystemExit(1)
+
+    def curl_download(self, args: Sequence[object]) -> CommandResult:
+        protocols = "=http,https" if self.allow_insecure_http else "=https"
+        return self.run(["curl", "--proto", protocols, "--proto-redir", "=https", *args])
+
+    def emit(self, text: str = "", *, error: bool = False) -> None:
+        output = self._quiet_output or (sys.stderr if error else sys.stdout)
+        print(text, file=output, flush=True)
+
+    def _run_supervised(
+        self,
+        argv: list[str],
+        *,
+        capture: bool,
+        cwd: Path | None,
+        env: dict[str, str],
+    ) -> CommandResult:
+        stdout: int | TextIO = subprocess.PIPE if capture else self._quiet_output or sys.stdout
+        stderr: int | TextIO = subprocess.PIPE if capture else self._quiet_output or sys.stderr
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdout=stdout,
+            stderr=stderr,
+            text=True,
+            start_new_session=True,
+        )
+        with self._process_lock:
+            self._active_process = process
+        try:
+            output, errors = process.communicate()
+        finally:
+            with self._process_lock:
+                if self._active_process is process:
+                    self._active_process = None
+        return CommandResult(process.returncode, output or "", errors or "")
 
     def run(
         self,
@@ -106,21 +231,25 @@ class Installer:
         capture: bool = False,
         cwd: Path | None = None,
         env: dict[str, str] | None = None,
-        stdin: IO[str] | int | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            [str(arg) for arg in args],
-            check=False,
-            cwd=cwd,
-            env={**self.env, **(env or {})},
-            stdin=stdin,
-            stdout=subprocess.PIPE if capture else self._quiet_output,
-            stderr=subprocess.PIPE if capture else self._quiet_output,
-            text=True,
-        )
-        if check and result.returncode:
-            command = " ".join(shlex.quote(str(arg)) for arg in args)
-            detail = (result.stderr or result.stdout or "").strip()
+    ) -> CommandResult:
+        argv = [str(arg) for arg in args]
+        runtime_env = {**self.env, **(env or {})}
+        if self._quiet_output is not None or cwd is not None:
+            result = self._run_supervised(argv, capture=capture, cwd=cwd, env=runtime_env)
+        else:
+            with XSH.env.swap(runtime_env):
+                if capture:
+                    pipeline = !(@(argv))
+                else:
+                    pipeline = ![@unthread @(argv)]
+            result = CommandResult(
+                pipeline.returncode,
+                (pipeline.out or "") if capture else "",
+                (pipeline.err or "") if capture else "",
+            )
+        if check and not result:
+            command = " ".join(shlex.quote(arg) for arg in argv)
+            detail = (result.stderr or result.stdout).strip()
             raise RuntimeError(f"{command} failed with exit code {result.returncode}" + (f": {detail}" if detail else ""))
         return result
 
@@ -140,15 +269,31 @@ class Installer:
         atexit.register(self.cleanup)
         signal.signal(signal.SIGINT, lambda _signum, _frame: self.signal_cleanup(130))
         signal.signal(signal.SIGTERM, lambda _signum, _frame: self.signal_cleanup(143))
+        signal.signal(signal.SIGHUP, lambda _signum, _frame: self.signal_cleanup(129))
         self._cleanup_registered = True
 
+    def terminate_active_process(self) -> None:
+        with self._process_lock:
+            process = self._active_process
+        if process is None or process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            process.kill()
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            process.wait()
+
     def cleanup(self) -> None:
+        self.terminate_active_process()
         if self.download_dir and self.download_dir.exists():
             shutil.rmtree(self.download_dir, ignore_errors=True)
             self.download_dir = None
+        self.native_cleanup()
         self.restore_terminal()
 
     def signal_cleanup(self, status: int) -> None:
+        self.terminate_active_process()
         self.restore_terminal()
         raise SystemExit(status)
 
@@ -157,7 +302,7 @@ class Installer:
             return
         text = self.reset + self.show_cursor
         try:
-            with open("/dev/tty", "w", encoding="utf-8") as tty:
+            with open(TTY_PATH, "w", encoding="utf-8") as tty:
                 tty.write(text)
                 tty.flush()
         except OSError:
@@ -173,11 +318,12 @@ class Installer:
     def terminal_size(self) -> tuple[int, int]:
         fd: int | None = None
         try:
-            fd = os.open("/dev/tty", os.O_RDONLY)
-            output = self.run(["stty", "size"], capture=True, check=False, stdin=fd).stdout
-            rows, cols = (int(value) for value in output.split())
-        except (OSError, ValueError):
-            rows, cols = 24, 80
+            fd = os.open(TTY_PATH, os.O_RDONLY)
+            size = os.get_terminal_size(fd)
+            cols, rows = size.columns, size.lines
+        except OSError:
+            size = shutil.get_terminal_size((80, 24))
+            cols, rows = size.columns, size.lines
         finally:
             if fd is not None:
                 os.close(fd)
@@ -188,7 +334,7 @@ class Installer:
 
     def write_screen(self, text: str) -> None:
         try:
-            with open("/dev/tty", "w", encoding="utf-8") as tty:
+            with open(TTY_PATH, "w", encoding="utf-8") as tty:
                 tty.write(text)
                 tty.flush()
         except OSError:
@@ -469,7 +615,7 @@ class Installer:
             return 1 if answer in {"n", "no"} else 0
 
         try:
-            with open("/dev/tty", "r+", encoding="utf-8") as prompt_input:
+            with open(TTY_PATH, "r+", encoding="utf-8") as prompt_input:
                 return read_answer(prompt_input)
         except OSError:
             return read_answer(sys.stdin) if sys.stdin.isatty() else 2
@@ -557,6 +703,702 @@ class Installer:
         patch = int(match.group(3) or 0)
         return (major, minor, patch) >= MIN_NODE_VERSION
 
+    def native_glibc(self) -> bool:
+        if not self.command_path("getconf"):
+            return False
+        result = self.run(["getconf", "GNU_LIBC_VERSION"], capture=True, check=False)
+        match = re.fullmatch(r"glibc (\d+)\.(\d+)\s*", result.stdout)
+        return result.returncode == 0 and match is not None and (int(match.group(1)), int(match.group(2))) >= (2, 17)
+
+    def native_musl(self) -> bool:
+        if any((self.native_sysroot / "lib").glob("ld-musl-*.so.1")):
+            return True
+        if not self.command_path("ldd"):
+            return False
+        result = self.run(["ldd"], capture=True, check=False)
+        return "musl" in result.stdout or "musl" in result.stderr
+
+    def native_avx2(self) -> bool:
+        cpuinfo = self.native_sysroot / "proc/cpuinfo"
+        try:
+            lines = cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return False
+        for line in lines:
+            key, separator, values = line.partition(":")
+            if separator and key.strip() == "flags" and "avx2" in values.split():
+                return True
+        return False
+
+    def macos_version(self) -> str | None:
+        if not self.command_path("sw_vers"):
+            return None
+        result = self.run(["sw_vers", "-productVersion"], capture=True, check=False)
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    def native_platform(self) -> str | None:
+        system = self.system_name()
+        libc_suffix = ""
+        if system == "Darwin":
+            version = self.macos_version()
+            if version is None:
+                return None
+            major = version.split(".", 1)[0]
+            if not major.isdigit() or int(major) < 13:
+                return None
+            native_os = "darwin"
+        elif system == "Linux":
+            native_os = "linux"
+            if self.native_glibc():
+                libc_suffix = ""
+            elif self.native_musl():
+                libc_suffix = "-musl"
+            else:
+                return None
+        else:
+            return None
+
+        machine = self.machine_name()
+        if machine in {"arm64", "aarch64"}:
+            return f"{native_os}-arm64{libc_suffix}"
+        if machine not in {"x86_64", "amd64"}:
+            return None
+        baseline = "-baseline" if native_os == "linux" and not self.native_avx2() else ""
+        return f"{native_os}-x64{libc_suffix}{baseline}"
+
+    def native_prepare_root(self) -> None:
+        home = self.env.get("HOME")
+        if not home:
+            raise SystemExit("error: HOME is required for a native installation.")
+        data_home = self.env.get("XDG_DATA_HOME") or str(Path(home) / p".local/share")
+        configured_root = self.env.get("PRIME_AGENT_INSTALL_DIR") or str(Path(data_home) / p"prime-agent")
+        root = Path(configured_root)
+        if not root.is_absolute():
+            raise SystemExit("error: install directory must be absolute.")
+        if root.is_symlink():
+            raise SystemExit("error: managed installation root must not be a symlink.")
+        root.mkdir(parents=True, exist_ok=True)
+        root = root.resolve()
+        marker = root / p".managed"
+        releases = root / p"releases"
+        binary_dir = root / p"bin"
+        if marker.is_symlink() or releases.is_symlink() or binary_dir.is_symlink():
+            raise SystemExit("error: managed installation directories must not be symlinks.")
+        if marker.exists():
+            if marker.read_text(encoding="utf-8").strip() != NATIVE_OWNER:
+                raise SystemExit(f"error: unrecognized installation owner in {root}.")
+        elif any(root.iterdir()):
+            raise SystemExit(f"error: refusing to take ownership of nonempty directory {root}.")
+        else:
+            self.native_root_adopted = True
+
+        lock = root / p".install-lock"
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            owner = ""
+            with contextlib.suppress(OSError):
+                owner = (lock / p"pid").read_text(encoding="utf-8").strip()
+            raise SystemExit(f"error: installation is locked (pid {owner}). After confirming no installer is running, remove {lock}.")
+
+        self.native_root = root
+        self.native_lock = lock
+        try:
+            (lock / p"pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
+            marker.write_text(f"{NATIVE_OWNER}\n", encoding="utf-8")
+            releases.mkdir(exist_ok=True)
+            binary_dir.mkdir(exist_ok=True)
+            for name in ("prime-agent", "previous"):
+                link = binary_dir / name
+                if link.exists() or link.is_symlink():
+                    if not link.is_symlink() or self.native_parse_target(os.readlink(link)) is None:
+                        raise SystemExit("error: unrecognized managed command target.")
+            for candidate in root.glob(".install.*"):
+                if candidate.is_dir() and not candidate.is_symlink():
+                    shutil.rmtree(candidate)
+            self.native_stage = Path(tempfile.mkdtemp(prefix=".install.", dir=root))
+            if not self.native_recover_activation():
+                raise SystemExit(f"error: invalid activation recovery state at {root / p'.activation-state'}.")
+            if self.native_recovered:
+                self.native_prune_releases()
+            if "PRIME_AGENT_EXPECTED_CURRENT" in self.env:
+                current = self.native_readlink(binary_dir / p"prime-agent")
+                if current != self.env["PRIME_AGENT_EXPECTED_CURRENT"]:
+                    raise SystemExit("error: the active release changed; retry the update.")
+        except BaseException:
+            self.native_cleanup()
+            raise
+
+        bin_home = self.env.get("PRIME_AGENT_BIN_DIR") or str(Path(home) / p".local/bin")
+        self.native_public_bin = Path(bin_home)
+
+    def native_adopted_root_is_removable(self) -> bool:
+        root = self.native_root
+        if root is None or not self.native_root_adopted:
+            return False
+        marker = root / p".managed"
+        try:
+            if marker.is_symlink() or marker.read_text(encoding="utf-8").strip() != NATIVE_OWNER:
+                return False
+            allowed = {".managed", "bin", "releases"}
+            if {entry.name for entry in root.iterdir()} - allowed:
+                return False
+            for directory in (root / p"bin", root / p"releases"):
+                if directory.is_symlink() or not directory.is_dir() or any(directory.iterdir()):
+                    return False
+        except OSError:
+            return False
+        return True
+
+    def native_cleanup(self) -> None:
+        stage = self.native_stage
+        root = self.native_root
+        lock = self.native_lock
+        owns_lock = False
+        if lock is not None and lock.is_dir() and not lock.is_symlink():
+            with contextlib.suppress(OSError):
+                owns_lock = (lock / p"pid").read_text(encoding="utf-8").strip() == str(os.getpid())
+        if owns_lock and stage is not None and root is not None and (root / p".activation-state").exists():
+            with contextlib.suppress(OSError, RuntimeError):
+                if self.native_recover_activation():
+                    self.native_prune_releases()
+        if (
+            root is not None
+            and self.native_activation_target
+            and self.native_activation_previous
+            and self.native_readlink(root / p"bin/prime-agent") == self.native_activation_target
+            and self.native_readlink(root / p"bin/previous") != self.native_activation_previous
+            and stage is not None
+        ):
+            with contextlib.suppress(OSError, RuntimeError):
+                self.native_atomic_link(self.native_activation_previous, root / p"bin/previous")
+        self.native_activation_target = ""
+        self.native_activation_previous = ""
+        if stage is not None and root is not None:
+            with contextlib.suppress(OSError):
+                if stage.parent == root and stage.name.startswith(".install.") and not stage.is_symlink():
+                    shutil.rmtree(stage)
+        self.native_stage = None
+
+        if lock is not None and lock.is_dir() and not lock.is_symlink():
+            try:
+                owner = (lock / p"pid").read_text(encoding="utf-8").strip()
+            except OSError:
+                owner = ""
+            if owner == str(os.getpid()):
+                with contextlib.suppress(OSError):
+                    (lock / p"pid").unlink()
+                    lock.rmdir()
+        self.native_lock = None
+
+        if not self.native_activation_target and self.native_adopted_root_is_removable() and root is not None:
+            shutil.rmtree(root)
+        self.native_root_adopted = False
+
+    @staticmethod
+    def native_validate_archive(archive: Path) -> None:
+        try:
+            with tarfile.open(archive, "r:gz") as tar:
+                members = tar.getmembers()
+        except (OSError, tarfile.TarError) as error:
+            raise ValueError("release archive could not be inspected") from error
+        if not members:
+            raise ValueError("release archive is empty")
+        if len(members) > 10_000:
+            raise ValueError("release archive contains too many entries")
+        total_size = 0
+        for member in members:
+            path = PurePosixPath(member.name)
+            if "\\" in member.name or path.is_absolute() or ".." in path.parts:
+                raise ValueError(f"unsafe archive path: {member.name}")
+            if not member.isdir() and not member.isreg():
+                raise ValueError(f"unsafe archive member type: {member.name}")
+            total_size += member.size
+            if member.size > 128 * 1024 * 1024 or total_size > 512 * 1024 * 1024:
+                raise ValueError("release archive is too large")
+
+    def native_atomic_link(self, target: str, link: Path) -> None:
+        if self.native_stage is None:
+            raise RuntimeError("native staging directory is not initialized")
+        link.parent.mkdir(parents=True, exist_ok=True)
+        temporary_dir = Path(tempfile.mkdtemp(prefix="link.", dir=self.native_stage))
+        temporary_link = temporary_dir / p"link"
+        try:
+            temporary_link.symlink_to(target)
+            os.replace(temporary_link, link)
+        finally:
+            with contextlib.suppress(OSError):
+                temporary_link.unlink()
+            with contextlib.suppress(OSError):
+                temporary_dir.rmdir()
+
+    def native_activate(self, target: str, previous: str) -> None:
+        if self.native_root is None or self.native_stage is None:
+            raise RuntimeError("native installation root is not prepared")
+        self.native_activation_target = target
+        self.native_activation_previous = previous
+        staged_journal = self.native_stage / p"activation-state"
+        journal = self.native_root / p".activation-state"
+        staged_journal.write_text(f"{target}\n{previous}\n", encoding="utf-8")
+        os.replace(staged_journal, journal)
+        self.native_atomic_link(target, self.native_root / p"bin/prime-agent")
+        if previous and target != previous:
+            self.native_atomic_link(previous, self.native_root / p"bin/previous")
+        journal.unlink()
+        self.native_activation_target = ""
+        self.native_activation_previous = ""
+
+    def native_probe(self, args: Sequence[object]) -> CommandResult:
+        argv = [str(arg) for arg in args]
+        try:
+            process = subprocess.Popen(
+                argv,
+                env=self.env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+        except OSError as error:
+            return CommandResult(127, "", str(error))
+        with self._process_lock:
+            self._active_process = process
+        try:
+            try:
+                output, errors = process.communicate(timeout=self.native_probe_timeout())
+                return CommandResult(process.returncode, output or "", errors or "")
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError, ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                output, errors = process.communicate()
+                message = f"error: executable probe timed out after {self.native_probe_timeout()} seconds."
+                return CommandResult(124, output or "", f"{errors or ''}{message}\n")
+        finally:
+            with self._process_lock:
+                if self._active_process is process:
+                    self._active_process = None
+
+    def native_validate_release_metadata(self, target: str) -> NativeTarget | None:
+        parsed = self.native_parse_target(target)
+        if parsed is None:
+            return None
+        release = parsed.directory
+        if release.is_symlink() or not release.is_dir():
+            return None
+        try:
+            if release.resolve() != release.absolute():
+                return None
+            for asset in (*NATIVE_ASSETS, ".archive-sha256", ".install-source"):
+                path = release / asset
+                if path.is_symlink() or not path.is_file():
+                    return None
+                expected_parent = release / PurePosixPath(asset).parent
+                if path.parent.resolve() != expected_parent.absolute():
+                    return None
+            if (release / p".archive-sha256").read_text(encoding="utf-8").strip() != parsed.digest:
+                return None
+            package = json.loads((release / p"package.json").read_text(encoding="utf-8"))
+            if not isinstance(package, dict) or package.get("version") != parsed.version:
+                return None
+            source = (release / p".install-source").read_text(encoding="utf-8").strip()
+            if not source.startswith(("http://", "https://")):
+                return None
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        return parsed
+
+    def native_verify_release_target(self, target: str, label: str = "release") -> bool:
+        parsed = self.native_validate_release_metadata(target)
+        if parsed is None:
+            return False
+        version = self.native_probe([parsed.directory / p"prime-agent", "--version"])
+        if not version or version.stdout.strip() != parsed.version:
+            return False
+        return bool(self.native_probe([parsed.directory / p"prime-agent", "--help"]))
+
+    @staticmethod
+    def native_readlink(path: Path) -> str:
+        try:
+            return os.readlink(path)
+        except OSError:
+            return ""
+
+    def native_recover_activation(self) -> bool:
+        if self.native_root is None:
+            return False
+        journal = self.native_root / p".activation-state"
+        if not journal.exists() and not journal.is_symlink():
+            return True
+        if journal.is_symlink() or not journal.is_file():
+            return False
+        try:
+            lines = journal.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            return False
+        if len(lines) != 2:
+            return False
+        target, previous = lines
+        if not self.native_verify_release_target(target, "recovery-target"):
+            return False
+        if previous and not self.native_verify_release_target(previous, "recovery-previous"):
+            return False
+        current = self.native_readlink(self.native_root / p"bin/prime-agent")
+        if current == target:
+            previous_link = self.native_root / p"bin/previous"
+            if previous and previous != target and self.native_readlink(previous_link) != previous:
+                self.native_atomic_link(previous, previous_link)
+        elif current != previous:
+            return False
+        journal.unlink()
+        self.native_recovered = True
+        return True
+
+    def native_release_in_use(self, executable: Path) -> bool | None:
+        proc = self.native_sysroot / p"proc"
+        if proc.is_dir():
+            determined = True
+            for entry in proc.iterdir():
+                if not entry.name.isdigit():
+                    continue
+                try:
+                    if (entry / p"exe").resolve() == executable.resolve():
+                        return True
+                except OSError:
+                    continue
+            return False if determined else None
+        lsof = self.command_path("lsof")
+        if lsof:
+            return bool(self.run([lsof, "-t", "--", executable], capture=True, check=False).stdout.strip())
+        return None
+
+    def native_prune_releases(self) -> None:
+        if self.native_root is None:
+            return
+        current = self.native_readlink(self.native_root / p"bin/prime-agent")
+        previous = self.native_readlink(self.native_root / p"bin/previous")
+        releases = self.native_root / p"releases"
+        if releases.is_symlink() or not releases.is_dir():
+            return
+        for release in releases.iterdir():
+            if release.is_symlink() or not release.is_dir():
+                continue
+            target = f"../releases/{release.name}/prime-agent"
+            if target in {current, previous} or self.native_validate_release_metadata(target) is None:
+                continue
+            in_use = self.native_release_in_use(release / p"prime-agent")
+            if in_use is False:
+                shutil.rmtree(release)
+
+    def native_rollback(self) -> None:
+        self.register_traps()
+        self.native_prepare_root()
+        if self.native_root is None:
+            raise SystemExit("error: native installation root is unavailable.")
+        previous_link = self.native_root / p"bin/previous"
+        current_link = self.native_root / p"bin/prime-agent"
+        if not previous_link.is_symlink():
+            raise SystemExit("error: no previous compiled release is available.")
+        previous = self.native_readlink(previous_link)
+        current = self.native_readlink(current_link)
+        expected = self.env.get("PRIME_AGENT_EXPECTED_PREVIOUS")
+        if expected and previous != expected:
+            raise SystemExit("error: the previous release changed while planning rollback; retry.")
+        if not previous or previous == current:
+            raise SystemExit("error: no different previous release is available.")
+        if not self.native_verify_release_target(previous, "previous"):
+            raise SystemExit("error: invalid previous release metadata or assets.")
+        if self.native_verify_release_target(current, "current"):
+            self.native_activate(previous, current)
+        else:
+            self.native_atomic_link(previous, current_link)
+        self.native_prune_releases()
+        print("Restored the previous compiled release.")
+        self.native_cleanup()
+
+    def native_check_public_command(self) -> tuple[Path, Path]:
+        if self.native_root is None:
+            raise RuntimeError("native installation root is not prepared")
+        home = self.env.get("HOME")
+        configured = self.env.get("PRIME_AGENT_BIN_DIR") or (str(Path(home) / p".local/bin") if home else "")
+        public_bin = self.native_public_bin or Path(configured)
+        if not public_bin.is_absolute():
+            raise SystemExit("error: bin directory must be absolute.")
+        self.native_public_bin = public_bin
+        if self.env.get("PRIME_AGENT_INSTALL_LINK", "1") == "0":
+            return public_bin, public_bin / self.command
+        if not self.command or self.command in {".", ".."} or "/" in self.command:
+            raise SystemExit("error: command name must be a basename.")
+        command = public_bin / self.command
+        managed = self.native_root / p"bin/prime-agent"
+        if command.exists() or command.is_symlink():
+            if not command.is_symlink() or command.readlink() != managed:
+                raise SystemExit(f"error: refusing to replace existing command {command}.")
+        public_bin.mkdir(parents=True, exist_ok=True)
+        return public_bin, command
+
+    def native_install_public_command(self) -> None:
+        public_bin, command = self.native_check_public_command()
+        if self.env.get("PRIME_AGENT_INSTALL_LINK", "1") == "0" or command.is_symlink():
+            return
+        if self.native_root is None:
+            raise RuntimeError("native installation root is not prepared")
+        managed = self.native_root / p"bin/prime-agent"
+        temporary = public_bin / f".{self.command}.{os.getpid()}.{secrets.token_hex(3)}"
+        try:
+            temporary.symlink_to(managed)
+            os.replace(temporary, command)
+        finally:
+            with contextlib.suppress(OSError):
+                temporary.unlink()
+
+    def native_configure_path(self) -> None:
+        if self.native_public_bin is None:
+            raise RuntimeError("native public bin directory is unavailable")
+        public_bin = str(self.native_public_bin)
+        if public_bin in self.original_path.split(os.pathsep):
+            return
+        path_line = f"export PATH={self.shell_quote(self.native_public_bin)}:$PATH"
+        profile = self.detect_shell_profile()
+        if profile is not None:
+            try:
+                existing = profile.read_text(encoding="utf-8").splitlines()
+            except FileNotFoundError:
+                existing = []
+            if path_line not in existing:
+                profile.parent.mkdir(parents=True, exist_ok=True)
+                with profile.open("a", encoding="utf-8") as output:
+                    output.write(f"\n# Prime Agent\n{path_line}\n")
+        print(f"For this shell, run: {path_line}")
+
+    def native_extract_release(self, archive: Path, version: str, native_platform: str, digest: str) -> NativeTarget:
+        if self.native_root is None or self.native_stage is None:
+            raise RuntimeError("native installation root is not prepared")
+        if NATIVE_VERSION_PATTERN.fullmatch(version) is None or native_platform not in NATIVE_PLATFORMS:
+            raise ValueError("invalid native release identity")
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise ValueError("invalid native release digest")
+        actual_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        if actual_digest != digest:
+            raise ValueError("native archive digest mismatch")
+        self.native_validate_archive(archive)
+        application = self.native_stage / p"application"
+        if application.exists():
+            shutil.rmtree(application)
+        application.mkdir()
+        with tarfile.open(archive, "r:gz") as tar:
+            for member in tar.getmembers():
+                relative = PurePosixPath(member.name)
+                destination = application.joinpath(*relative.parts)
+                if member.isdir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                    destination.chmod(member.mode & 0o777)
+                    continue
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                source = tar.extractfile(member)
+                if source is None:
+                    raise ValueError(f"could not extract archive member: {member.name}")
+                with source, destination.open("wb") as output:
+                    shutil.copyfileobj(source, output)
+                destination.chmod(member.mode & 0o777)
+
+        for asset in NATIVE_ASSETS:
+            path = application / asset
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"missing archive asset: {asset}")
+        try:
+            package = json.loads((application / p"package.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ValueError("invalid package metadata") from error
+        if not isinstance(package, dict) or package.get("version") != version:
+            raise ValueError("archive version mismatch")
+        (application / p"prime-agent").chmod((application / p"prime-agent").stat().st_mode | 0o700)
+        (application / p".archive-sha256").write_text(f"{digest}\n", encoding="utf-8")
+        (application / p".install-source").write_text(f"{self.base_url}\n", encoding="utf-8")
+
+        name = f"{version}-{native_platform}-{digest}"
+        destination = self.native_root / p"releases" / name
+        if destination.exists() or destination.is_symlink():
+            alphabet = string.ascii_letters + string.digits
+            for _attempt in range(100):
+                unique = "".join(secrets.choice(alphabet) for _ in range(6))
+                candidate = destination.with_name(f"{name}.{unique}")
+                if not candidate.exists() and not candidate.is_symlink():
+                    destination = candidate
+                    name = candidate.name
+                    break
+            else:
+                raise RuntimeError("could not allocate a unique native release directory")
+        os.replace(application, destination)
+        target = f"../releases/{name}/prime-agent"
+        parsed = self.native_parse_target(target)
+        if parsed is None:
+            raise RuntimeError("created an invalid native release target")
+        return parsed
+
+    def native_parse_target(self, target: str | os.PathLike[str]) -> NativeTarget | None:
+        target = os.fspath(target)
+        match = re.fullmatch(r"\.\./releases/([^/]+)/prime-agent", target)
+        if match is None or self.native_root is None:
+            return None
+        name = match.group(1)
+        if name in {"", ".", ".."} or re.fullmatch(r"[0-9A-Za-z.-]+", name) is None:
+            return None
+        prefix, separator, digest_suffix = name.rpartition("-")
+        if not separator:
+            return None
+        digest, unique_separator, unique = digest_suffix.partition(".")
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            return None
+        if unique_separator and re.fullmatch(r"[0-9A-Za-z]{6}", unique) is None:
+            return None
+        native_platform = next((item for item in NATIVE_PLATFORMS if prefix.endswith(f"-{item}")), None)
+        if native_platform is None:
+            return None
+        version = prefix[: -(len(native_platform) + 1)]
+        if NATIVE_VERSION_PATTERN.fullmatch(version) is None:
+            return None
+        return NativeTarget(
+            target=target,
+            name=name,
+            digest=digest,
+            platform=native_platform,
+            version=version,
+            directory=self.native_root / "releases" / name,
+        )
+
+    @staticmethod
+    def release_is_node_only(manifest: Path, filename: str) -> bool:
+        compiled = False
+        matching: list[list[str]] = []
+        try:
+            lines = manifest.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return False
+        for line in lines:
+            fields = line.split()
+            if len(fields) >= 2 and fields[1].endswith(".tar.gz"):
+                compiled = True
+            if len(fields) >= 2 and fields[1] == filename:
+                matching.append(fields)
+        if compiled or len(matching) != 1:
+            return False
+        fields = matching[0]
+        return len(fields) == 2 and re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]) is not None
+
+    @staticmethod
+    def native_select_checksum(manifest: Path, filename: str) -> str | None:
+        try:
+            lines = manifest.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            return None
+        matches = [line.split() for line in lines if len(line.split()) >= 2 and line.split()[1] == filename]
+        if len(matches) != 1:
+            return None
+        fields = matches[0]
+        if len(fields) != 2 or re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]) is None:
+            return None
+        return fields[0].lower()
+
+    def install_native(self, native_platform: str, args: Sequence[str]) -> int:
+        if self.base_url == self.unconfigured_base_url:
+            raise SystemExit("error: set PRIME_AGENT_DOWNLOAD_BASE_URL or use the published installer.")
+        self.validate_download_base_url()
+        self.register_traps()
+        self.init_screen()
+        version = self.resolve_version(args)
+        if NATIVE_VERSION_PATTERN.fullmatch(version) is None:
+            raise SystemExit("error: invalid native release version.")
+
+        download_dir = self.temp_dir()
+        self.download_dir = download_dir
+        filename = f"prime-agent-{version}-{native_platform}.tar.gz"
+        manifest = download_dir / p"SHA256SUMS"
+        manifest_url = f"{self.base_url}/releases/v{version}/SHA256SUMS"
+        if not self.run_animation(
+            "Downloading Prime Agent",
+            "Downloading release checksums",
+            f"Prime Agent v{version}",
+            lambda _output: self.curl_download(
+                ["-fsSL", "--connect-timeout", "10", "--max-time", "120", manifest_url, "-o", manifest]
+            ),
+        ):
+            raise SystemExit("error: could not download release checksums.")
+        digest = self.native_select_checksum(manifest, filename)
+        if digest is None:
+            node_filename = f"{self.package}-{version}.tgz"
+            if self.validate_install_method() == "auto" and self.release_is_node_only(manifest, node_filename):
+                shutil.rmtree(download_dir, ignore_errors=True)
+                self.download_dir = None
+                print("This release only provides npm packages; using the Node installation.", file=sys.stderr)
+                return self.install_node_main([version])
+            raise SystemExit(f"error: expected one valid checksum for {filename}.")
+
+        if self.env.get("PRIME_AGENT_INSTALLER_NONINTERACTIVE", "0") != "1":
+            answer = self.prompt_yes_no(
+                f"Install Prime Agent v{version}?",
+                "Downloads and verifies the compiled application.",
+                "Install? [Y/n]",
+            )
+            if answer == 1:
+                shutil.rmtree(download_dir, ignore_errors=True)
+                self.download_dir = None
+                return 0
+
+        self.native_prepare_root()
+        if self.native_stage is None:
+            raise RuntimeError("native staging directory is unavailable")
+        shutil.rmtree(download_dir, ignore_errors=True)
+        self.download_dir = None
+        expected = self.env.get("PRIME_AGENT_EXPECTED_SHA256")
+        if expected and expected != digest:
+            raise SystemExit("error: release manifest and checksum inventory disagree.")
+
+        archive = self.native_stage / filename
+        archive_url = f"{self.base_url}/releases/v{version}/{filename}"
+        if not self.run_animation(
+            "Downloading Prime Agent",
+            "Downloading compiled Prime Agent",
+            native_platform,
+            lambda _output: self.curl_download(
+                ["-fsSL", "--connect-timeout", "10", "--max-time", "300", archive_url, "-o", archive]
+            ),
+        ):
+            raise SystemExit("error: could not download compiled Prime Agent.")
+
+        target = self.native_extract_release(archive, version, native_platform, digest)
+        if not self.native_verify_release_target(target.target, "downloaded"):
+            shutil.rmtree(target.directory, ignore_errors=True)
+            self.native_cleanup()
+            if self.validate_install_method() == "auto":
+                print("The compiled executable cannot run here; using the Node installation.", file=sys.stderr)
+                return self.install_node_main([version])
+            raise SystemExit("error: the compiled executable cannot run on this machine.")
+
+        self.native_check_public_command()
+        if self.native_root is None:
+            raise RuntimeError("native installation root is unavailable")
+        current = self.native_readlink(self.native_root / p"bin/prime-agent")
+        previous = current if current and self.native_verify_release_target(current, "current") else ""
+        self.native_activate(target.target, previous)
+        self.native_install_public_command()
+        self.native_prune_releases()
+        if self.env.get("PRIME_AGENT_INSTALL_LINK", "1") != "0":
+            try:
+                self.native_configure_path()
+            except OSError:
+                print(f"Add {self.native_public_bin} to PATH to run Prime Agent.", file=sys.stderr)
+        self.screen_update("Prime Agent installed", detail=f"Run it with: {self.command}")
+        print(f"Installed Prime Agent {version} at {self.native_root / p'bin/prime-agent'}")
+        self.native_cleanup()
+        return 0
+
+    def native_probe_timeout(self) -> int:
+        value = self.env.get("PRIME_AGENT_PROBE_TIMEOUT_SECONDS", "")
+        if not value.isdigit():
+            return 60
+        timeout = int(value, 10)
+        return timeout if 1 <= timeout <= 600 else 60
+
     def resolve_version(self, args: Sequence[str]) -> str:
         if args:
             selected = args[0]
@@ -577,7 +1419,7 @@ class Installer:
         directory = self.temp_dir()
         path = directory / channel
         try:
-            if not self.run_animation("Resolving latest release", "Resolving latest release", f"Checking the {channel} release channel.", lambda output: self.run(["curl", "-fsSL", f"{self.base_url}/{channel}", "-o", path])):
+            if not self.run_animation("Resolving latest release", "Resolving latest release", f"Checking the {channel} release channel.", lambda output: self.curl_download(["-fsSL", f"{self.base_url}/{channel}", "-o", path])):
                 print(f"error: could not resolve latest Prime Agent version from {self.base_url}/{channel}", file=sys.stderr)
                 raise SystemExit(1)
             version = path.read_text(encoding="utf-8").strip()
@@ -690,14 +1532,14 @@ class Installer:
             base_dir.mkdir(parents=True, exist_ok=True)
             checksums = temporary / "SHASUMS256.txt"
             print(f"Resolving Node.js binary for {platform}-{arch}")
-            self.run(["curl", "-fsSL", f"{NODE_DIST_BASE}/SHASUMS256.txt", "-o", checksums])
+            self.curl_download(["-fsSL", f"{NODE_DIST_BASE}/SHASUMS256.txt", "-o", checksums])
             suffix = f"-{platform}-{arch}.tar.xz"
             node_file = next((line.split()[1] for line in checksums.read_text(encoding="utf-8").splitlines() if len(line.split()) >= 2 and line.split()[1].startswith("node-v") and line.split()[1].endswith(suffix)), "")
             if not node_file or "/" in node_file or "\\" in node_file or ".." in node_file or not re.fullmatch(rf"node-v.+-{re.escape(platform)}-{re.escape(arch)}\.tar\.xz", node_file):
                 raise RuntimeError(f"No safe Node.js binary is available for {platform}-{arch}.")
             archive = temporary / node_file
             print(f"Downloading Node.js {node_file.removesuffix('.tar.xz')}")
-            self.run(["curl", "-fsSL", f"{NODE_DIST_BASE}/{node_file}", "-o", archive])
+            self.curl_download(["-fsSL", f"{NODE_DIST_BASE}/{node_file}", "-o", archive])
             self.verify_node_download(temporary, node_file)
             self.ensure_extract_tools(platform)
             node_dir = base_dir / node_file.removesuffix(".tar.xz")
@@ -818,9 +1660,9 @@ class Installer:
             raise SystemExit(1)
         checksums = tarball_path.parent / "SHA256SUMS"
         checksums_url = f"{self.base_url}/releases/v{version}/SHA256SUMS"
-        if not self.run_animation("Downloading checksums", "Downloading release checksums", f"Prime Agent v{version}", lambda _output: self.run(["curl", "-fsSL", checksums_url, "-o", checksums])):
+        if not self.run_animation("Downloading checksums", "Downloading release checksums", f"Prime Agent v{version}", lambda _output: self.curl_download(["-fsSL", checksums_url, "-o", checksums])):
             raise RuntimeError("could not download release checksums")
-        if not self.run_animation("Downloading Prime Agent", f"Downloading Prime Agent v{version}", "Fetching the verified package.", lambda _output: self.run(["curl", "-fsSL", tarball_url, "-o", tarball_path])):
+        if not self.run_animation("Downloading Prime Agent", f"Downloading Prime Agent v{version}", "Fetching the verified package.", lambda _output: self.curl_download(["-fsSL", tarball_url, "-o", tarball_path])):
             raise RuntimeError("could not download Prime Agent")
         self.verify_package_checksum(checksums, tarball_path)
 
@@ -895,10 +1737,11 @@ class Installer:
         if not self.run_animation("Installing Prime Agent", "Installing Prime Agent", details, action, mode="static"):
             raise SystemExit(1)
 
-    def main(self, args: Sequence[str]) -> int:
+    def install_node_main(self, args: Sequence[str]) -> int:
         if self.base_url == self.unconfigured_base_url:
             print("error: installer download URL is not configured.\nSet PRIME_AGENT_DOWNLOAD_BASE_URL or use the installer published by the release workflow.", file=sys.stderr)
             return 1
+        self.validate_download_base_url()
         self.register_traps()
         self.init_screen()
         if self.screen.enabled:
@@ -935,6 +1778,29 @@ class Installer:
             self.screen_update("Prime Agent installed", detail=f"PATH update needed for {self.command}.") if self.screen.enabled else print("\nPrime Agent was installed successfully.")
             print(f"The {self.command} command was installed, but it is not on your PATH yet.\nCheck npm's global bin directory with:\n\n  npm bin -g\n\nThen add that directory to your shell PATH.")
         return 0
+
+    def main(self, args: Sequence[str]) -> int:
+        if args and args[0] == "--rollback":
+            self.native_rollback()
+            return 0
+        if args and args[0] == "--native-platform":
+            native_platform = self.native_platform()
+            if native_platform is None:
+                return 1
+            print(native_platform)
+            return 0
+
+        method = self.validate_install_method()
+        if method != "node":
+            native_platform = self.native_platform()
+            if native_platform is not None:
+                self.install_native(native_platform, args)
+                return 0
+            if method == "binary":
+                print("error: no compatible compiled archive is available for this platform.", file=sys.stderr)
+                return 1
+            print("Using the Node installation for this platform.", file=sys.stderr)
+        return self.install_node_main(args)
 
 
 def main(args: Sequence[str] | None = None) -> int:
