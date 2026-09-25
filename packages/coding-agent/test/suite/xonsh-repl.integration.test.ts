@@ -146,7 +146,7 @@ describe("real Xonsh REPL integration", () => {
 		}
 		expect(manager.isRunning).toBe(false);
 		expect(manager.isDefunct).toBe(true);
-	}, 60_000);
+	});
 
 	it("executes real Xonsh cells in an AgentSession configured like the full-control SDK example", async () => {
 		const tempAgentDir = join(tmpdir(), `pi-full-control-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -277,5 +277,5 @@ describe("real Xonsh REPL integration", () => {
 				}
 			}
 		}
-	}, 60_000);
+	});
 });
