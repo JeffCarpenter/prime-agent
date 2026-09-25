@@ -48,6 +48,7 @@ collect.sh
 __pycache__/
 *.pyc
 .planning/active_plan
+./.planning/.active_plan
 
 # Rust
 /target
