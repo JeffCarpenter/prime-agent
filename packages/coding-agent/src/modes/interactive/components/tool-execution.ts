@@ -382,6 +382,7 @@ export class ToolExecutionComponent extends Container {
 		// as panelStatus() is still animating (including partial streaming results).
 		if (this.isStatusAnimating() && !this.usesSelfRenderShell()) {
 			this.contentPanel.setHeader(this.panelHeader());
+		}
 		const lines = super.render(width);
 		// The header row toggles only this component: panel header line for the
 		// default shell, the fixed summary line for self-rendered ipython/xonsh cells.

@@ -2,6 +2,7 @@ import stripAnsi from "strip-ansi";
 import { describe, expect, it } from "vitest";
 import {
 	getXonshCodeFromArgs,
+	IPythonCellComponent,
 	XonshCellComponent,
 	type XonshCellState,
 } from "../src/modes/interactive/components/ipython-cell.js";
@@ -18,7 +19,7 @@ describe("XonshCellComponent", () => {
 	});
 
 	it("renders Python cells through the same component", () => {
-		const rendered = stripAnsi(new XonshCellComponent({ code: "value = 1" }).render(80).join("\n"));
+		const rendered = stripAnsi(new IPythonCellComponent({ code: "value = 1" }).render(80).join("\n"));
 		expect(rendered).toContain("python");
 	});
 
