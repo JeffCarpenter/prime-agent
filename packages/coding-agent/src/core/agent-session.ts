@@ -10965,6 +10965,11 @@ export class AgentSession {
 				snapshotDir: this._ipythonKernelSnapshotDir,
 				readyGate: previousIpythonDispose,
 				onRestore: notifyRestore ? (result) => this._onIpythonStateRestored(result) : undefined,
+				onUnavailableSkills: (errors) => this._onPythonSkillsUnavailable(errors),
+				onBackgroundWorkSettled: () => {
+					this._maybeResumeGoalContinuationAfterRlmWork();
+					this._maybeResumeAutonomousContinuationAfterRlmWork();
+				},
 			});
 			this._xonshKernelProvisioner = new XonshKernelProvisioner(this._cwd, {
 				env: this._rlmKernelEnv(),
@@ -10974,12 +10979,8 @@ export class AgentSession {
 				hostHandlers: this._createKernelHostHandlers(),
 				pythonSkills,
 				snapshotDir: this._xonshKernelSnapshotDir,
+				readyGate: previousXonshDispose,
 				onRestore: notifyRestore ? (result) => this._onReplStateRestored(result, "xonsh") : undefined,
-				onUnavailableSkills: (errors) => this._onPythonSkillsUnavailable(errors),
-				onBackgroundWorkSettled: () => {
-					this._maybeResumeGoalContinuationAfterRlmWork();
-					this._maybeResumeAutonomousContinuationAfterRlmWork();
-				},
 			});
 			configuredBaseToolDefinitions = createAllToolDefinitions(this._cwd, {
 				ipython: {
