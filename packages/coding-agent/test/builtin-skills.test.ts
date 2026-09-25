@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getBundledSkillsDir } from "../src/config.js";
 import { DefaultPackageManager } from "../src/core/package-manager.js";
@@ -131,7 +131,6 @@ describe("builtin skills", () => {
 		expect(skills[0].name).toBe("word-count");
 		expect(skills[0].kind).toBe("python");
 		expect(skills[0].kind === "python" && skills[0].python.importName).toBe("word_count");
-	});
 	});
 
 	// Verify every shipping path includes bundled skills; source-only success would hide a release packaging regression.

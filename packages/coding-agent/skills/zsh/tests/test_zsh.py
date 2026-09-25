@@ -87,6 +87,7 @@ class TestZshFacade:
         assert isinstance(handle, BashHandle)
         
         # Let it run partway
+        # test-policy: allow wall-clock-sleep -- awaits subprocess output stream to populate background handle buffer
         await asyncio.sleep(0.45)
         
         # Check running state and mid-run tail
