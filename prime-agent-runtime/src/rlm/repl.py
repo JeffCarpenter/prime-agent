@@ -878,7 +878,6 @@ def _snapshot_state(
                     if total + 12 + len(encoded) + len(blob) > max_bytes:
                         # Only reachable in prune mode, where the measurement cap ignores the budget.
                         skipped.append({"name": name, "reason": "exceeds aggregate snapshot size cap"})
-<<<<<<< HEAD
                         continue
                     fh.write(len(encoded).to_bytes(4, "little"))
                     fh.write(encoded)
