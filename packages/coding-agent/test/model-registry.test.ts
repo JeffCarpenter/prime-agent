@@ -1442,20 +1442,6 @@ describe("anthropic live model discovery", () => {
 	])("builds the models URL for %s", (baseUrl, url) => {
 		expect(anthropicModelsUrl(baseUrl)).toBe(url);
 	});
-
-	test("keeps the catalog models when discovery fails", async () => {
-		const auth = AuthStorage.inMemory();
-		auth.setRuntimeApiKey("anthropic", "sk-ant-api03-key");
-		const registry = ModelRegistry.inMemory(auth);
-		const before = registry.getAll().filter((m) => m.provider === "anthropic");
-		globalThis.fetch = (async () => {
-			throw new Error("network down");
-		}) as typeof globalThis.fetch;
-
-		const available = await registry.refreshAvailableModels();
-
-		expect(available.filter((m) => m.provider === "anthropic")).toEqual(before);
-	});
 });
 
 describe("google live model discovery", () => {
@@ -1633,13 +1619,6 @@ describe("ollama live model discovery", () => {
 		expect(ollamaModelCost(baseUrl)).toEqual(isFree ? free : { source: "none" });
 	});
 
-	test("keeps only the configured models when discovery fails", async () => {
-		const registry = registryAt("http://localhost:11434/v1");
-		globalThis.fetch = (() => Promise.reject(new Error("network down"))) as typeof globalThis.fetch;
-
-		expect((await ollamaIds(registry)).map((m) => m.id)).toEqual(["configured"]);
-	});
-
 	test("drops discovered models when credentials change", async () => {
 		const auth = AuthStorage.inMemory();
 		const registry = registryAt("http://localhost:11434/v1", ModelRegistry.inMemory(auth));
@@ -1670,6 +1649,80 @@ describe("ollama live model discovery", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("live discovery cache shared by anthropic, google, and ollama", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
+	});
+
+	const list = (id: string) => ({ models: [{ name: id, supportedGenerationMethods: ["generateContent"] }] });
+	const cases = [
+		{ provider: "anthropic", path: "/v1/models", body: (id: string) => ({ data: [{ id }] }) },
+		{ provider: "google", path: "/v1beta/models", body: list },
+		{ provider: "ollama", path: "/api/tags", body: list },
+	];
+
+	function harness(c: (typeof cases)[number]) {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.stubEnv("PI_OFFLINE", "0");
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey(c.provider, "key");
+		const registry = ModelRegistry.inMemory(auth);
+		const models = [{ ...getModels("anthropic")[0]!, id: "c" }];
+		const config = { baseUrl: "http://localhost:11434/v1", api: "openai-completions", apiKey: "k", models } as const;
+		if (c.provider === "ollama") registry.registerProvider("ollama", config);
+		const ids = () => registry.getAll().flatMap((x) => (x.provider === c.provider ? [x.id] : []));
+		const base = ids();
+		const state = { requests: 0, failing: false, onRequest: () => {} };
+		vi.stubGlobal("fetch", async (input: unknown) => {
+			if (!String(input).includes(c.path)) return Response.json({});
+			state.onRequest();
+			if (state.failing) throw new Error(`down after ${++state.requests}`);
+			return Response.json(c.body(`n${++state.requests}`));
+		});
+		const live = async (...extra: string[]) => {
+			await registry.refreshAvailableModels();
+			expect(ids()).toEqual([...base, ...extra]);
+		};
+		return { state, live, rotate: () => auth.setRuntimeApiKey(c.provider, "rotated") };
+	}
+
+	test.each(cases)("$provider honors the TTL, refetches when expired, and keeps the cache on failure", async (c) => {
+		const { state, live } = harness(c);
+		await live("n1");
+		vi.setSystemTime(Date.now() + 299_999);
+		await live("n1");
+		vi.setSystemTime(Date.now() + 1);
+		await live("n2");
+		state.failing = true;
+		vi.setSystemTime(Date.now() + 300_000);
+		await live("n2");
+		state.failing = false;
+		await live("n4");
+	});
+
+	test.each(cases)("$provider serves an expired cache offline but never across credentials", async (c) => {
+		const { state, live, rotate } = harness(c);
+		await live("n1");
+		vi.setSystemTime(Date.now() + 300_000);
+		vi.stubEnv("PI_OFFLINE", "1");
+		await live("n1");
+		vi.stubEnv("PI_OFFLINE", "0");
+		rotate();
+		state.failing = true;
+		await live();
+	});
+
+	test.each(cases)("$provider discards a fetch whose credential changed mid-flight", async (c) => {
+		const { state, live, rotate } = harness(c);
+		state.onRequest = rotate;
+		await live();
+		state.onRequest = () => {};
+		await live("n2");
 	});
 });
 

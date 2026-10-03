@@ -578,6 +578,34 @@ function isOfflineModeEnabled(): boolean {
 	return isCatalogOffline();
 }
 
+const DISCOVERY_CACHE_TTL_MS = 300_000;
+
+interface DiscoveryCache {
+	authFingerprint: string;
+	models: Model<Api>[];
+	refreshedAt: number;
+}
+
+/** Serves the credential-scoped cache, refetches when absent or expired (never offline), and keeps it if the fetch fails. */
+async function cachedDiscovery(options: {
+	cache: DiscoveryCache | undefined;
+	authFingerprint: string;
+	fetchFresh: () => Promise<Model<Api>[]>;
+	stillCurrent: () => Promise<boolean>;
+}): Promise<DiscoveryCache | undefined> {
+	const { cache, authFingerprint } = options;
+	let models = cache?.authFingerprint === authFingerprint ? cache.models : undefined;
+	if (!isOfflineModeEnabled() && (!models || Date.now() - cache!.refreshedAt >= DISCOVERY_CACHE_TTL_MS)) {
+		try {
+			models = await options.fetchFresh();
+		} catch {
+			// Keep only this credential/endpoint's last successful metadata.
+		}
+	}
+	if (!(await options.stillCurrent()) || !models) return undefined;
+	return { authFingerprint, models, refreshedAt: models === cache?.models ? cache.refreshedAt : Date.now() };
+}
+
 /**
  * Model registry - loads and manages models, resolves API keys via AuthStorage.
  */
@@ -598,11 +626,11 @@ export class ModelRegistry {
 	private executableOpenAICodexModelIds = new Set<string>();
 	private openAICodexModelsCache: { authFingerprint: string; modelIds: Set<string>; refreshedAt: number } | undefined;
 	private liveAnthropicModels: Model<Api>[] = [];
-	private anthropicModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
+	private anthropicModelsCache: DiscoveryCache | undefined;
 	private liveGoogleModels: Model<Api>[] = [];
-	private googleModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
+	private googleModelsCache: DiscoveryCache | undefined;
 	private liveOllamaModels: Model<Api>[] = [];
-	private ollamaModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
+	private ollamaModelsCache: DiscoveryCache | undefined;
 	private backgroundPrivatePrimeAuthorization: { fingerprint: string; promise: Promise<void> } | undefined;
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
 	private pendingPrimeInferenceCatalogRefresh: Promise<void> | undefined;
@@ -1551,38 +1579,33 @@ export class ModelRegistry {
 		if (!seed || !this.hasConfiguredAuth(seed)) return;
 		const auth = await this.getApiKeyAndHeaders(seed);
 		if (!auth.ok || !auth.apiKey) return;
+		const apiKey = auth.apiKey;
 		const url = anthropicModelsUrl(seed.baseUrl);
-		const authFingerprint = createHmac("sha256", auth.apiKey).update(url).digest("hex");
-		const cached = this.anthropicModelsCache;
-		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
-		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
-			try {
-				const credentialHeaders: Record<string, string> = auth.apiKey.includes("sk-ant-oat")
+		const authFingerprint = createHmac("sha256", apiKey).update(url).digest("hex");
+		const result = await cachedDiscovery({
+			cache: this.anthropicModelsCache,
+			authFingerprint,
+			fetchFresh: async () => {
+				const credentialHeaders: Record<string, string> = apiKey.includes("sk-ant-oat")
 					? {
-							Authorization: `Bearer ${auth.apiKey}`,
+							Authorization: `Bearer ${apiKey}`,
 							"anthropic-beta": "claude-code-20250219,oauth-2025-04-20",
 							"user-agent": `claude-cli/${claudeCodeVersion}`,
 							"x-app": "cli",
 						}
-					: { "x-api-key": auth.apiKey };
+					: { "x-api-key": apiKey };
 				const response = await fetch(url, {
 					headers: { "anthropic-version": "2023-06-01", ...auth.headers, ...credentialHeaders },
 					signal: AbortSignal.timeout(5_000),
 				});
 				if (!response.ok) throw new Error(`Anthropic discovery HTTP ${response.status}`);
-				models = readAnthropicModels(await response.json(), seed);
-			} catch {
-				// Keep only this credential/endpoint's last successful metadata when offline.
-			}
-		}
-		const currentAuth = await this.getApiKeyAndHeaders(seed);
-		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
-		this.anthropicModelsCache = {
-			authFingerprint,
-			models,
-			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
-		};
-		this.liveAnthropicModels = models;
+				return readAnthropicModels(await response.json(), seed);
+			},
+			stillCurrent: () => this.isAuthCurrent(seed, apiKey),
+		});
+		if (!result) return;
+		this.anthropicModelsCache = result;
+		this.liveAnthropicModels = result.models;
 	}
 
 	private async refreshGoogleModels(): Promise<void> {
@@ -1593,17 +1616,18 @@ export class ModelRegistry {
 		if (!seed || !this.hasConfiguredAuth(seed)) return;
 		const auth = await this.getApiKeyAndHeaders(seed);
 		if (!auth.ok || !auth.apiKey) return;
-		const authFingerprint = createHmac("sha256", auth.apiKey).update(googleModelsUrl(seed.baseUrl)).digest("hex");
-		const cached = this.googleModelsCache;
-		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
-		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
-			try {
+		const apiKey = auth.apiKey;
+		const authFingerprint = createHmac("sha256", apiKey).update(googleModelsUrl(seed.baseUrl)).digest("hex");
+		const result = await cachedDiscovery({
+			cache: this.googleModelsCache,
+			authFingerprint,
+			fetchFresh: async () => {
 				const discovered: Model<Api>[] = [];
 				let pageToken: string | undefined;
 				for (let page = 0; page < GOOGLE_MAX_DISCOVERY_PAGES; page++) {
 					const headers = new Headers(auth.headers);
 					if (!headers.has("authorization") && !headers.has("x-goog-api-key")) {
-						headers.set("x-goog-api-key", auth.apiKey);
+						headers.set("x-goog-api-key", apiKey);
 					}
 					const response = await fetch(googleModelsUrl(seed.baseUrl, pageToken), {
 						headers,
@@ -1615,19 +1639,13 @@ export class ModelRegistry {
 					pageToken = result.nextPageToken;
 					if (!pageToken) break;
 				}
-				models = discovered;
-			} catch {
-				// Keep only this credential/endpoint's last successful metadata when offline.
-			}
-		}
-		const currentAuth = await this.getApiKeyAndHeaders(seed);
-		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
-		this.googleModelsCache = {
-			authFingerprint,
-			models,
-			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
-		};
-		this.liveGoogleModels = models;
+				return discovered;
+			},
+			stillCurrent: () => this.isAuthCurrent(seed, apiKey),
+		});
+		if (!result) return;
+		this.googleModelsCache = result;
+		this.liveGoogleModels = result.models;
 	}
 
 	/** Ollama is a models.json provider with no bundled seed; without a configured model nothing is probed. */
@@ -1640,10 +1658,10 @@ export class ModelRegistry {
 		const authFingerprint = createHmac("sha256", auth.apiKey ?? "")
 			.update(tagsUrl)
 			.digest("hex");
-		const cached = this.ollamaModelsCache;
-		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
-		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
-			try {
+		const result = await cachedDiscovery({
+			cache: this.ollamaModelsCache,
+			authFingerprint,
+			fetchFresh: async () => {
 				const deadline = AbortSignal.timeout(OLLAMA_DISCOVERY_TIMEOUT_MS);
 				const request = async (url: string, body?: object): Promise<unknown> => {
 					const response = await fetch(url, {
@@ -1666,19 +1684,18 @@ export class ModelRegistry {
 					}
 				};
 				await Promise.all(Array.from({ length: Math.min(OLLAMA_SHOW_CONCURRENCY, ids.length) }, worker));
-				models = discovered.filter((model) => model !== undefined);
-			} catch {
-				// Keep only this endpoint's last successful metadata when the server is unreachable.
-			}
-		}
-		const currentAuth = await this.getApiKeyAndHeaders(seed);
-		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
-		this.ollamaModelsCache = {
-			authFingerprint,
-			models,
-			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
-		};
-		this.liveOllamaModels = models;
+				return discovered.filter((model) => model !== undefined);
+			},
+			stillCurrent: () => this.isAuthCurrent(seed, auth.apiKey),
+		});
+		if (!result) return;
+		this.ollamaModelsCache = result;
+		this.liveOllamaModels = result.models;
+	}
+
+	private async isAuthCurrent(seed: Model<Api>, apiKey: string | undefined): Promise<boolean> {
+		const current = await this.getApiKeyAndHeaders(seed);
+		return current.ok && current.apiKey === apiKey;
 	}
 
 	/**
