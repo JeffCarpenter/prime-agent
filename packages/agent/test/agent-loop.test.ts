@@ -2,6 +2,7 @@ import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
 	EventStream,
+	getUsageCostAmounts,
 	type Message,
 	type Model,
 	type UserMessage,
@@ -500,7 +501,10 @@ describe("agentLoop with AgentMessage", () => {
 		};
 		const controller = new AbortController();
 		const partialMessage = createAssistantMessage([{ type: "text", text: "partial" }]);
-		partialMessage.usage.cost.total = 1;
+		partialMessage.usage.cost = {
+			status: "known",
+			amounts: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 1 },
+		};
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: identityConverter,
@@ -526,13 +530,16 @@ describe("agentLoop with AgentMessage", () => {
 		if (text?.type === "text") {
 			text.text = "mutated";
 		}
-		partialMessage.usage.cost.total = 99;
+		partialMessage.usage.cost = {
+			status: "known",
+			amounts: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 99 },
+		};
 
 		expect(assistant?.role).toBe("assistant");
 		if (assistant?.role === "assistant") {
 			expect(assistant.stopReason).toBe("aborted");
 			expect(assistant.content).toEqual([{ type: "text", text: "partial" }]);
-			expect(assistant.usage.cost.total).toBe(1);
+			expect(getUsageCostAmounts(assistant.usage.cost)?.total).toBe(1);
 		}
 	});
 

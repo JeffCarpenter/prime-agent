@@ -1,3 +1,4 @@
+import { getModelCostRates } from "./models.js";
 import type { Api, Model } from "./types.js";
 
 export type AnthropicCacheDuration = "5m" | "1h";
@@ -19,9 +20,11 @@ export function hasStandardAnthropicCachePricing<TApi extends Api>(model: Model<
 		return false;
 	}
 
-	const expectedCacheWriteCost = model.cost.input * ANTHROPIC_FIVE_MINUTE_CACHE_WRITE_COST_MULTIPLIER;
-	const tolerance = Number.EPSILON * Math.max(1, model.cost.cacheWrite, expectedCacheWriteCost);
-	return Math.abs(model.cost.cacheWrite - expectedCacheWriteCost) <= tolerance;
+	const cost = getModelCostRates(model.cost);
+	if (!cost) return false;
+	const expectedCacheWriteCost = cost.input * ANTHROPIC_FIVE_MINUTE_CACHE_WRITE_COST_MULTIPLIER;
+	const tolerance = Number.EPSILON * Math.max(1, cost.cacheWrite, expectedCacheWriteCost);
+	return Math.abs(cost.cacheWrite - expectedCacheWriteCost) <= tolerance;
 }
 
 export function getAnthropicCacheCosts(

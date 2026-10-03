@@ -1,0 +1,2 @@
+- Added tagged known/unknown model cost and usage-cost states so unpriced models stay usable without reporting `$0`, with reversible unknown-contributor accounting in usage aggregation.
+- Added provider-reported cost precedence (for example OpenRouter reported charges) over catalog rate estimates when both exist.

@@ -8,6 +8,7 @@ import {
 	readCatalogPolicy,
 	syncCatalog,
 } from "../scripts/generate-models.js";
+import { parseModelCatalog } from "../src/model-catalog.js";
 import type { Api, Model } from "../src/types.js";
 
 function model(id: string, overrides: Partial<Model<Api>> = {}): Model<Api> {
@@ -139,7 +140,20 @@ function installMockCatalogFetch(): () => void {
 			);
 		}
 		if (href === "https://openrouter.ai/api/v1/models") {
-			return new Response(JSON.stringify({ data: [] }));
+			return new Response(
+				JSON.stringify({
+					data: [
+						{
+							id: "dynamic-negative",
+							name: "Dynamic negative",
+							supported_parameters: ["tools"],
+							pricing: { prompt: "-1", completion: "0.000002", input_cache_read: "0", input_cache_write: "0" },
+							context_length: 128000,
+							top_provider: { max_completion_tokens: 8192 },
+						},
+					],
+				}),
+			);
 		}
 		throw new Error(`unexpected fetch ${href}`);
 	}) as typeof fetch;
@@ -291,11 +305,34 @@ describe("model catalog exporter merge", () => {
 });
 
 describe("model catalog exporter emit", () => {
+	test("accepts tagged known and unknown costs without weakening legacy cost validation", () => {
+		const known = model("known", {
+			cost: { status: "known", rates: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.2 } },
+		});
+		const unknown = model("unknown", { cost: { status: "unknown" } });
+		const catalog = { schemaVersion: 1, models: [known, unknown, model("legacy")] };
+		expect(parseModelCatalog(catalog).models.map((entry) => entry.cost)).toEqual([
+			known.cost,
+			unknown.cost,
+			model("legacy").cost,
+		]);
+		expect(() =>
+			parseModelCatalog({
+				schemaVersion: 1,
+				models: [model("invalid", { cost: { status: "unknown", input: 0 } as Model<Api>["cost"] })],
+			}),
+		).toThrow();
+	});
+
 	test("writes aggregate and admission manifest directly", async () => {
 		const restoreFetch = installMockCatalogFetch();
 		try {
 			const root = catalogPolicyFixture();
 			writeCatalogFixture(root, ["kept", "removed"]);
+			writeFileSync(
+				join(root, "models", "whitelist", "openrouter.yml"),
+				'source: "openrouter-api"\nids: ["dynamic-negative", "auto"]\nglobs: []\n',
+			);
 
 			await expect(syncCatalog(root)).resolves.toBe(0);
 
@@ -303,11 +340,25 @@ describe("model catalog exporter emit", () => {
 			const manifest = JSON.parse(readFileSync(join(root, "models", "admission-manifest.v1.json"), "utf8"));
 			expect(
 				catalog.models.map((entry: { provider: string; id: string }) => `${entry.provider}:${entry.id}`),
-			).toEqual(["openai:kept", "openai:removed", "openai-codex:codex-manual"]);
+			).toEqual([
+				"openai:kept",
+				"openai:removed",
+				"openai-codex:codex-manual",
+				"openrouter:dynamic-negative",
+				"openrouter:auto",
+			]);
 			expect(catalog.models[0]).toMatchObject({ name: "Fresh kept", featured: true });
+			expect(catalog.models.slice(3, 5).map((entry: Model<Api>) => entry.cost)).toEqual([
+				{ status: "unknown" },
+				{ status: "unknown" },
+			]);
 			expect(manifest).toEqual({
 				schemaVersion: 1,
-				admitted: { openai: ["kept", "removed"], "openai-codex": ["codex-manual"] },
+				admitted: {
+					openai: ["kept", "removed"],
+					openrouter: ["dynamic-negative", "auto"],
+					"openai-codex": ["codex-manual"],
+				},
 			});
 			expect(() => readFileSync(join(root, "models", "providers", "openai.json"), "utf8")).toThrow();
 		} finally {

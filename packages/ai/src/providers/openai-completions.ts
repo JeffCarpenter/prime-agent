@@ -12,7 +12,7 @@ import type {
 } from "openai/resources/chat/completions.js";
 import { getAnthropicCacheWriteCost, hasStandardAnthropicCachePricing } from "../cache-pricing.js";
 import { getEnvApiKey } from "../env-api-keys.js";
-import { calculateCost, clampThinkingLevel } from "../models.js";
+import { calculateCost, clampThinkingLevel, getModelCostRates, getUsageCostAmounts } from "../models.js";
 import type {
 	AssistantMessage,
 	CacheRetention,
@@ -170,9 +170,10 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
 			const compat = getCompat(model);
 			const cacheRetention = resolveCacheRetention(options?.cacheRetention);
 			const cacheControl = getCompatCacheControl(compat, cacheRetention);
+			const modelCost = getModelCostRates(model.cost);
 			const cacheWriteCost =
-				cacheControl && hasStandardAnthropicCachePricing(model)
-					? getAnthropicCacheWriteCost(model.cost.input, cacheControl.ttl === "1h" ? "1h" : "5m")
+				cacheControl && modelCost && hasStandardAnthropicCachePricing(model)
+					? getAnthropicCacheWriteCost(modelCost.input, cacheControl.ttl === "1h" ? "1h" : "5m")
 					: undefined;
 			const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
 			const client = createClient(
@@ -1150,20 +1151,26 @@ function parseChunkUsage(
 	// catalog-rate estimate, scaling the component breakdown to match.
 	const reportedCost = model.provider === "openrouter" ? openRouterReportedCost(rawUsage) : undefined;
 	if (reportedCost !== undefined) {
-		if (usage.cost.total > 0) {
-			const scale = reportedCost / usage.cost.total;
-			usage.cost.input *= scale;
-			usage.cost.output *= scale;
-			usage.cost.cacheRead *= scale;
-			usage.cost.cacheWrite *= scale;
-		} else if (usage.totalTokens > 0) {
-			// No catalog rates to apportion by: attribute by token counts instead.
-			usage.cost.input = (reportedCost * usage.input) / usage.totalTokens;
-			usage.cost.output = (reportedCost * usage.output) / usage.totalTokens;
-			usage.cost.cacheRead = (reportedCost * usage.cacheRead) / usage.totalTokens;
-			usage.cost.cacheWrite = (reportedCost * usage.cacheWrite) / usage.totalTokens;
-		}
-		usage.cost.total = reportedCost;
+		const catalogCost = getUsageCostAmounts(usage.cost);
+		const amounts =
+			catalogCost && catalogCost.total > 0
+				? {
+						input: (catalogCost.input * reportedCost) / catalogCost.total,
+						output: (catalogCost.output * reportedCost) / catalogCost.total,
+						cacheRead: (catalogCost.cacheRead * reportedCost) / catalogCost.total,
+						cacheWrite: (catalogCost.cacheWrite * reportedCost) / catalogCost.total,
+						total: reportedCost,
+					}
+				: usage.totalTokens > 0
+					? {
+							input: (reportedCost * usage.input) / usage.totalTokens,
+							output: (reportedCost * usage.output) / usage.totalTokens,
+							cacheRead: (reportedCost * usage.cacheRead) / usage.totalTokens,
+							cacheWrite: (reportedCost * usage.cacheWrite) / usage.totalTokens,
+							total: reportedCost,
+						}
+					: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: reportedCost };
+		usage.cost = { status: "known", amounts };
 	}
 	return usage;
 }

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clampServiceTier, supportsFastMode } from "../src/models.js";
+import { clampServiceTier, getUsageCostAmounts, supportsFastMode } from "../src/models.js";
 import {
 	getOpenAICodexWebSocketDebugStats,
 	resetOpenAICodexWebSocketDebugStats,
@@ -422,12 +422,7 @@ describe("openai-codex streaming", () => {
 	it.each(["gpt-5.3-codex", "gpt-5.4", "gpt-5.5"])("clamps %s minimal reasoning effort to low", async (modelId) => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
 		process.env.PI_CODING_AGENT_DIR = tempDir;
-
-		const payload = Buffer.from(
-			JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
-			"utf8",
-		).toString("base64");
-		const token = `aaa.${payload}.bbb`;
+		const token = mockToken();
 
 		const sse = `${[
 			`data: ${JSON.stringify({
@@ -497,6 +492,7 @@ describe("openai-codex streaming", () => {
 			provider: "openai-codex",
 			baseUrl: "https://chatgpt.com/backend-api",
 			reasoning: true,
+			thinkingLevelMap: { minimal: null },
 			input: ["text"],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: 400000,
@@ -512,7 +508,7 @@ describe("openai-codex streaming", () => {
 			apiKey: token,
 			reasoningEffort: "minimal",
 		});
-		await streamResult.result();
+		expect((await streamResult.result()).stopReason).toBe("stop");
 	});
 
 	it.each([
@@ -609,9 +605,9 @@ describe("openai-codex streaming", () => {
 
 			const result = await streamOpenAICodexResponses(model, context, { apiKey: token, serviceTier }).result();
 
-			expect(result.usage.cost.input).toBe(1 * multiplier);
-			expect(result.usage.cost.output).toBe(2 * multiplier);
-			expect(result.usage.cost.total).toBe(3 * multiplier);
+			expect(getUsageCostAmounts(result.usage.cost)?.input).toBe(1 * multiplier);
+			expect(getUsageCostAmounts(result.usage.cost)?.output).toBe(2 * multiplier);
+			expect(getUsageCostAmounts(result.usage.cost)?.total).toBe(3 * multiplier);
 		},
 	);
 
