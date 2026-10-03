@@ -8,7 +8,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ENV_SESSION_DIR } from "../src/config.js";
 import { AuthStorage } from "../src/core/auth-storage.js";
 import { getBundledModels } from "../src/core/bundled-model-catalog.js";
-import { anthropicModelsUrl, ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.js";
+import {
+	anthropicModelsUrl,
+	ModelRegistry,
+	ollamaModelCost,
+	type ProviderConfigInput,
+} from "../src/core/model-registry.js";
 
 describe("ModelRegistry", () => {
 	let tempDir: string;
@@ -1548,6 +1553,123 @@ describe("google live model discovery", () => {
 		globalThis.fetch = (async () => respond()) as typeof globalThis.fetch;
 
 		expect(await googleIds(registry)).toEqual(before);
+	});
+});
+
+describe("ollama live model discovery", () => {
+	const originalFetch = globalThis.fetch;
+	const free = { source: "aggregate", value: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+	beforeEach(() => {
+		vi.stubEnv("PI_OFFLINE", "0");
+	});
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+		vi.unstubAllEnvs();
+	});
+
+	const registryAt = (baseUrl: string, registry = ModelRegistry.inMemory(AuthStorage.inMemory())) => {
+		const configured = { id: "configured", name: "configured", reasoning: false, input: ["text" as const] };
+		registry.registerProvider("ollama", {
+			baseUrl,
+			api: "openai-completions",
+			apiKey: "ollama",
+			models: [{ ...configured, cost: free.value, contextWindow: 4096, maxTokens: 1024 }],
+		});
+		return registry;
+	};
+	const serve = (tags: object, show: (id: string) => Response = () => Response.json({})) => {
+		const calls: string[] = [];
+		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) => {
+			if (!String(input).includes("/api/")) return new Response("missing", { status: 404 });
+			calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+			return String(input).endsWith("/api/tags") ? Response.json(tags) : show(JSON.parse(String(init?.body)).model);
+		}) as typeof globalThis.fetch;
+		return calls;
+	};
+	const ollamaIds = async (registry: ModelRegistry) =>
+		(await registry.refreshAvailableModels()).filter((m) => m.provider === "ollama");
+
+	test("maps tags and show, falls back per model, and drops embedding-only models", async () => {
+		const registry = registryAt("http://localhost:11434/v1/");
+		const calls = serve({ models: [{ model: "a:latest" }, { name: "b" }, { name: "embed" }] }, (id) =>
+			id === "b"
+				? new Response("boom", { status: 500 })
+				: Response.json(
+						id === "embed"
+							? { capabilities: ["embedding"] }
+							: {
+									model_info: { "general.architecture": "qwen3", "qwen3.context_length": 40960 },
+									capabilities: ["completion", "tools", "thinking", "vision"],
+								},
+					),
+		);
+
+		const models = await ollamaIds(registry);
+
+		expect(calls[0]).toBe("GET http://localhost:11434/api/tags");
+		expect(calls).toContain("POST http://localhost:11434/api/show");
+		expect(models.map((m) => m.id).sort()).toEqual(["a:latest", "b", "configured"]);
+		expect(models.find((m) => m.id === "a:latest")).toMatchObject({
+			api: "openai-completions",
+			baseUrl: "http://localhost:11434/v1/",
+			reasoning: true,
+			input: ["text", "image"],
+			contextWindow: 40960,
+			maxTokens: 16384,
+			cost: free,
+		});
+		expect(models.find((m) => m.id === "b")).toMatchObject({ reasoning: false, contextWindow: 8192, cost: free });
+	});
+
+	test.each([
+		["http://localhost:11434/v1", true],
+		["http://127.0.0.1:11434/v1", true],
+		["http://[::1]:11434/v1", true],
+		["http://ollama.localhost:11434/v1", true],
+		["http://localhost.evil.com:11434/v1", false],
+		["http://192.168.1.5:11434/v1", false],
+		["not a url", false],
+	])("prices %s as free: %s", (baseUrl, isFree) => {
+		expect(ollamaModelCost(baseUrl)).toEqual(isFree ? free : { source: "none" });
+	});
+
+	test("keeps only the configured models when discovery fails", async () => {
+		const registry = registryAt("http://localhost:11434/v1");
+		globalThis.fetch = (() => Promise.reject(new Error("network down"))) as typeof globalThis.fetch;
+
+		expect((await ollamaIds(registry)).map((m) => m.id)).toEqual(["configured"]);
+	});
+
+	test("drops discovered models when credentials change", async () => {
+		const auth = AuthStorage.inMemory();
+		const registry = registryAt("http://localhost:11434/v1", ModelRegistry.inMemory(auth));
+		serve({ models: [{ name: "a" }] });
+		await registry.refreshAvailableModels();
+		expect(registry.getAll().some((m) => m.id === "a")).toBe(true);
+		auth.setRuntimeApiKey("ollama", "other");
+		expect(registry.getAll().some((m) => m.id === "a")).toBe(false);
+	});
+
+	test("keeps a session-history model that the server no longer lists", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "ollama-registry-"));
+		mkdirSync(join(dir, "sessions"));
+		vi.stubEnv(ENV_SESSION_DIR, join(dir, "sessions"));
+		try {
+			const entry = JSON.stringify({ type: "model_change", provider: "ollama", modelId: "removed" });
+			writeFileSync(join(dir, "sessions", "s.jsonl"), `${entry}\n`);
+			const registry = registryAt(
+				"http://localhost:11434/v1",
+				ModelRegistry.create(AuthStorage.inMemory(), join(dir, "models.json")),
+			);
+			serve({ models: [{ name: "a" }] });
+
+			await registry.refreshAvailableModels();
+			await registry.waitForPendingModelRefreshes(5_000);
+
+			expect(registry.getAll().map((m) => m.id)).toEqual(expect.arrayContaining(["a", "removed"]));
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });
 

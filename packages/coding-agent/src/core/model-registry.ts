@@ -495,6 +495,67 @@ function readGoogleModels(value: unknown, seed: Model<Api>): { models: Model<Api
 	return { models, nextPageToken: nextPageToken || undefined };
 }
 
+const OLLAMA_MAX_MODELS = 50;
+const OLLAMA_SHOW_CONCURRENCY = 4;
+const OLLAMA_DISCOVERY_TIMEOUT_MS = 2_000;
+const OLLAMA_DEFAULT_CONTEXT_WINDOW = 8192;
+
+function ollamaApiUrl(baseUrl: string, endpoint: "tags" | "show"): string {
+	return `${baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")}/api/${endpoint}`;
+}
+
+/** Only a loopback host is provably free; a LAN host or reverse proxy may bill, so its price stays unknown. */
+export function ollamaModelCost(baseUrl: string): Model<Api>["cost"] {
+	try {
+		const host = new URL(baseUrl).hostname.toLowerCase();
+		if (host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost")) {
+			return { source: "aggregate", value: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+		}
+	} catch {
+		// An unparsable base URL is not provably local.
+	}
+	return { source: "none" };
+}
+
+function readOllamaTags(value: unknown): string[] {
+	if (!value || typeof value !== "object" || !("models" in value) || !Array.isArray(value.models)) {
+		throw new Error("Invalid Ollama model list");
+	}
+	return value.models
+		.flatMap((entry: unknown): string[] => {
+			const { model, name } = (entry ?? {}) as { model?: unknown; name?: unknown };
+			const id = typeof model === "string" && model ? model : name;
+			return typeof id === "string" && id ? [id] : [];
+		})
+		.slice(0, OLLAMA_MAX_MODELS);
+}
+
+/** `show` is the /api/show payload, or undefined when that probe failed. */
+function buildOllamaModel(id: string, show: unknown, seed: Model<Api>): Model<Api> | undefined {
+	const { model_info, capabilities } = (show && typeof show === "object" ? show : {}) as {
+		model_info?: Record<string, unknown> | null;
+		capabilities?: unknown;
+	};
+	const caps = Array.isArray(capabilities) ? capabilities : undefined;
+	if (caps && !caps.includes("completion")) return undefined;
+	const context = model_info?.[`${model_info["general.architecture"]}.context_length`];
+	const contextWindow = typeof context === "number" && context > 0 ? context : OLLAMA_DEFAULT_CONTEXT_WINDOW;
+	return {
+		id,
+		name: id,
+		provider: seed.provider,
+		api: seed.api,
+		baseUrl: seed.baseUrl,
+		headers: seed.headers,
+		compat: seed.compat,
+		reasoning: caps?.includes("thinking") === true,
+		input: caps?.includes("vision") ? ["text", "image"] : ["text"],
+		contextWindow,
+		maxTokens: Math.min(contextWindow, 16384),
+		cost: ollamaModelCost(seed.baseUrl),
+	} as Model<Api>;
+}
+
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_FILE = "prime-inference-private-models.json";
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_TTL_MS = 5 * 60_000;
 const PRIVATE_PRIME_BACKGROUND_REFRESH_TIMEOUT_MS = 3_000;
@@ -540,6 +601,8 @@ export class ModelRegistry {
 	private anthropicModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
 	private liveGoogleModels: Model<Api>[] = [];
 	private googleModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
+	private liveOllamaModels: Model<Api>[] = [];
+	private ollamaModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
 	private backgroundPrivatePrimeAuthorization: { fingerprint: string; promise: Promise<void> } | undefined;
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
 	private pendingPrimeInferenceCatalogRefresh: Promise<void> | undefined;
@@ -579,6 +642,7 @@ export class ModelRegistry {
 				registry.liveOpenAICodexModels = [];
 				registry.liveAnthropicModels = [];
 				registry.liveGoogleModels = [];
+				registry.liveOllamaModels = [];
 				registry.executableOpenAICodexModelIds = new Set();
 				void registry.scheduleCatalogRefresh().catch(() => {});
 			} else unsubscribe();
@@ -602,12 +666,18 @@ export class ModelRegistry {
 	 */
 	refresh(): void {
 		this.usedModels = this.readUsedModelsCache();
-		for (const model of [...this.liveOpenAICodexModels, ...this.liveAnthropicModels, ...this.liveGoogleModels]) {
+		for (const model of [
+			...this.liveOpenAICodexModels,
+			...this.liveAnthropicModels,
+			...this.liveGoogleModels,
+			...this.liveOllamaModels,
+		]) {
 			this.liveModelHints.set(`${model.provider}\0${model.id}`, model);
 		}
 		this.liveOpenAICodexModels = [];
 		this.liveAnthropicModels = [];
 		this.liveGoogleModels = [];
+		this.liveOllamaModels = [];
 		this.executableOpenAICodexModelIds = new Set();
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
@@ -949,6 +1019,7 @@ export class ModelRegistry {
 			...this.liveOpenAICodexModels,
 			...this.liveAnthropicModels,
 			...this.liveGoogleModels,
+			...this.liveOllamaModels,
 			...this.usedModels.flatMap((used) => this.usedModelFor(used) ?? []),
 		];
 		for (const model of candidates) {
@@ -1073,6 +1144,7 @@ export class ModelRegistry {
 				this.refreshOpenAICodexModels(),
 				this.refreshAnthropicModels(),
 				this.refreshGoogleModels(),
+				this.refreshOllamaModels(),
 			]);
 			return this.getAvailable();
 		});
@@ -1556,6 +1628,57 @@ export class ModelRegistry {
 			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
 		};
 		this.liveGoogleModels = models;
+	}
+
+	/** Ollama is a models.json provider with no bundled seed; without a configured model nothing is probed. */
+	private async refreshOllamaModels(): Promise<void> {
+		const seed = this.models.find((model) => model.provider === "ollama");
+		if (!seed) return;
+		const auth = await this.getApiKeyAndHeaders(seed);
+		if (!auth.ok) return;
+		const tagsUrl = ollamaApiUrl(seed.baseUrl, "tags");
+		const authFingerprint = createHmac("sha256", auth.apiKey ?? "")
+			.update(tagsUrl)
+			.digest("hex");
+		const cached = this.ollamaModelsCache;
+		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
+		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
+			try {
+				const deadline = AbortSignal.timeout(OLLAMA_DISCOVERY_TIMEOUT_MS);
+				const request = async (url: string, body?: object): Promise<unknown> => {
+					const response = await fetch(url, {
+						method: body ? "POST" : "GET",
+						headers: { ...(body && { "content-type": "application/json" }), ...auth.headers },
+						body: body && JSON.stringify(body),
+						signal: deadline,
+					});
+					if (!response.ok) throw new Error(`Ollama discovery HTTP ${response.status}`);
+					return response.json();
+				};
+				const ids = readOllamaTags(await request(tagsUrl));
+				const showUrl = ollamaApiUrl(seed.baseUrl, "show");
+				const discovered: (Model<Api> | undefined)[] = [];
+				let next = 0;
+				const worker = async (): Promise<void> => {
+					for (let i = next++; i < ids.length; i = next++) {
+						const show = await request(showUrl, { model: ids[i] }).catch(() => undefined);
+						discovered[i] = buildOllamaModel(ids[i], show, seed);
+					}
+				};
+				await Promise.all(Array.from({ length: Math.min(OLLAMA_SHOW_CONCURRENCY, ids.length) }, worker));
+				models = discovered.filter((model) => model !== undefined);
+			} catch {
+				// Keep only this endpoint's last successful metadata when the server is unreachable.
+			}
+		}
+		const currentAuth = await this.getApiKeyAndHeaders(seed);
+		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
+		this.ollamaModelsCache = {
+			authFingerprint,
+			models,
+			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
+		};
+		this.liveOllamaModels = models;
 	}
 
 	/**
