@@ -1,0 +1,1 @@
+- Added deterministic fixture support and validation for provenance-tagged model costs in bundled catalog assets.
