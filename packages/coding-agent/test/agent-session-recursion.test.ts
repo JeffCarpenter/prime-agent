@@ -136,6 +136,7 @@ interface InspectableRlmSession {
 	_rlmChildUnsubscribes: Map<string, () => void>;
 	_deletedRlmChildIds: Set<string>;
 	_rlmQuiescenceWaitAborts: Set<AbortController>;
+	_waitForSessionActivityChange(signal: AbortSignal): Promise<void>;
 	_createKernelHostHandlers(): HostRequestHandlers;
 	_reapDeletedRlmSubagentRuntimesAfterCompaction(): Promise<void>;
 }
@@ -173,6 +174,18 @@ function deferred<T = void>(): {
 		reject = rejectPromise;
 	});
 	return { promise, resolve, reject };
+}
+
+function waitForChildUsageAttributions(session: AgentSession, expectedCount: number): Promise<void> {
+	const attributed = deferred();
+	const append = session.sessionManager.appendChildUsageAttribution.bind(session.sessionManager);
+	let count = 0;
+	vi.spyOn(session.sessionManager, "appendChildUsageAttribution").mockImplementation((...args) => {
+		const id = append(...args);
+		if (++count === expectedCount) attributed.resolve();
+		return id;
+	});
+	return attributed.promise;
 }
 
 function customNotices(session: AgentSession, customType: string): AgentMessage[] {
@@ -1154,16 +1167,17 @@ describe("AgentSession rlm recursion", () => {
 			headlessIdleCalls++;
 			await originalHeadlessIdle();
 		});
+		const childWithActivityWait = child.session as unknown as InspectableRlmSession;
+		const waitForActivityChange = childWithActivityWait._waitForSessionActivityChange.bind(childWithActivityWait);
+		const activityWaitStarted = deferred();
+		vi.spyOn(childWithActivityWait, "_waitForSessionActivityChange").mockImplementation((signal) => {
+			const waiting = waitForActivityChange(signal);
+			activityWaitStarted.resolve();
+			return waiting;
+		});
 
 		const quiescence = root.waitForRlmQuiescence();
-		const firstBoundary = await Promise.race([
-			quiescence.then(
-				() => "resolved" as const,
-				() => "rejected" as const,
-			),
-			sleep(20).then(() => "timer" as const),
-		]);
-		expect(firstBoundary).toBe("timer");
+		await activityWaitStarted.promise;
 		expect(headlessIdleCalls).toBe(1);
 
 		child.completion.resolve();
@@ -1705,17 +1719,11 @@ describe("AgentSession rlm recursion", () => {
 
 	it("coalesces the admitted task's tool-loop turns into one flushed spawn-usage attribution", async () => {
 		const root = createToolLoopSession(2, [usage(1, 1), usage(2, 2)]);
+		const attributed = waitForChildUsageAttributions(root, 1);
 
-		await root.runRlmChild("use a tool");
-		await vi.waitFor(() => {
-			const attributions = root.sessionManager
-				.getEntries()
-				.filter((entry) => entry.type === "child_usage_attributed");
-			expect(attributions).toHaveLength(1);
-			expect(attributions[0]?.origin).toBe("spawn_task");
-			expect(attributions[0]?.childUsage.input).toBe(3);
-			expect(attributions[0]?.childUsage.output).toBe(3);
-		});
+		await Promise.all([root.runRlmChild("use a tool"), attributed]);
+		const attributions = root.sessionManager.getEntries().filter((entry) => entry.type === "child_usage_attributed");
+		expect(attributions).toMatchObject([{ origin: "spawn_task", childUsage: { input: 3, output: 3 } }]);
 	});
 
 	it("flushes a stale pending usage batch before extending it, bounding crash loss", async () => {
@@ -1726,21 +1734,14 @@ describe("AgentSession rlm recursion", () => {
 			const root = createToolLoopSession(3, [usage(1, 1), usage(2, 2), usage(4, 4)], (toolResultCount) => {
 				if (toolResultCount === 2) vi.setSystemTime(Date.now() + 61_000);
 			});
+			const attributed = waitForChildUsageAttributions(root, 2);
 
-			await root.runRlmChild("use a tool");
-			await vi.waitFor(() => {
-				const attributions = root.sessionManager
-					.getEntries()
-					.filter((entry) => entry.type === "child_usage_attributed");
-				expect(attributions.map((entry) => [entry.childUsage.input, entry.childUsage.output])).toEqual([
-					[3, 3],
-					[4, 4],
-				]);
-				expect(attributions.map((entry) => entry.origin)).toEqual(["spawn_task", "spawn_task"]);
-				// Each aggregate covers exactly the completions durable with or
-				// before it, so any prefix replays to the exact own spend.
-				expect(attributions.map((entry) => entry.aggregateUsage.input)).toEqual([3, 7]);
-			});
+			await Promise.all([root.runRlmChild("use a tool"), attributed]);
+			const attributions = root.sessionManager.getEntries().filter((e) => e.type === "child_usage_attributed");
+			expect(attributions).toMatchObject([
+				{ origin: "spawn_task", childUsage: { input: 3, output: 3 }, aggregateUsage: { input: 3 } },
+				{ origin: "spawn_task", childUsage: { input: 4, output: 4 }, aggregateUsage: { input: 7 } },
+			]);
 
 			const sessionFile = root.sessionManager.getSessionFile();
 			if (!sessionFile) throw new Error("parent session file was not created");
