@@ -7,7 +7,7 @@ import { getOAuthProvider, registerOAuthProvider } from "@earendil-works/pi-ai/o
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.js";
 import { getBundledModels } from "../src/core/bundled-model-catalog.js";
-import { ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.js";
+import { anthropicModelsUrl, ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.js";
 
 describe("ModelRegistry", () => {
 	let tempDir: string;
@@ -1381,5 +1381,72 @@ describe("issue #702 codex model discovery client version", () => {
 		// 0.153.x is the floor at which ChatGPT discovery lists GPT-6 Astra (discussion #2062).
 		expect((major ?? 0) > 0 || (minor ?? 0) >= 153).toBe(true);
 		expect(executable.some((model) => model.provider === "openai-codex")).toBe(true);
+	});
+});
+
+describe("anthropic live model discovery", () => {
+	const originalFetch = globalThis.fetch;
+	beforeEach(() => {
+		vi.stubEnv("PI_OFFLINE", "0");
+	});
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+		vi.unstubAllEnvs();
+	});
+
+	test.each([
+		["sk-ant-api03-key", "x-api-key", "sk-ant-api03-key"],
+		["sk-ant-oat01-token", "authorization", "Bearer sk-ant-oat01-token"],
+	])("lists unpriced live-only models and sends the right credential for %s", async (key, header, value) => {
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey("anthropic", key);
+		const registry = ModelRegistry.inMemory(auth);
+		const known = registry.getAll().find((m) => m.provider === "anthropic")!;
+		let headers: Headers | undefined;
+		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) => {
+			if (!String(input).includes("/v1/models")) return new Response("missing", { status: 404 });
+			headers = new Headers(init?.headers);
+			return new Response(
+				JSON.stringify({
+					data: [
+						{ id: "claude-live-only", display_name: "Live", capabilities: { thinking: { supported: true } } },
+						{ id: known.id, display_name: "Renamed" },
+					],
+				}),
+			);
+		}) as typeof globalThis.fetch;
+
+		const available = await registry.refreshAvailableModels();
+
+		expect(headers?.get(header)).toBe(value);
+		expect(available.find((m) => m.id === "claude-live-only")).toMatchObject({
+			provider: "anthropic",
+			reasoning: true,
+			cost: { source: "none" },
+		});
+		expect(available.find((m) => m.id === known.id)).toEqual(known);
+	});
+
+	test.each([
+		["https://api.anthropic.com", "https://api.anthropic.com/v1/models?limit=1000"],
+		["https://api.anthropic.com/v1", "https://api.anthropic.com/v1/models?limit=1000"],
+		["https://api.anthropic.com//", "https://api.anthropic.com/v1/models?limit=1000"],
+		["https://proxy.example.com/anthropic/v1/", "https://proxy.example.com/anthropic/v1/models?limit=1000"],
+	])("builds the models URL for %s", (baseUrl, url) => {
+		expect(anthropicModelsUrl(baseUrl)).toBe(url);
+	});
+
+	test("keeps the catalog models when discovery fails", async () => {
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey("anthropic", "sk-ant-api03-key");
+		const registry = ModelRegistry.inMemory(auth);
+		const before = registry.getAll().filter((m) => m.provider === "anthropic");
+		globalThis.fetch = (async () => {
+			throw new Error("network down");
+		}) as typeof globalThis.fetch;
+
+		const available = await registry.refreshAvailableModels();
+
+		expect(available.filter((m) => m.provider === "anthropic")).toEqual(before);
 	});
 });

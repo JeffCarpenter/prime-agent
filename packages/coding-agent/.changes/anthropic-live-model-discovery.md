@@ -1,0 +1,1 @@
+- Added live Anthropic model discovery via `GET /v1/models`, listing models missing from the catalog with unknown pricing instead of `$0`, and falling back to the catalog on failure.

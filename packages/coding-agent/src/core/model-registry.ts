@@ -413,6 +413,40 @@ function readOpenAICodexModelIds(value: unknown): Set<string> {
 	);
 }
 
+export function anthropicModelsUrl(baseUrl: string): string {
+	const normalized = baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+	return `${normalized}/v1/models?limit=1000`;
+}
+
+function readAnthropicModels(value: unknown, seed: Model<Api>): Model<Api>[] {
+	if (!value || typeof value !== "object" || !("data" in value) || !Array.isArray(value.data)) {
+		throw new Error("Invalid Anthropic model list");
+	}
+	return value.data.flatMap((entry: unknown): Model<Api>[] => {
+		if (!entry || typeof entry !== "object" || !("id" in entry) || typeof entry.id !== "string") return [];
+		const { display_name, capabilities, max_input_tokens, max_tokens } = entry as {
+			display_name?: unknown;
+			capabilities?: { thinking?: { supported?: unknown }; image_input?: { supported?: unknown } };
+			max_input_tokens?: unknown;
+			max_tokens?: unknown;
+		};
+		return [
+			{
+				id: entry.id,
+				name: typeof display_name === "string" && display_name ? display_name : entry.id,
+				provider: "anthropic",
+				api: "anthropic-messages",
+				baseUrl: seed.baseUrl,
+				reasoning: capabilities?.thinking?.supported === true,
+				input: capabilities?.image_input?.supported === false ? ["text"] : ["text", "image"],
+				contextWindow: typeof max_input_tokens === "number" && max_input_tokens > 0 ? max_input_tokens : 200_000,
+				maxTokens: typeof max_tokens === "number" && max_tokens > 0 ? max_tokens : 8192,
+				cost: { source: "none" },
+			},
+		];
+	});
+}
+
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_FILE = "prime-inference-private-models.json";
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_TTL_MS = 5 * 60_000;
 const PRIVATE_PRIME_BACKGROUND_REFRESH_TIMEOUT_MS = 3_000;
@@ -454,6 +488,8 @@ export class ModelRegistry {
 	private liveOpenAICodexModels: Model<Api>[] = [];
 	private executableOpenAICodexModelIds = new Set<string>();
 	private openAICodexModelsCache: { authFingerprint: string; modelIds: Set<string>; refreshedAt: number } | undefined;
+	private liveAnthropicModels: Model<Api>[] = [];
+	private anthropicModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
 	private backgroundPrivatePrimeAuthorization: { fingerprint: string; promise: Promise<void> } | undefined;
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
 	private pendingPrimeInferenceCatalogRefresh: Promise<void> | undefined;
@@ -485,6 +521,7 @@ export class ModelRegistry {
 			const registry = reference.deref();
 			if (registry) {
 				registry.liveOpenAICodexModels = [];
+				registry.liveAnthropicModels = [];
 				registry.executableOpenAICodexModelIds = new Set();
 				void registry.scheduleCatalogRefresh().catch(() => {});
 			} else unsubscribe();
@@ -508,6 +545,7 @@ export class ModelRegistry {
 	 */
 	refresh(): void {
 		this.liveOpenAICodexModels = [];
+		this.liveAnthropicModels = [];
 		this.executableOpenAICodexModelIds = new Set();
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
@@ -829,9 +867,14 @@ export class ModelRegistry {
 		const catalogIds = new Set(
 			this.models.filter((model) => model.provider === "openai-codex").map((model) => model.id),
 		);
-		return [...this.models, ...this.liveOpenAICodexModels.filter((model) => !catalogIds.has(model.id))].map((model) =>
-			this.getModelForCurrentAuth(model),
+		const anthropicIds = new Set(
+			this.models.filter((model) => model.provider === "anthropic").map((model) => model.id),
 		);
+		return [
+			...this.models,
+			...this.liveOpenAICodexModels.filter((model) => !catalogIds.has(model.id)),
+			...this.liveAnthropicModels.filter((model) => !anthropicIds.has(model.id)),
+		].map((model) => this.getModelForCurrentAuth(model));
 	}
 
 	getModelForCurrentAuth(model: Model<Api>): Model<Api> {
@@ -914,7 +957,7 @@ export class ModelRegistry {
 			);
 			this.pendingProviderCatalogRefresh = this.refreshProviderCatalog(false).catch(() => undefined);
 			void this.pendingProviderCatalogRefresh;
-			await this.refreshOpenAICodexModels();
+			await Promise.allSettled([this.refreshOpenAICodexModels(), this.refreshAnthropicModels()]);
 			return this.getAvailable();
 		});
 	}
@@ -1309,6 +1352,47 @@ export class ModelRegistry {
 				cost: { source: "none" },
 			}),
 		);
+	}
+
+	private async refreshAnthropicModels(): Promise<void> {
+		const seed =
+			this.models.find((model) => model.provider === "anthropic") ??
+			this.bundledCatalogModels.find((model) => model.provider === "anthropic") ??
+			getModels("anthropic")[0];
+		if (!seed || !this.hasConfiguredAuth(seed)) return;
+		const auth = await this.getApiKeyAndHeaders(seed);
+		if (!auth.ok || !auth.apiKey) return;
+		const url = anthropicModelsUrl(seed.baseUrl);
+		const authFingerprint = createHmac("sha256", auth.apiKey).update(url).digest("hex");
+		const cached = this.anthropicModelsCache;
+		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
+		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
+			try {
+				const credentialHeaders: Record<string, string> = auth.apiKey.includes("sk-ant-oat")
+					? {
+							Authorization: `Bearer ${auth.apiKey}`,
+							"anthropic-beta": "claude-code-20250219,oauth-2025-04-20",
+							"x-app": "cli",
+						}
+					: { "x-api-key": auth.apiKey };
+				const response = await fetch(url, {
+					headers: { "anthropic-version": "2023-06-01", ...auth.headers, ...credentialHeaders },
+					signal: AbortSignal.timeout(5_000),
+				});
+				if (!response.ok) throw new Error(`Anthropic discovery HTTP ${response.status}`);
+				models = readAnthropicModels(await response.json(), seed);
+			} catch {
+				// Keep only this credential/endpoint's last successful metadata when offline.
+			}
+		}
+		const currentAuth = await this.getApiKeyAndHeaders(seed);
+		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
+		this.anthropicModelsCache = {
+			authFingerprint,
+			models,
+			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
+		};
+		this.liveAnthropicModels = models;
 	}
 
 	/**
