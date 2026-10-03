@@ -465,7 +465,7 @@ describe("ModelRegistry", () => {
 			[
 				"changes cost fields partially",
 				{ cost: { input: 99 } },
-				{ cost: { status: "known", rates: { input: 99 } } },
+				{ cost: { source: "aggregate", value: { input: 99 } } },
 			],
 		])("%s and leaves sibling models alone", (_name, override, expected) => {
 			const registry = withOverrides({ [sonnetId]: override });
@@ -1299,7 +1299,7 @@ describe("issue #702 codex model discovery client version", () => {
 		expect(liveModel).toMatchObject({
 			provider: "openai-codex",
 			id: "gpt-5.9-codex",
-			cost: { status: "unknown" },
+			cost: { source: "none" },
 		});
 		await expect(registry.canUseModel(liveModel!)).resolves.toBe(true);
 		expect(registry.find("openai-codex", "gpt-5.9-codex")).toEqual(liveModel);
