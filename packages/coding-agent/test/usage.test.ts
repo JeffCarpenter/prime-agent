@@ -8,7 +8,7 @@ const pricedUsage: Usage = {
 	cacheRead: 0,
 	cacheWrite: 0,
 	totalTokens: 3,
-	cost: { status: "known", amounts: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, total: 3 } },
+	cost: { source: "aggregate", value: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, total: 3 } },
 };
 const unpricedUsage: Usage = {
 	input: 3,
@@ -17,9 +17,9 @@ const unpricedUsage: Usage = {
 	cacheWrite: 0,
 	totalTokens: 7,
 	cost: {
-		status: "unknown",
-		pricedSubtotal: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		unknownContributors: 1,
+		source: "none",
+		partial: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		missingCount: 1,
 	},
 };
 
@@ -29,13 +29,13 @@ describe("assistant usage cost aggregation", () => {
 
 		addAssistantUsage(total, pricedUsage);
 		addAssistantUsage(total, unpricedUsage);
-		expect(total.cost).toMatchObject({ status: "unknown", unknownContributors: 1 });
+		expect(total.cost).toMatchObject({ source: "none", missingCount: 1 });
 
 		subtractAssistantUsage(total, unpricedUsage);
 
 		expect(total.cost).toEqual({
-			status: "known",
-			amounts: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, total: 3 },
+			source: "aggregate",
+			value: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0, total: 3 },
 		});
 	});
 });

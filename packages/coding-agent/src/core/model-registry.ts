@@ -358,8 +358,8 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 		};
 		if (Object.values(mergedRates).every((value) => value !== undefined)) {
 			result.cost = {
-				status: "known",
-				rates: mergedRates as { input: number; output: number; cacheRead: number; cacheWrite: number },
+				source: "aggregate",
+				value: mergedRates as { input: number; output: number; cacheRead: number; cacheWrite: number },
 			};
 		}
 	}
@@ -1306,7 +1306,7 @@ export class ModelRegistry {
 				input: ["text"],
 				contextWindow: 128000,
 				maxTokens: 16384,
-				cost: { status: "unknown" },
+				cost: { source: "none" },
 			}),
 		);
 	}

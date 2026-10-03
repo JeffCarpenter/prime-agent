@@ -11,7 +11,7 @@ beforeAll(() => initTheme("dark"));
 
 it.each([40, 80])("keeps the same visible list size when a model's price is unknown at width %i", (width) => {
 	const known = getCodingAgentFixtureModel("anthropic", "claude-sonnet-5");
-	const unknown = { ...known, cost: { status: "unknown" as const } };
+	const unknown = { ...known, cost: { source: "none" as const } };
 	const registry = ModelRegistry.inMemory(AuthStorage.inMemory());
 	const ui = { requestRender() {} } as TUI;
 	const options = { inline: true, availableModels: [known], getRows: () => 20 };

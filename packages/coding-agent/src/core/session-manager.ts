@@ -1,5 +1,13 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message, ServiceTier, TextContent, Usage } from "@earendil-works/pi-ai";
+import type {
+	AssistantMessage,
+	CostAmounts,
+	ImageContent,
+	Message,
+	ServiceTier,
+	TextContent,
+	Usage,
+} from "@earendil-works/pi-ai";
 import { randomUUID } from "crypto";
 import {
 	appendFileSync,
@@ -385,8 +393,24 @@ function migrateV2ToV3(entries: FileEntry[]): void {
 function normalizeEntryUsageCosts(entry: FileEntry): void {
 	const normalize = (usage: Usage | undefined): void => {
 		// Older transcripts can omit usage or cost entirely.
-		if (!usage?.cost || "status" in usage.cost) return;
-		usage.cost = { status: "known", amounts: { ...usage.cost } };
+		if (!usage?.cost) return;
+		if ("source" in usage.cost) return;
+		if ("status" in usage.cost) {
+			const legacy = usage.cost as
+				| { status: "unknown"; pricedSubtotal?: CostAmounts; unknownContributors?: number }
+				| { status: "known"; amounts: CostAmounts };
+			if (legacy.status === "unknown") {
+				usage.cost = {
+					source: "none",
+					partial: legacy.pricedSubtotal ? { ...legacy.pricedSubtotal } : undefined,
+					missingCount: legacy.unknownContributors ?? 1,
+				};
+			} else {
+				usage.cost = { source: "aggregate", value: { ...legacy.amounts } };
+			}
+			return;
+		}
+		usage.cost = { source: "aggregate", value: { ...usage.cost } };
 	};
 	switch (entry.type) {
 		case "message":

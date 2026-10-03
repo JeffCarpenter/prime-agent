@@ -579,9 +579,9 @@ describe("formatContextTree", () => {
 			output: 200,
 			totalTokens: 1200,
 			cost: {
-				status: "unknown",
-				pricedSubtotal: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-				unknownContributors: 1,
+				source: "none",
+				partial: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				missingCount: 1,
 			},
 		};
 		const root = node({ ownUsage: unpriced, totalUsage: unpriced });

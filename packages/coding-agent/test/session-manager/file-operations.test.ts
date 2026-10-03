@@ -830,8 +830,8 @@ describe("migrateSessionEntries", () => {
 		const amounts = { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 };
 		const expected =
 			kind === "unknown"
-				? { status: "unknown", pricedSubtotal: amounts, unknownContributors: 1 }
-				: { status: "known", amounts };
+				? { source: "none", partial: amounts, missingCount: 1 }
+				: { source: "aggregate", value: amounts };
 		const usage = {
 			input: 1,
 			output: 2,
