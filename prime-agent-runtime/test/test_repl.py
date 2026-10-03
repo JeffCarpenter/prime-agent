@@ -60,6 +60,12 @@ class ReplProcess:
         self.raw_lines.append(line)
         return json.loads(line)
 
+    def read_until_stdout(self, request_id: str, text: str) -> dict:
+        while True:
+            event = self.read_event()
+            if event.get("event") == "stdout" and event.get("id") == request_id and text in event.get("text", ""):
+                return event
+
     def ready(self) -> tuple[dict, float]:
         event = self.read_event()
         return event, (time.monotonic() - self.spawned_at) * 1000
@@ -362,8 +368,8 @@ class ReplTest(unittest.TestCase):
         self.assertEqual(one(follow, "done")["status"], "ok")
 
     def test_duplicate_inflight_id_rejected_and_original_still_interruptible(self):
-        self.repl.send({"type": "execute", "id": "dup", "code": "import time\nwhile True:\n    time.sleep(0.05)"})
-        time.sleep(0.3)
+        self.repl.send({"type": "execute", "id": "dup", "code": "from rlm.repl import host_request\nawait host_request({'type': 'hold'})"})
+        wait_for_host_request(self.repl, [])
         self.repl.send({"type": "execute", "id": "dup", "code": "print('imposter')"})
         error = self.repl.read_event()
         self.assertEqual(error["event"], "error")
@@ -410,12 +416,12 @@ class ReplTest(unittest.TestCase):
                 "import signal",
                 "if hasattr(signal, 'pthread_kill'):",
                 "    del signal.pthread_kill",
-                "import asyncio",
-                "await asyncio.sleep(30)",
+                "from rlm.repl import host_request",
+                "await host_request({'type': 'hold'})",
             ]
         )
         self.repl.send({"type": "execute", "id": "nokill", "code": code})
-        time.sleep(0.4)
+        wait_for_host_request(self.repl, [])
         self.repl.send({"type": "interrupt"})
         events = self.repl.until_done("nokill")
         error = one(events, "error")
@@ -457,21 +463,21 @@ class ReplTest(unittest.TestCase):
         # the command past an interrupt.
         with tempfile.TemporaryDirectory() as tmp:
             marker = os.path.join(tmp, "marker")
-            code = f"from rlm import bash\nr = await bash('sleep 1.5 && touch {marker}')"
+            code = f"from rlm import bash\nhandle = bash('sleep 1.5 && touch {marker}')\nprint('bash-started', flush=True)\nr = await handle"
             self.repl.send({"type": "execute", "id": "ibash", "code": code})
-            time.sleep(0.4)
+            self.repl.read_until_stdout("ibash", "bash-started")
             self.repl.send({"type": "interrupt"})
             events = self.repl.until_done("ibash")
             error = one(events, "error")
             self.assertEqual(error["ename"], "KeyboardInterrupt")
             self.assertEqual(one(events, "done")["status"], "error")
-            time.sleep(1.6)
+            completed = self.repl.execute("bash-cancelled", "handle.poll() is not None")
+            self.assertEqual(one(completed, "result")["text"], "True")
             self.assertFalse(os.path.exists(marker))
 
     def _interrupt_after_running(self, rid: str, code: str) -> list[dict]:
-        self.repl.send({"type": "execute", "id": rid, "code": code})
-        # Give the cell time to enter its blocking region before interrupting.
-        time.sleep(0.4)
+        self.repl.send({"type": "execute", "id": rid, "code": f"print('cell-ready', flush=True)\n{code}"})
+        self.repl.read_until_stdout(rid, "cell-ready")
         self.repl.send({"type": "interrupt"})
         return self.repl.until_done(rid)
 
@@ -564,9 +570,11 @@ class ReplTest(unittest.TestCase):
         # the stale target of the finished request.
         events = self._interrupt_after_running("reuse", "import time\nwhile True:\n    time.sleep(0.05)")
         self.assertEqual(one(events, "error")["ename"], "KeyboardInterrupt")
-        self.repl.send({"type": "execute", "id": "reuse", "code": "import time\ntime.sleep(1.5)\nprint('survived')"})
-        time.sleep(0.4)  # let the cell enter its sleep before the stray SIGINT
+        code = "from rlm.repl import host_request\nawait host_request({'type': 'hold'})\nprint('survived')"
+        self.repl.send({"type": "execute", "id": "reuse", "code": code})
+        request = wait_for_host_request(self.repl, [])
         os.kill(self.repl.proc.pid, signal.SIGINT)
+        reply_ok(self.repl, request)
         events = self.repl.until_done("reuse")
         self.assertIsNone(one(events, "error"))
         self.assertEqual(one(events, "done")["status"], "ok")
@@ -864,15 +872,8 @@ class ReplTest(unittest.TestCase):
         )
         pid = int(one(events, "result")["text"])
         self.assertEqual(self.repl.shutdown(), 0)
-        # Shutdown kills live bash process groups; the sleep must be gone.
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
-                return
-            time.sleep(0.05)
-        self.fail(f"bash child {pid} survived runtime shutdown")
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
 
     def test_async_bash_completion_notifies_only_after_an_unawaited_creating_cell(self):
         direct = self.repl.execute(
@@ -1472,14 +1473,14 @@ class ReplTest(unittest.TestCase):
 
 
     def test_interrupt_with_non_string_id_is_protocol_error(self):
-        self.repl.send({"type": "execute", "id": "busy", "code": "import asyncio\nawait asyncio.sleep(0.6)\n'done'"})
-        time.sleep(0.2)
+        code = "from rlm.repl import host_request\nawait host_request({'type': 'hold'})\n'done'"
+        self.repl.send({"type": "execute", "id": "busy", "code": code})
+        request = wait_for_host_request(self.repl, [])
         self.repl.send({"type": "interrupt", "id": 123})
+        protocol_error = self.repl.read_event()
+        self.assertIn("interrupt request id must be a string", protocol_error["evalue"])
+        reply_ok(self.repl, request)
         events = self.repl.until_done("busy")
-        protocol_errors = [e for e in events if e.get("ename") == "ProtocolError"]
-        self.assertEqual(len(protocol_errors), 1)
-        self.assertIn("interrupt request id must be a string", protocol_errors[0]["evalue"])
-        # The running cell was not interrupted by the malformed request.
         self.assertEqual(one(events, "result")["text"], "'done'")
         self.assertEqual(one(events, "done")["status"], "ok")
 
@@ -1980,9 +1981,7 @@ class FinishRequestTest(unittest.TestCase):
         previous = signal.signal(signal.SIGINT, repl._sigint_handler)
         self.addCleanup(signal.signal, signal.SIGINT, previous)
         repl._request_interrupt(None)
-        deadline = time.monotonic() + 5
-        while not repl._handoff_interrupted and time.monotonic() < deadline:
-            time.sleep(0.01)
+        self.assertTrue(repl._handoff_interrupted)
         self.assertEqual(repl._sigint_target, "handoff")
         self.assertFalse(repl._pending_interrupts["any"])
         self.assertTrue(repl._consume_handoff_interrupt())
@@ -2566,8 +2565,8 @@ class OwnerWatchdogTest(unittest.TestCase):
             repl = ReplProcess(env={"PRIME_AGENT_KERNEL_OWNER_PID": str(owner.pid)})
             self.addCleanup(repl.close)
             repl.ready()
-            repl.send({"type": "execute", "id": "busy", "code": "while True: pass"})
-            time.sleep(1.0)  # let the busy cell start monopolizing the loop
+            repl.send({"type": "execute", "id": "busy", "code": "print('busy-started', flush=True)\nwhile True: pass"})
+            repl.read_until_stdout("busy", "busy-started")
             self.assertIsNone(repl.proc.poll())
             owner.kill()
             owner.wait(timeout=10)
