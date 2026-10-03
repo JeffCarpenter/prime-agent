@@ -42,7 +42,9 @@ export function loadUsedModelsCache(cachePath: string): UsedModelsCache {
 export function listUsedModels(cache: UsedModelsCache): UsedModel[] {
 	const latest = new Map<string, UsedModel>();
 	for (const file of Object.values(cache.files)) {
-		for (const model of file.models ?? []) {
+		if (!Array.isArray(file?.models)) continue;
+		for (const model of file.models) {
+			if (typeof model?.provider !== "string" || typeof model.modelId !== "string") continue;
 			const key = `${model.provider}\0${model.modelId}`;
 			const known = latest.get(key);
 			if (!known || model.lastUsed > known.lastUsed) latest.set(key, model);
