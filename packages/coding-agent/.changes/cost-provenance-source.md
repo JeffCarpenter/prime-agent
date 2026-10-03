@@ -1,0 +1,1 @@
+- Adapted session cost normalization and usage aggregation to provenance-tagged Cost<T>.
