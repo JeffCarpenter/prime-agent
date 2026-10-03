@@ -1,0 +1,1 @@
+- Added live discovery of locally installed Ollama models in the model picker, with context window and capabilities read from the server and local models priced as free.
