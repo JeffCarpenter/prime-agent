@@ -38,6 +38,7 @@ interface ModelsDevModel {
 	id: string;
 	name: string;
 	tool_call?: boolean;
+	status?: string;
 	reasoning?: boolean;
 	reasoning_options?: {
 		type?: string;
@@ -544,6 +545,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			for (const [modelId, model] of Object.entries(data.anthropic.models)) {
 				const m = model as ModelsDevModel;
 				if (m.tool_call !== true) continue;
+				if (m.status === "deprecated") continue;
 
 				models.push({
 					id: modelId,
