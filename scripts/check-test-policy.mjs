@@ -21,18 +21,54 @@ function git(args, allowFailure = false) {
 	}
 }
 
+function resolveCommit(ref) {
+	return git(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], true);
+}
+
+function isAncestor(hash) {
+	return git(["merge-base", "HEAD", hash], true) === hash;
+}
+
+function resolvePushBase(head) {
+	if (!process.env.GITHUB_EVENT_PATH) throw new Error("CI push is missing GITHUB_EVENT_PATH");
+	const before = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8")).before;
+	const base = typeof before === "string" ? resolveCommit(before) : "";
+	if (!base || base === head || !isAncestor(base)) throw new Error("CI push before must name a strict ancestor of HEAD");
+	return base;
+}
+
+function resolvePullRequestBase() {
+	if (!process.env.GITHUB_BASE_REF) throw new Error("CI pull request is missing GITHUB_BASE_REF");
+	const target = resolveCommit(`origin/${process.env.GITHUB_BASE_REF}`);
+	if (!target) throw new Error(`Cannot resolve CI pull request base origin/${process.env.GITHUB_BASE_REF}`);
+	const base = git(["merge-base", "HEAD", target], true);
+	if (!base) throw new Error(`No common ancestor with origin/${process.env.GITHUB_BASE_REF}`);
+	return base;
+}
+
+function resolveLocalBase() {
+	const candidates = [];
+	for (const ref of ["origin/main", "upstream/main"]) {
+		const hash = resolveCommit(ref);
+		if (!hash || !isAncestor(hash)) continue;
+		const distance = Number(git(["rev-list", "--count", `${hash}..HEAD`]));
+		candidates.push({ hash, distance });
+	}
+	candidates.sort((left, right) => left.distance - right.distance);
+	if (candidates.length > 0) return candidates[0].hash;
+	throw new Error("No main ancestor found; set TEST_POLICY_BASE to an ancestor of HEAD");
+}
+
 function resolveBase() {
-	if (process.env.TEST_POLICY_BASE && git(["rev-parse", "--verify", process.env.TEST_POLICY_BASE], true)) {
-		return process.env.TEST_POLICY_BASE;
-	}
-	if (process.env.GITHUB_BASE_REF) {
-		const remote = `origin/${process.env.GITHUB_BASE_REF}`;
-		if (git(["rev-parse", "--verify", remote], true)) return git(["merge-base", "HEAD", remote], true) || remote;
-	}
-	const originMain = git(["rev-parse", "--verify", "origin/main"], true);
 	const head = git(["rev-parse", "HEAD"]);
-	if (originMain && originMain !== head) return git(["merge-base", "HEAD", "origin/main"], true) || "origin/main";
-	return git(["rev-parse", "--verify", "HEAD^"], true) ? "HEAD^" : undefined;
+	if (process.env.TEST_POLICY_BASE) {
+		const base = resolveCommit(process.env.TEST_POLICY_BASE);
+		if (!base || !isAncestor(base)) throw new Error("TEST_POLICY_BASE must name a commit that is an ancestor of HEAD");
+		return base;
+	}
+	if (process.env.GITHUB_EVENT_NAME === "push") return resolvePushBase(head);
+	if (process.env.GITHUB_EVENT_NAME === "pull_request" || process.env.GITHUB_BASE_REF) return resolvePullRequestBase();
+	return resolveLocalBase();
 }
 
 function walkFiles(dir, out = []) {
