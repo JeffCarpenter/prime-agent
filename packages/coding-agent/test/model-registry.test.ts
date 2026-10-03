@@ -5,6 +5,7 @@ import type { Api, Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai"
 import { createModelCatalog, getApiProvider, getModelCostRates, getModels } from "@earendil-works/pi-ai";
 import { getOAuthProvider, registerOAuthProvider } from "@earendil-works/pi-ai/oauth";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { ENV_SESSION_DIR } from "../src/config.js";
 import { AuthStorage } from "../src/core/auth-storage.js";
 import { getBundledModels } from "../src/core/bundled-model-catalog.js";
 import { anthropicModelsUrl, ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.js";
@@ -1547,5 +1548,106 @@ describe("google live model discovery", () => {
 		globalThis.fetch = (async () => respond()) as typeof globalThis.fetch;
 
 		expect(await googleIds(registry)).toEqual(before);
+	});
+});
+
+describe("previously used models", () => {
+	let dir: string;
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "used-registry-"));
+		mkdirSync(join(dir, "sessions"));
+		vi.stubEnv(ENV_SESSION_DIR, join(dir, "sessions"));
+		vi.stubEnv("PI_OFFLINE", "1");
+	});
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	test("lists session-history models as unknown cost, deduped, seeded, and gated by auth", async () => {
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey("anthropic", "sk-ant-api03-key");
+		const registry = ModelRegistry.create(auth, join(dir, "models.json"));
+		const known = registry.getAll().find((m) => m.provider === "anthropic")!;
+		const used = [
+			["anthropic", "claude-used-only"],
+			["anthropic", known.id],
+			["google", "gemini-used-only"],
+			["no-such-provider", "ghost"],
+		];
+		const lines = used.map(([provider, modelId]) => JSON.stringify({ type: "model_change", provider, modelId }));
+		writeFileSync(join(dir, "sessions", "s.jsonl"), `${lines.join("\n")}\n`);
+
+		await registry.refreshAvailableModels();
+		await registry.waitForPendingModelRefreshes(5_000);
+
+		const all = registry.getAll();
+		expect(all.find((m) => m.id === "claude-used-only")).toMatchObject({
+			name: "claude-used-only",
+			api: known.api,
+			baseUrl: known.baseUrl,
+			cost: { source: "none" },
+		});
+		expect(all.filter((m) => m.provider === "anthropic" && m.id === known.id)).toEqual([known]);
+		expect(all.some((m) => m.id === "gemini-used-only")).toBe(true);
+		expect(all.some((m) => m.id === "ghost")).toBe(false);
+		const available = registry.getAvailable().map((m) => m.id);
+		expect(available).toContain("claude-used-only");
+		expect(available).not.toContain("gemini-used-only");
+		registry.refresh();
+		expect(registry.getAll().some((m) => m.id === "claude-used-only")).toBe(true);
+		expect(registry.getAll().find((m) => m.id === "claude-used-only")).toBe(
+			registry.getAll().find((m) => m.id === "claude-used-only"),
+		);
+		const fresh = ModelRegistry.create(auth, join(dir, "models.json"));
+		expect(fresh.getAll().some((m) => m.id === "claude-used-only")).toBe(true);
+	});
+
+	test("keeps live capabilities of a used model across refresh() and drops them on credential change", async () => {
+		const originalFetch = globalThis.fetch;
+		vi.stubEnv("PI_OFFLINE", "0");
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey("anthropic", "sk-ant-api03-key");
+		const registry = ModelRegistry.create(auth, join(dir, "models.json"));
+		writeFileSync(
+			join(dir, "sessions", "s.jsonl"),
+			`${JSON.stringify({ type: "model_change", provider: "anthropic", modelId: "claude-live-only" })}\n`,
+		);
+		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0]) => {
+			if (!String(input).includes("/v1/models")) return new Response("missing", { status: 404 });
+			return new Response(
+				JSON.stringify({
+					data: [
+						{
+							id: "claude-live-only",
+							capabilities: { thinking: { supported: true } },
+							max_input_tokens: 1_000_000,
+						},
+					],
+				}),
+			);
+		}) as typeof globalThis.fetch;
+		try {
+			await registry.refreshAvailableModels();
+			await registry.waitForPendingModelRefreshes(5_000);
+			expect(registry.find("anthropic", "claude-live-only")).toMatchObject({
+				reasoning: true,
+				contextWindow: 1_000_000,
+			});
+
+			registry.refresh();
+			expect(registry.find("anthropic", "claude-live-only")).toMatchObject({
+				reasoning: true,
+				contextWindow: 1_000_000,
+			});
+
+			auth.setRuntimeApiKey("anthropic", "sk-ant-api03-other");
+			expect(registry.find("anthropic", "claude-live-only")).toMatchObject({
+				reasoning: false,
+				contextWindow: 128000,
+			});
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 });

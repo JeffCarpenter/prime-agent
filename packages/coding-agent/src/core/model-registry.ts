@@ -30,7 +30,7 @@ import { dirname, join } from "path";
 import { type Static, type TProperties, Type } from "typebox";
 import type { Validator } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
-import { getAgentDir } from "../config.js";
+import { getAgentDir, getSessionsDir } from "../config.js";
 import { writeFileAtomicSync } from "../utils/atomic-file.js";
 import type { AuthSourceToken, AuthStatus, AuthStorage } from "./auth-storage.js";
 import { getBundledModels } from "./bundled-model-catalog.js";
@@ -55,6 +55,7 @@ import {
 	resolveConfigValueUncached,
 	resolveHeadersOrThrow,
 } from "./resolve-config-value.js";
+import { listUsedModels, loadUsedModelsCache, scanUsedModels, type UsedModel } from "./used-models.js";
 
 const PercentileCutoffsSchema = Type.Object({
 	p50: Type.Optional(Type.Number()),
@@ -543,6 +544,10 @@ export class ModelRegistry {
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
 	private pendingPrimeInferenceCatalogRefresh: Promise<void> | undefined;
 	private pendingProviderCatalogRefresh: Promise<void> | undefined;
+	private usedModels: UsedModel[] = [];
+	private liveModelHints = new Map<string, Model<Api>>();
+	private usedModelObjects = new Map<string, { seed: Model<Api>; model: Model<Api> }>();
+	private pendingUsedModelsScan: Promise<void> | undefined;
 	private readonly providerCatalog: CatalogCache<Model<Api>[]>;
 	private catalogRefreshTimer?: ReturnType<typeof setInterval>;
 	private scheduledCatalogRefresh?: Promise<void>;
@@ -564,11 +569,13 @@ export class ModelRegistry {
 			(payload) => parseProviderModelCatalog(payload, this.bundledCatalogModels),
 			legacyCachePaths("provider-model-catalog.v1.json"),
 		);
+		this.usedModels = this.readUsedModelsCache();
 		this.loadModels();
 		const reference = new WeakRef(this);
 		const unsubscribe = authStorage.onChange(() => {
 			const registry = reference.deref();
 			if (registry) {
+				registry.liveModelHints.clear();
 				registry.liveOpenAICodexModels = [];
 				registry.liveAnthropicModels = [];
 				registry.liveGoogleModels = [];
@@ -594,6 +601,10 @@ export class ModelRegistry {
 	 * Reload models from disk (built-in + custom from models.json).
 	 */
 	refresh(): void {
+		this.usedModels = this.readUsedModelsCache();
+		for (const model of [...this.liveOpenAICodexModels, ...this.liveAnthropicModels, ...this.liveGoogleModels]) {
+			this.liveModelHints.set(`${model.provider}\0${model.id}`, model);
+		}
 		this.liveOpenAICodexModels = [];
 		this.liveAnthropicModels = [];
 		this.liveGoogleModels = [];
@@ -631,6 +642,23 @@ export class ModelRegistry {
 		this.onOAuthProvidersReset?.();
 
 		this.reloadModelsAfterCatalogChange();
+	}
+
+	private usedModelsPaths(): { sessionsDir: string; cachePath: string } | undefined {
+		if (!this.modelsJsonPath) return undefined;
+		const dir = dirname(this.modelsJsonPath);
+		return { sessionsDir: getSessionsDir(dir), cachePath: join(dir, "models", "used-models.v1.json") };
+	}
+
+	private readUsedModelsCache(): UsedModel[] {
+		const paths = this.usedModelsPaths();
+		return paths ? listUsedModels(loadUsedModelsCache(paths.cachePath)) : [];
+	}
+
+	private async refreshUsedModels(): Promise<void> {
+		const paths = this.usedModelsPaths();
+		if (!paths) return;
+		this.usedModels = await scanUsedModels(paths.sessionsDir, paths.cachePath).catch(() => this.usedModels);
 	}
 
 	private reloadModelsAfterCatalogChange(): void {
@@ -915,19 +943,49 @@ export class ModelRegistry {
 	 * If models.json had errors, returns only built-in models.
 	 */
 	getAll(): Model<Api>[] {
-		const catalogIds = new Set(
-			this.models.filter((model) => model.provider === "openai-codex").map((model) => model.id),
-		);
-		const anthropicIds = new Set(
-			this.models.filter((model) => model.provider === "anthropic").map((model) => model.id),
-		);
-		const googleIds = new Set(this.models.filter((model) => model.provider === "google").map((model) => model.id));
-		return [
-			...this.models,
-			...this.liveOpenAICodexModels.filter((model) => !catalogIds.has(model.id)),
-			...this.liveAnthropicModels.filter((model) => !anthropicIds.has(model.id)),
-			...this.liveGoogleModels.filter((model) => !googleIds.has(model.id)),
-		].map((model) => this.getModelForCurrentAuth(model));
+		const all = [...this.models];
+		const seen = new Set(all.map((model) => `${model.provider}\0${model.id}`));
+		const candidates = [
+			...this.liveOpenAICodexModels,
+			...this.liveAnthropicModels,
+			...this.liveGoogleModels,
+			...this.usedModels.flatMap((used) => this.usedModelFor(used) ?? []),
+		];
+		for (const model of candidates) {
+			const key = `${model.provider}\0${model.id}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			all.push(model);
+		}
+		return all.map((model) => this.getModelForCurrentAuth(model));
+	}
+
+	/** Reuses the built model while its seed is unchanged so getAll() keeps object identity. */
+	private usedModelFor({ provider, modelId }: UsedModel): Model<Api> | undefined {
+		const seed = this.models.find((model) => model.provider === provider);
+		if (!seed) return undefined;
+		const key = `${provider}\0${modelId}`;
+		const hint = this.liveModelHints.get(key);
+		if (hint) return hint;
+		const cached = this.usedModelObjects.get(key);
+		if (cached?.seed === seed) return cached.model;
+		const { api, baseUrl, headers, compat } = seed;
+		const model = {
+			id: modelId,
+			name: modelId,
+			provider,
+			api,
+			baseUrl,
+			headers,
+			compat,
+			reasoning: false,
+			input: ["text"],
+			contextWindow: 128000,
+			maxTokens: 16384,
+			cost: { source: "none" },
+		} as Model<Api>;
+		this.usedModelObjects.set(key, { seed, model });
+		return model;
 	}
 
 	getModelForCurrentAuth(model: Model<Api>): Model<Api> {
@@ -1010,6 +1068,7 @@ export class ModelRegistry {
 			);
 			this.pendingProviderCatalogRefresh = this.refreshProviderCatalog(false).catch(() => undefined);
 			void this.pendingProviderCatalogRefresh;
+			this.pendingUsedModelsScan = this.refreshUsedModels();
 			await Promise.allSettled([
 				this.refreshOpenAICodexModels(),
 				this.refreshAnthropicModels(),
@@ -1063,6 +1122,7 @@ export class ModelRegistry {
 		const pending: Promise<unknown>[] = [];
 		if (this.pendingPrimeInferenceCatalogRefresh) pending.push(this.pendingPrimeInferenceCatalogRefresh);
 		if (this.pendingProviderCatalogRefresh) pending.push(this.pendingProviderCatalogRefresh);
+		if (this.pendingUsedModelsScan) pending.push(this.pendingUsedModelsScan);
 		if (this.backgroundPrivatePrimeAuthorization?.promise) {
 			pending.push(this.backgroundPrivatePrimeAuthorization.promise);
 		}
