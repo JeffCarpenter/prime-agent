@@ -448,6 +448,52 @@ function readAnthropicModels(value: unknown, seed: Model<Api>): Model<Api>[] {
 	});
 }
 
+const GOOGLE_MAX_DISCOVERY_PAGES = 10;
+const GOOGLE_UNSUPPORTED_MODEL_PATTERN = /(^|[-_.])(live|deep-research|computer-use|image|tts)($|[-_.])/i;
+
+function googleModelsUrl(baseUrl: string, pageToken?: string): string {
+	const normalized = baseUrl.replace(/\/+$/, "").replace(/\/v1beta$/, "");
+	const token = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+	return `${normalized}/v1beta/models?pageSize=1000${token}`;
+}
+
+function readGoogleModels(value: unknown, seed: Model<Api>): { models: Model<Api>[]; nextPageToken?: string } {
+	if (!value || typeof value !== "object" || !("models" in value) || !Array.isArray(value.models)) {
+		throw new Error("Invalid Google model list");
+	}
+	const nextPageToken = "nextPageToken" in value && typeof value.nextPageToken === "string" ? value.nextPageToken : "";
+	const models = value.models.flatMap((entry: unknown): Model<Api>[] => {
+		if (!entry || typeof entry !== "object") return [];
+		const { name, displayName, inputTokenLimit, outputTokenLimit, supportedGenerationMethods, thinking } = entry as {
+			name?: unknown;
+			displayName?: unknown;
+			inputTokenLimit?: unknown;
+			outputTokenLimit?: unknown;
+			supportedGenerationMethods?: unknown;
+			thinking?: unknown;
+		};
+		if (typeof name !== "string" || !Array.isArray(supportedGenerationMethods)) return [];
+		if (!supportedGenerationMethods.includes("generateContent")) return [];
+		const id = name.replace(/^models\//, "");
+		if (!id || GOOGLE_UNSUPPORTED_MODEL_PATTERN.test(id)) return [];
+		return [
+			{
+				id,
+				name: typeof displayName === "string" && displayName ? displayName : id,
+				provider: "google",
+				api: "google-generative-ai",
+				baseUrl: seed.baseUrl,
+				reasoning: thinking === true,
+				input: ["text", "image"],
+				contextWindow: typeof inputTokenLimit === "number" && inputTokenLimit > 0 ? inputTokenLimit : 1_048_576,
+				maxTokens: typeof outputTokenLimit === "number" && outputTokenLimit > 0 ? outputTokenLimit : 8192,
+				cost: { source: "none" },
+			},
+		];
+	});
+	return { models, nextPageToken: nextPageToken || undefined };
+}
+
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_FILE = "prime-inference-private-models.json";
 const PRIVATE_PRIME_AUTHORIZATION_CACHE_TTL_MS = 5 * 60_000;
 const PRIVATE_PRIME_BACKGROUND_REFRESH_TIMEOUT_MS = 3_000;
@@ -491,6 +537,8 @@ export class ModelRegistry {
 	private openAICodexModelsCache: { authFingerprint: string; modelIds: Set<string>; refreshedAt: number } | undefined;
 	private liveAnthropicModels: Model<Api>[] = [];
 	private anthropicModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
+	private liveGoogleModels: Model<Api>[] = [];
+	private googleModelsCache: { authFingerprint: string; models: Model<Api>[]; refreshedAt: number } | undefined;
 	private backgroundPrivatePrimeAuthorization: { fingerprint: string; promise: Promise<void> } | undefined;
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
 	private pendingPrimeInferenceCatalogRefresh: Promise<void> | undefined;
@@ -523,6 +571,7 @@ export class ModelRegistry {
 			if (registry) {
 				registry.liveOpenAICodexModels = [];
 				registry.liveAnthropicModels = [];
+				registry.liveGoogleModels = [];
 				registry.executableOpenAICodexModelIds = new Set();
 				void registry.scheduleCatalogRefresh().catch(() => {});
 			} else unsubscribe();
@@ -547,6 +596,7 @@ export class ModelRegistry {
 	refresh(): void {
 		this.liveOpenAICodexModels = [];
 		this.liveAnthropicModels = [];
+		this.liveGoogleModels = [];
 		this.executableOpenAICodexModelIds = new Set();
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
@@ -871,10 +921,12 @@ export class ModelRegistry {
 		const anthropicIds = new Set(
 			this.models.filter((model) => model.provider === "anthropic").map((model) => model.id),
 		);
+		const googleIds = new Set(this.models.filter((model) => model.provider === "google").map((model) => model.id));
 		return [
 			...this.models,
 			...this.liveOpenAICodexModels.filter((model) => !catalogIds.has(model.id)),
 			...this.liveAnthropicModels.filter((model) => !anthropicIds.has(model.id)),
+			...this.liveGoogleModels.filter((model) => !googleIds.has(model.id)),
 		].map((model) => this.getModelForCurrentAuth(model));
 	}
 
@@ -958,7 +1010,11 @@ export class ModelRegistry {
 			);
 			this.pendingProviderCatalogRefresh = this.refreshProviderCatalog(false).catch(() => undefined);
 			void this.pendingProviderCatalogRefresh;
-			await Promise.allSettled([this.refreshOpenAICodexModels(), this.refreshAnthropicModels()]);
+			await Promise.allSettled([
+				this.refreshOpenAICodexModels(),
+				this.refreshAnthropicModels(),
+				this.refreshGoogleModels(),
+			]);
 			return this.getAvailable();
 		});
 	}
@@ -1395,6 +1451,51 @@ export class ModelRegistry {
 			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
 		};
 		this.liveAnthropicModels = models;
+	}
+
+	private async refreshGoogleModels(): Promise<void> {
+		const seed =
+			this.models.find((model) => model.provider === "google") ??
+			this.bundledCatalogModels.find((model) => model.provider === "google") ??
+			getModels("google")[0];
+		if (!seed || !this.hasConfiguredAuth(seed)) return;
+		const auth = await this.getApiKeyAndHeaders(seed);
+		if (!auth.ok || !auth.apiKey) return;
+		const authFingerprint = createHmac("sha256", auth.apiKey).update(googleModelsUrl(seed.baseUrl)).digest("hex");
+		const cached = this.googleModelsCache;
+		let models = cached?.authFingerprint === authFingerprint ? cached.models : undefined;
+		if (!isOfflineModeEnabled() && (!models || Date.now() - cached!.refreshedAt >= 300_000)) {
+			try {
+				const discovered: Model<Api>[] = [];
+				let pageToken: string | undefined;
+				for (let page = 0; page < GOOGLE_MAX_DISCOVERY_PAGES; page++) {
+					const headers = new Headers(auth.headers);
+					if (!headers.has("authorization") && !headers.has("x-goog-api-key")) {
+						headers.set("x-goog-api-key", auth.apiKey);
+					}
+					const response = await fetch(googleModelsUrl(seed.baseUrl, pageToken), {
+						headers,
+						signal: AbortSignal.timeout(5_000),
+					});
+					if (!response.ok) throw new Error(`Google discovery HTTP ${response.status}`);
+					const result = readGoogleModels(await response.json(), seed);
+					discovered.push(...result.models);
+					pageToken = result.nextPageToken;
+					if (!pageToken) break;
+				}
+				models = discovered;
+			} catch {
+				// Keep only this credential/endpoint's last successful metadata when offline.
+			}
+		}
+		const currentAuth = await this.getApiKeyAndHeaders(seed);
+		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !models) return;
+		this.googleModelsCache = {
+			authFingerprint,
+			models,
+			refreshedAt: models === cached?.models ? cached.refreshedAt : Date.now(),
+		};
+		this.liveGoogleModels = models;
 	}
 
 	/**

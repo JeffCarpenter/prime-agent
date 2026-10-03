@@ -1,0 +1,1 @@
+- Added live Google Gemini model discovery that lists unpriced models available to your API key.

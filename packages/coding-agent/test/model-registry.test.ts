@@ -1451,3 +1451,101 @@ describe("anthropic live model discovery", () => {
 		expect(available.filter((m) => m.provider === "anthropic")).toEqual(before);
 	});
 });
+
+describe("google live model discovery", () => {
+	const originalFetch = globalThis.fetch;
+	beforeEach(() => {
+		vi.stubEnv("PI_OFFLINE", "0");
+	});
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+		vi.unstubAllEnvs();
+	});
+
+	const chat = (name: string, extra: object = {}) => ({
+		name: `models/${name}`,
+		supportedGenerationMethods: ["generateContent"],
+		...extra,
+	});
+	const registryWithKey = () => {
+		const auth = AuthStorage.inMemory();
+		auth.setRuntimeApiKey("google", "google-test-key");
+		return ModelRegistry.inMemory(auth);
+	};
+	const serve = (respond: (url: string, headers: Headers) => unknown) => {
+		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) =>
+			String(input).includes("/v1beta/models?pageSize=1000")
+				? new Response(JSON.stringify(respond(String(input), new Headers(init?.headers))))
+				: new Response("missing", { status: 404 })) as typeof globalThis.fetch;
+	};
+	const googleIds = async (registry: ModelRegistry) =>
+		(await registry.refreshAvailableModels()).filter((m) => m.provider === "google");
+
+	test("pages, filters, and lists unpriced live-only models with the key header", async () => {
+		const registry = registryWithKey();
+		const known = registry.getAll().find((m) => m.provider === "google")!;
+		const keys: (string | null)[] = [];
+		serve((url, headers) => {
+			keys.push(headers.get("x-goog-api-key"));
+			if (url.includes("pageToken=p2")) {
+				return { models: [chat("gemini-new-only-9", { inputTokenLimit: 2048, thinking: true })] };
+			}
+			const embed = { name: "models/embed-9", supportedGenerationMethods: ["embedContent"] };
+			return { models: [chat(known.id, { displayName: "Renamed" }), embed], nextPageToken: "p2" };
+		});
+
+		const models = await googleIds(registry);
+
+		expect(keys).toEqual(["google-test-key", "google-test-key"]);
+		expect(models.filter((m) => m.id === known.id)).toEqual([known]);
+		expect(models.some((m) => m.id === "embed-9")).toBe(false);
+		const added = { reasoning: true, contextWindow: 2048, maxTokens: 8192, cost: { source: "none" } };
+		expect(models.find((m) => m.id === "gemini-new-only-9")).toMatchObject(added);
+	});
+
+	test.each([
+		["gemini-9.1-flash-lite", true],
+		["gemini-2.5-flash-image", false],
+		["gemini-2.5-flash-preview-tts", false],
+		["gemini-live-2.5-flash", false],
+		["gemini-2.5-computer-use-preview", false],
+		["deep-research-pro", false],
+	])("lists %s: %s", async (id, listed) => {
+		serve(() => ({ models: [chat(id)] }));
+
+		expect((await googleIds(registryWithKey())).some((m) => m.id === id)).toBe(listed);
+	});
+
+	test("stops after ten pages when the server keeps paging", async () => {
+		let pages = 0;
+		serve(() => ({ models: [chat(`gemini-page-${++pages}`)], nextPageToken: "again" }));
+
+		const models = await googleIds(registryWithKey());
+
+		expect(pages).toBe(10);
+		expect(models.some((m) => m.id === "gemini-page-10")).toBe(true);
+	});
+
+	test("defers to a configured Authorization header instead of adding x-goog-api-key", async () => {
+		const registry = registryWithKey();
+		registry.registerProvider("google", { headers: { Authorization: "Bearer proxy-token" } });
+		const seen: Headers[] = [];
+		serve((_url, headers) => ({ models: [seen.push(headers)] }));
+
+		await registry.refreshAvailableModels();
+
+		expect(seen[0]?.get("authorization")).toBe("Bearer proxy-token");
+		expect(seen[0]?.has("x-goog-api-key")).toBe(false);
+	});
+
+	test.each([
+		["network", () => Promise.reject(new Error("network down"))],
+		["bad payload", () => Promise.resolve(new Response(JSON.stringify({ nope: 1 })))],
+	])("keeps the catalog models on %s failure", async (_label, respond) => {
+		const registry = registryWithKey();
+		const before = registry.getAll().filter((m) => m.provider === "google");
+		globalThis.fetch = (async () => respond()) as typeof globalThis.fetch;
+
+		expect(await googleIds(registry)).toEqual(before);
+	});
+});
