@@ -1650,7 +1650,7 @@ describe("openai-completions service tier", () => {
 
 		expect(getUsageCostAmounts(response.usage.cost)?.total).toBeCloseTo(expectedTotal, 10);
 		const unknownResponse = await streamSimple(
-			{ ...serviceTierModel(provider), cost: { status: "unknown" } },
+			{ ...serviceTierModel(provider), cost: { source: "none" } },
 			{ messages: [{ role: "user", content: "Hi", timestamp: 1 }] },
 			{ apiKey: "test", serviceTier: requestedTier },
 		).result();
@@ -1658,7 +1658,7 @@ describe("openai-completions service tier", () => {
 		if (reported && reported.cost > 0) {
 			expect(getUsageCostAmounts(unknownResponse.usage.cost)?.total).toBeCloseTo(expectedTotal, 10);
 		} else {
-			expect(unknownResponse.usage.cost).toMatchObject({ status: "unknown", unknownContributors: 1 });
+			expect(unknownResponse.usage.cost).toMatchObject({ source: "none", missingCount: 1 });
 		}
 	});
 });

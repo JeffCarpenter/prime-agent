@@ -9,7 +9,7 @@ describe("model cost calculation", () => {
 		const zero = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 		const model: Model<"openai-codex-responses"> = {
 			...getFixtureModel<"openai-codex-responses">("openai-codex", "gpt-5.4"),
-			cost: status === "unknown" ? { status } : { status, rates: zero },
+			cost: status === "unknown" ? { source: "none" } : { source: "aggregate", value: zero },
 		};
 		const usage: Usage = {
 			input: 100,
@@ -17,12 +17,12 @@ describe("model cost calculation", () => {
 			cacheRead: 10,
 			cacheWrite: 0,
 			totalTokens: 130,
-			cost: { status: "known", amounts: { ...zero, total: 0 } },
+			cost: { source: "aggregate", value: { ...zero, total: 0 } },
 		};
 		const expected =
 			status === "unknown"
-				? { status, pricedSubtotal: { ...zero, total: 0 }, unknownContributors: 1 }
-				: { status, amounts: { ...zero, total: 0 } };
+				? { source: "none", partial: { ...zero, total: 0 }, missingCount: 1 }
+				: { source: "aggregate", value: { ...zero, total: 0 } };
 		expect(calculateCost(model, usage)).toEqual(expected);
 		applyServiceTierPricing(usage, "priority", model.id);
 		expect(usage.cost).toEqual(expected);

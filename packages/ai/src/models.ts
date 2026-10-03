@@ -1,6 +1,7 @@
 import { MODELS } from "./models.generated.js";
 import type {
 	Api,
+	Cost,
 	CostAmounts,
 	CostRates,
 	KnownProvider,
@@ -102,14 +103,20 @@ export interface CostOverrides {
 	cacheWrite?: number;
 }
 
-export function getModelCostRates(cost: Model<Api>["cost"]): CostRates | undefined {
-	if ("status" in cost) return cost.status === "known" ? cost.rates : undefined;
+export function getCostValue<T>(cost: Cost<T> | T | undefined): T | undefined {
+	if (!cost) return undefined;
+	if (typeof cost === "object" && "source" in cost) {
+		return cost.source === "none" ? undefined : cost.value;
+	}
 	return cost;
 }
 
+export function getModelCostRates(cost: Model<Api>["cost"]): CostRates | undefined {
+	return getCostValue(cost);
+}
+
 export function getUsageCostAmounts(cost: Usage["cost"]): CostAmounts | undefined {
-	if ("status" in cost) return cost.status === "known" ? cost.amounts : undefined;
-	return cost;
+	return getCostValue(cost);
 }
 
 export function calculateCost<TApi extends Api>(
@@ -117,15 +124,15 @@ export function calculateCost<TApi extends Api>(
 	usage: Usage,
 	overrides?: CostOverrides,
 ): Usage["cost"] {
-	if ("status" in model.cost && model.cost.status === "unknown") {
+	if ("source" in model.cost && model.cost.source === "none") {
 		usage.cost = {
-			status: "unknown",
-			pricedSubtotal: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-			unknownContributors: 1,
+			source: "none",
+			partial: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			missingCount: 1,
 		};
 		return usage.cost;
 	}
-	const rates = "status" in model.cost ? model.cost.rates : model.cost;
+	const rates = "source" in model.cost ? model.cost.value : model.cost;
 	const amounts = {
 		input: (rates.input / 1000000) * usage.input,
 		output: (rates.output / 1000000) * usage.output,
@@ -134,7 +141,7 @@ export function calculateCost<TApi extends Api>(
 		total: 0,
 	};
 	amounts.total = amounts.input + amounts.output + amounts.cacheRead + amounts.cacheWrite;
-	usage.cost = { status: "known", amounts };
+	usage.cost = { source: "aggregate", value: amounts };
 	return usage.cost;
 }
 

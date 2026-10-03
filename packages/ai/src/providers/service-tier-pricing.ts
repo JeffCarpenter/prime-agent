@@ -32,5 +32,5 @@ export function applyServiceTierPricing(usage: Usage, serviceTier: ServiceTier |
 		total: 0,
 	};
 	amounts.total = amounts.input + amounts.output + amounts.cacheRead + amounts.cacheWrite;
-	usage.cost = { status: "known", amounts };
+	usage.cost = { source: "aggregate", value: amounts };
 }

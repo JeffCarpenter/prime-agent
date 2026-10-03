@@ -197,12 +197,12 @@ export interface CostAmounts extends CostRates {
 	total: number;
 }
 
-export type ModelCost = { status: "known"; rates: CostRates } | { status: "unknown" } | CostRates;
-
-export type UsageCost =
-	| { status: "known"; amounts: CostAmounts }
-	| { status: "unknown"; pricedSubtotal: CostAmounts; unknownContributors: number }
-	| CostAmounts;
+export type CostSource = "none" | "provider" | "aggregate";
+export type Cost<T> =
+	| { readonly source: "none"; readonly partial?: T; readonly missingCount?: number }
+	| { readonly source: "provider" | "aggregate"; readonly value: T };
+export type ModelCost = Cost<CostRates> | CostRates;
+export type UsageCost = Cost<CostAmounts> | CostAmounts;
 
 export interface Usage {
 	input: number;
