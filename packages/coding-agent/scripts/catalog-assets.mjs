@@ -179,9 +179,43 @@ export function validateBundledModelCatalog(path, options = {}) {
 		if (!model.cost || typeof model.cost !== "object") {
 			throw new Error(`Bundled model catalog entry ${index} has a non-object cost: ${path}`);
 		}
-		for (const key of MODEL_COST_KEYS) {
-			if (typeof model.cost[key] !== "number" || !Number.isFinite(model.cost[key]) || model.cost[key] < 0) {
-				throw new Error(`Bundled model catalog entry ${index} has an invalid cost.${key}: ${path}`);
+		if ("source" in model.cost) {
+			if (model.cost.source === "none") {
+				if (model.cost.partial !== undefined) {
+					if (!model.cost.partial || typeof model.cost.partial !== "object") {
+						throw new Error(`Bundled model catalog entry ${index} has a non-object cost.partial: ${path}`);
+					}
+					for (const key of MODEL_COST_KEYS) {
+						if (typeof model.cost.partial[key] !== "number" || !Number.isFinite(model.cost.partial[key]) || model.cost.partial[key] < 0) {
+							throw new Error(`Bundled model catalog entry ${index} has an invalid cost.partial.${key}: ${path}`);
+						}
+					}
+				}
+				if (
+					model.cost.missingCount !== undefined &&
+					(typeof model.cost.missingCount !== "number" ||
+						!Number.isInteger(model.cost.missingCount) ||
+						model.cost.missingCount < 0)
+				) {
+					throw new Error(`Bundled model catalog entry ${index} has an invalid cost.missingCount: ${path}`);
+				}
+			} else if (model.cost.source === "provider" || model.cost.source === "aggregate") {
+				if (!model.cost.value || typeof model.cost.value !== "object") {
+					throw new Error(`Bundled model catalog entry ${index} has a non-object cost.value: ${path}`);
+				}
+				for (const key of MODEL_COST_KEYS) {
+					if (typeof model.cost.value[key] !== "number" || !Number.isFinite(model.cost.value[key]) || model.cost.value[key] < 0) {
+						throw new Error(`Bundled model catalog entry ${index} has an invalid cost.value.${key}: ${path}`);
+					}
+				}
+			} else {
+				throw new Error(`Bundled model catalog entry ${index} has an invalid cost.source: ${path}`);
+			}
+		} else {
+			for (const key of MODEL_COST_KEYS) {
+				if (typeof model.cost[key] !== "number" || !Number.isFinite(model.cost[key]) || model.cost[key] < 0) {
+					throw new Error(`Bundled model catalog entry ${index} has an invalid cost.${key}: ${path}`);
+				}
 			}
 		}
 		if (typeof model.contextWindow !== "number" || !Number.isInteger(model.contextWindow) || model.contextWindow < 1) {
@@ -256,7 +290,16 @@ export function validateBundledCatalogDir(directory, options = {}) {
 	};
 }
 
-function fixtureModel({ id, name, provider, api, baseUrl, reasoning = false, input = ["text"] }) {
+function fixtureModel({
+	id,
+	name = id,
+	provider,
+	api,
+	baseUrl = provider === "openai-codex" ? "https://chatgpt.com/backend-api" : undefined,
+	reasoning = false,
+	input = ["text"],
+	cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+}) {
 	return {
 		id,
 		name,
@@ -265,7 +308,7 @@ function fixtureModel({ id, name, provider, api, baseUrl, reasoning = false, inp
 		baseUrl,
 		reasoning,
 		input,
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		cost,
 		contextWindow: 128000,
 		maxTokens: 4096,
 	};
@@ -325,6 +368,25 @@ function fixtureCatalogBodies() {
 						provider: "google-gemini",
 						api: "gemini",
 						baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+					}),
+					fixtureModel({
+						id: "fixture-unpriced",
+						name: "Fixture Unpriced",
+						provider: "openai-codex",
+						api: "openai-codex-responses",
+						baseUrl: "https://chatgpt.com/backend-api",
+						cost: { source: "none" },
+					}),
+					fixtureModel({
+						id: "fixture-openrouter",
+						name: "Fixture OpenRouter",
+						provider: "openrouter",
+						api: "openai-completions",
+						baseUrl: "https://openrouter.ai/api/v1",
+						cost: {
+							source: "provider",
+							value: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
+						},
 					}),
 				],
 			},

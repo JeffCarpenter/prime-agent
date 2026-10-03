@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +6,13 @@ import {
 	copySourceCatalogAssets,
 	generateBundledCatalogAssets,
 	MAX_REMOTE_CATALOG_BYTES,
+	validateBundledModelCatalog,
 } from "../scripts/catalog-assets.mjs";
+
+declare module "../scripts/catalog-assets.mjs" {
+	// biome-ignore lint/suspicious/noExportsInTest: script module augmentation
+	export function validateBundledModelCatalog(p: string, o?: { allowSmallFixture?: boolean }): { models: number };
+}
 
 const tempDirs: string[] = [];
 
@@ -23,7 +29,7 @@ function tempDir(): string {
 	return dir;
 }
 
-function modelCatalog(): string {
+function modelCatalog(cost: Record<string, unknown> = { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }): string {
 	return `${JSON.stringify({
 		schemaVersion: 1,
 		models: [
@@ -35,7 +41,7 @@ function modelCatalog(): string {
 				baseUrl: "https://api.openai.com/v1",
 				reasoning: false,
 				input: ["text"],
-				cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
+				cost,
 				contextWindow: 128000,
 				maxTokens: 8192,
 			},
@@ -161,5 +167,35 @@ describe("catalog asset generation", () => {
 		expect(readFileSync(join(outDir, "mcp-services.bundled.json"), "utf8")).toBe(
 			readFileSync(join(catalogDir, "mcp-services.bundled.json"), "utf8"),
 		);
+	});
+
+	it("validates model catalog cost forms and rejects invalid costs", () => {
+		const file = join(tempDir(), "models.bundled.json");
+		const rates = { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 };
+		for (const cost of [
+			rates,
+			{ source: "none" },
+			{ source: "none", partial: rates, missingCount: 1 },
+			{ source: "provider", value: rates },
+			{ source: "aggregate", value: rates },
+		]) {
+			writeFileSync(file, modelCatalog(cost));
+			expect(validateBundledModelCatalog(file, { allowSmallFixture: true }).models).toBe(1);
+		}
+		for (const cost of [{ source: "bogus" }, { ...rates, input: -1 }, { source: "none", missingCount: -1 }]) {
+			writeFileSync(file, modelCatalog(cost));
+			expect(() => validateBundledModelCatalog(file, { allowSmallFixture: true })).toThrow(/invalid cost/);
+		}
+	});
+
+	it("generates small fixture catalog with unpriced and openrouter models", async () => {
+		const outDir = tempDir();
+		await generateBundledCatalogAssets({ outDir, fixture: true });
+		const catalog = JSON.parse(readFileSync(join(outDir, "models.bundled.json"), "utf8")) as {
+			models: Array<{ id: string; cost: { source?: string } }>;
+		};
+		expect(catalog.models).toHaveLength(6);
+		expect(catalog.models.find((m) => m.id === "fixture-unpriced")?.cost).toEqual({ source: "none" });
+		expect(catalog.models.find((m) => m.id === "fixture-openrouter")?.cost.source).toBe("provider");
 	});
 });
