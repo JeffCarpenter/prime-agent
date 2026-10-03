@@ -4,6 +4,7 @@ import {
 	closeSync,
 	lstatSync,
 	mkdirSync,
+	mkdtempSync,
 	openSync,
 	readFileSync,
 	renameSync,
@@ -825,6 +826,60 @@ describe("readSessionInfo incremental scans", () => {
 	});
 });
 describe("migrateSessionEntries", () => {
+	it.each(["legacy", "known", "unknown"] as const)("persists v4 %s costs without losing uncertainty", async (kind) => {
+		const amounts = { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 };
+		const expected =
+			kind === "unknown"
+				? { status: "unknown", pricedSubtotal: amounts, unknownContributors: 1 }
+				: { status: "known", amounts };
+		const usage = {
+			input: 1,
+			output: 2,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 3,
+			cost: kind === "legacy" ? amounts : expected,
+		};
+		const dir = mkdtempSync(join(tmpdir(), "session-cost-"));
+		try {
+			const file = join(dir, "cost.jsonl");
+			const base = { id: "a", parentId: null, timestamp: "2026-01-01T00:00:00Z" };
+			const records = [
+				{ type: "session", version: kind === "legacy" ? 3 : 4, id: "s", cwd: dir, timestamp: base.timestamp },
+				{ ...base, type: "message", message: { role: "assistant", content: [], usage } },
+				{ ...base, id: "c", type: "compaction", usage },
+				{ ...base, id: "b", type: "branch_summary", usage },
+				{
+					...base,
+					id: "u",
+					type: "child_usage_attributed",
+					targetId: "a",
+					childUsage: usage,
+					aggregateUsage: usage,
+				},
+			];
+			writeFileSync(file, `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+			await SessionManager.openAsync(file);
+			const persisted = readFileSync(file, "utf8")
+				.trim()
+				.split("\n")
+				.map((line) => JSON.parse(line));
+			expect(persisted[0].version).toBe(4);
+			expect(
+				[
+					persisted[1].message.usage,
+					persisted[2].usage,
+					persisted[3].usage,
+					persisted[4].childUsage,
+					persisted[4].aggregateUsage,
+				].map((value) => value.cost),
+			).toEqual(Array(5).fill(expected));
+			expect(SessionManager.open(file).getEntries()).toEqual((await SessionManager.openAsync(file)).getEntries());
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	const assistant = {
 		role: "assistant",
 		content: [{ type: "text", text: "hello" }],
@@ -846,8 +901,8 @@ describe("migrateSessionEntries", () => {
 		migrateSessionEntries(entries);
 
 		const [header, first, second] = entries as unknown as Array<Record<string, unknown>>;
-		// v3 is current after the hookMessage->custom migration.
-		expect(header!.version).toBe(3);
+		// v4 adds tagged usage costs.
+		expect(header!.version).toBe(4);
 		expect(String(first!.id)).toHaveLength(8);
 		expect(first!.parentId).toBeNull();
 		expect(String(second!.id)).toHaveLength(8);

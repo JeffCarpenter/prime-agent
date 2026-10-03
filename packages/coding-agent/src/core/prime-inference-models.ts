@@ -1,4 +1,4 @@
-import { isPrivatePrimeInferenceModelId, type Model } from "@earendil-works/pi-ai";
+import { getModelCostRates, isPrivatePrimeInferenceModelId, type Model } from "@earendil-works/pi-ai";
 import {
 	buildPrimeInferenceModels,
 	fetchPrimeInferenceModelCatalog,
@@ -71,7 +71,8 @@ export async function fetchAuthorizedPrivatePrimeInferenceModels(
 			const parsed = entriesById.get(id);
 			if (parsed) return [parsed];
 			const template = bundledById.get(id);
-			return template ? [{ id: item.id, input: template.cost.input, output: template.cost.output }] : [];
+			const cost = template ? getModelCostRates(template.cost) : undefined;
+			return cost ? [{ id: item.id, input: cost.input, output: cost.output }] : [];
 		});
 		return (
 			buildPrimeInferenceModels(bundledPrivateModels, privateEntries, {

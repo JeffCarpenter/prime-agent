@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
 	type Api,
+	getModelCostRates,
 	getPrimeInferenceReasoningControls,
 	isPrivatePrimeInferenceModelId,
 	type Model,
@@ -31,9 +32,10 @@ const DEFAULT_COMPAT: OpenAICompletionsCompat = {
 
 function cacheCosts(entry: PrimeInferenceCatalogEntry, template?: Model<"openai-completions">) {
 	const anthropic = entry.id.toLowerCase().startsWith("anthropic/");
+	const templateCost = template ? getModelCostRates(template.cost) : undefined;
 	return {
-		cacheRead: entry.cacheRead ?? template?.cost.cacheRead ?? (anthropic ? entry.input * 0.1 : 0),
-		cacheWrite: entry.cacheWrite ?? template?.cost.cacheWrite ?? (anthropic ? entry.input * 1.25 : 0),
+		cacheRead: entry.cacheRead ?? templateCost?.cacheRead ?? (anthropic ? entry.input * 0.1 : 0),
+		cacheWrite: entry.cacheWrite ?? templateCost?.cacheWrite ?? (anthropic ? entry.input * 1.25 : 0),
 	};
 }
 

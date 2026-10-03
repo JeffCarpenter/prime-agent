@@ -22,6 +22,7 @@ import type {
 	Context,
 	ImageContent,
 	Model,
+	ModelCost,
 	OAuthCredentials,
 	OAuthLoginCallbacks,
 	SimpleStreamOptions,
@@ -1267,7 +1268,7 @@ export interface ProviderModelConfig {
 	/** Supported input types. */
 	input: ("text" | "image")[];
 	/** Cost per token (for tracking, can be 0). */
-	cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	cost: ModelCost;
 	/** Maximum context window size in tokens. */
 	contextWindow: number;
 	/** Maximum output tokens. */

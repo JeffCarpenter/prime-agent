@@ -1,0 +1,3 @@
+- Added authenticated live-only OpenAI Codex models to `/model` and executable-model discovery before shared-catalog publication, preserving catalog entries and cached metadata on failures.
+- Added unknown-price handling for live-only Codex models: an inline picker notice, `price unknown` session usage cells, and unknown context-tree cost totals instead of `$0`.
+- Changed session files to format v4 with tagged known/unknown per-message costs, migrating v3 numeric costs on open.

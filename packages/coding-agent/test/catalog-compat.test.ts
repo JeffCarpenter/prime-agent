@@ -1,7 +1,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Api, createModelCatalog, getModels, type Model, parseModelCatalog } from "@earendil-works/pi-ai";
+import {
+	type Api,
+	createModelCatalog,
+	getModelCostRates,
+	getModels,
+	type Model,
+	parseModelCatalog,
+} from "@earendil-works/pi-ai";
 import { parseMcpServiceCatalogFile } from "@earendil-works/pi-ai/mcp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.js";
@@ -74,7 +81,10 @@ function primeInferenceCatalogPayload(): unknown {
 	return {
 		data: getModels("prime-inference").map((model) => ({
 			id: model.id,
-			pricing: { input_usd_per_mtok: model.cost.input, output_usd_per_mtok: model.cost.output },
+			pricing: {
+				input_usd_per_mtok: getModelCostRates(model.cost)?.input ?? 0,
+				output_usd_per_mtok: getModelCostRates(model.cost)?.output ?? 0,
+			},
 			specs: {
 				context_window: model.contextWindow,
 				max_output_tokens: model.maxTokens,

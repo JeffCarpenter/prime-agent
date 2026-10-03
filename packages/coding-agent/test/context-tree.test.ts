@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Usage } from "@earendil-works/pi-ai";
+import { type AssistantMessage, getUsageCostAmounts, type Usage } from "@earendil-works/pi-ai";
 import stripAnsi from "strip-ansi";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.js";
@@ -130,10 +130,10 @@ describe("loadContextTreeChildrenFromDisk", () => {
 		expect(childNode.model).toEqual({ provider: model.provider, id: model.id });
 		// Aggregate includes the grandchild; own does not.
 		expect(childNode.totalUsage.input).toBe(1400);
-		expect(childNode.totalUsage.cost.total).toBeCloseTo(0.14);
+		expect(getUsageCostAmounts(childNode.totalUsage.cost)?.total).toBeCloseTo(0.14);
 		expect(childNode.ownUsage.input).toBe(1000);
 		expect(childNode.ownUsage.output).toBe(200);
-		expect(childNode.ownUsage.cost.total).toBeCloseTo(0.1);
+		expect(getUsageCostAmounts(childNode.ownUsage.cost)?.total).toBeCloseTo(0.1);
 
 		expect(childNode.children).toHaveLength(1);
 		const grandchildNode = childNode.children[0];
@@ -460,9 +460,9 @@ describe("AgentSession.getContextTree", () => {
 		expect(tree.status).toBe("active");
 		expect(tree.model).toEqual({ provider: model.provider, id: model.id });
 		expect(tree.totalUsage.input).toBe(3500);
-		expect(tree.totalUsage.cost.total).toBeCloseTo(0.35);
+		expect(getUsageCostAmounts(tree.totalUsage.cost)?.total).toBeCloseTo(0.35);
 		expect(tree.ownUsage.input).toBe(3000);
-		expect(tree.ownUsage.cost.total).toBeCloseTo(0.3);
+		expect(getUsageCostAmounts(tree.ownUsage.cost)?.total).toBeCloseTo(0.3);
 		// In-memory session, no rlm dir: completed children cannot be discovered.
 		expect(tree.children).toEqual([]);
 	});
@@ -481,7 +481,7 @@ describe("AgentSession.getContextTree", () => {
 
 		const tree = session.getContextTree();
 		expect(tree.totalUsage.input).toBe(5200);
-		expect(tree.totalUsage.cost.total).toBeCloseTo(0.52);
+		expect(getUsageCostAmounts(tree.totalUsage.cost)?.total).toBeCloseTo(0.52);
 		expect(tree.ownUsage.input).toBe(5200);
 	});
 
@@ -570,6 +570,27 @@ describe("formatContextTree", () => {
 		});
 		const output = stripAnsi(formatContextTree(root, 100));
 		expect(output).toContain("Current: unknown after compaction");
+	});
+
+	it("shows unknown cost instead of a dollar amount when usage is unpriced", () => {
+		const unpriced: Usage = {
+			...emptyUsage(),
+			input: 1000,
+			output: 200,
+			totalTokens: 1200,
+			cost: {
+				status: "unknown",
+				pricedSubtotal: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				unknownContributors: 1,
+			},
+		};
+		const root = node({ ownUsage: unpriced, totalUsage: unpriced });
+
+		const output = stripAnsi(formatContextTree(root, 100));
+
+		expect(output).toContain("unknown");
+		expect(output).not.toContain("$0.00");
+		expect(output).not.toContain("$0.0000");
 	});
 
 	it("renders a lone root without tree glyphs or agent count", () => {

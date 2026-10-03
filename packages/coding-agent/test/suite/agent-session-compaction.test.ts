@@ -6,6 +6,7 @@ import {
 	type AssistantMessage,
 	fauxAssistantMessage,
 	fauxToolCall,
+	getUsageCostAmounts,
 	type Model,
 	type ToolResultMessage,
 	type Usage,
@@ -305,7 +306,9 @@ describe("AgentSession compaction", () => {
 			compactionUsage.input + compactionUsage.cacheRead + compactionUsage.cacheWrite,
 		);
 		expect((ownUsage?.outputTokens ?? 0) - (usageBeforeCompaction?.outputTokens ?? 0)).toBe(compactionUsage.output);
-		expect((ownUsage?.cost ?? 0) - (usageBeforeCompaction?.cost ?? 0)).toBeCloseTo(compactionUsage.cost.total);
+		expect((ownUsage?.cost ?? 0) - (usageBeforeCompaction?.cost ?? 0)).toBeCloseTo(
+			getUsageCostAmounts(compactionUsage.cost)?.total ?? Number.NaN,
+		);
 		expect(harness.session.messages[0]).toMatchObject({
 			role: "compactionSummary",
 			summary: expect.stringContaining("model-generated summary"),

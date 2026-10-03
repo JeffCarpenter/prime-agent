@@ -8,6 +8,7 @@ import {
 	type Context,
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
+	getUsageCostAmounts,
 	type TextContent,
 	type Usage,
 } from "@earendil-works/pi-ai";
@@ -1678,7 +1679,7 @@ describe("AgentSession rlm recursion", () => {
 		expect(after.tokens.input).toBeGreaterThanOrEqual(before.tokens.input + 7);
 		expect(after.tokens.output).toBeGreaterThanOrEqual(before.tokens.output + 3);
 		expect(after.tokens.total).toBeGreaterThanOrEqual(before.tokens.total + 10);
-		expect(after.cost).toBeGreaterThanOrEqual(before.cost + 10);
+		expect(after.cost).toBeGreaterThanOrEqual((before.cost ?? 0) + 10);
 		expect(parentAssistant.usage.totalTokens).toBe(0);
 
 		const parentEntry = root.sessionManager
@@ -1689,7 +1690,7 @@ describe("AgentSession rlm recursion", () => {
 		}
 		expect(parentEntry.message.usage.input).toBe(7);
 		expect(parentEntry.message.usage.output).toBe(3);
-		expect(parentEntry.message.usage.cost.total).toBe(10);
+		expect(getUsageCostAmounts(parentEntry.message.usage.cost)?.total).toBe(10);
 
 		const sessionFile = root.sessionManager.getSessionFile();
 		if (!sessionFile) throw new Error("parent session file was not created");
@@ -1699,7 +1700,7 @@ describe("AgentSession rlm recursion", () => {
 		if (!attribution || attribution.type !== "child_usage_attributed") throw new Error("missing attribution");
 		expect(attribution.childUsage.input).toBe(7);
 		expect(attribution.childUsage.output).toBe(3);
-		expect(attribution.aggregateUsage.cost.total).toBe(10);
+		expect(getUsageCostAmounts(attribution.aggregateUsage.cost)?.total).toBe(10);
 	});
 
 	it("coalesces the admitted task's tool-loop turns into one flushed spawn-usage attribution", async () => {

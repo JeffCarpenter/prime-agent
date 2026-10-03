@@ -6,6 +6,7 @@ import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core"
 import {
 	type Api,
 	type AssistantMessage,
+	getUsageCostAmounts,
 	type ImageContent,
 	type Message,
 	type Model,
@@ -1908,10 +1909,8 @@ export class InteractiveMode {
 		void (async () => {
 			try {
 				const tree = await connection.getContextTree();
-				const total = tree?.totalUsage?.cost?.total;
+				const total = tree?.totalUsage ? getUsageCostAmounts(tree.totalUsage.cost)?.total : undefined;
 				if (
-					typeof total !== "number" ||
-					!Number.isFinite(total) ||
 					generation < refresh.lastSuccessGeneration ||
 					this.agentConnection !== connection ||
 					this.connectionState?.sessionId !== sessionId
@@ -1919,7 +1918,8 @@ export class InteractiveMode {
 					return;
 				}
 				refresh.lastSuccessGeneration = generation;
-				this.topBarCost = { sessionId, total };
+				this.topBarCost =
+					typeof total === "number" && Number.isFinite(total) ? { sessionId, total } : { sessionId };
 				this.ui.requestRender();
 			} catch {
 				// Cost is cosmetic; a failed fetch keeps the previous value

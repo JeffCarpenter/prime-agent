@@ -9,6 +9,7 @@ import {
 	type Api,
 	type AssistantMessageEventStream,
 	type Context,
+	getModelCostRates,
 	getModels,
 	getProviders,
 	type KnownProvider,
@@ -348,12 +349,19 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 	if (override.maxTokens !== undefined) result.maxTokens = override.maxTokens;
 
 	if (override.cost) {
-		result.cost = {
-			input: override.cost.input ?? model.cost.input,
-			output: override.cost.output ?? model.cost.output,
-			cacheRead: override.cost.cacheRead ?? model.cost.cacheRead,
-			cacheWrite: override.cost.cacheWrite ?? model.cost.cacheWrite,
+		const rates = getModelCostRates(model.cost);
+		const mergedRates = {
+			input: override.cost.input ?? rates?.input,
+			output: override.cost.output ?? rates?.output,
+			cacheRead: override.cost.cacheRead ?? rates?.cacheRead,
+			cacheWrite: override.cost.cacheWrite ?? rates?.cacheWrite,
 		};
+		if (Object.values(mergedRates).every((value) => value !== undefined)) {
+			result.cost = {
+				status: "known",
+				rates: mergedRates as { input: number; output: number; cacheRead: number; cacheWrite: number },
+			};
+		}
 	}
 
 	result.compat = mergeCompat(model.compat, override.compat);
@@ -373,25 +381,7 @@ function readOpenAICodexAccountId(token: string): string | undefined {
 	}
 }
 
-/**
- * The Codex backend gates its model catalog on the reported client version: it answers HTTP 200 with a
- * catalog that grows as the version rises, so a low version yields a silently empty or partial list rather
- * than an error. Prime Agent's own package version is far below the Codex CLI's version line, so it must
- * report a supported Codex client version here instead.
- *
- * Shipping a new Codex model takes two edits, and both are required:
- * 1. Add the model to `codexModels` in `packages/ai/scripts/generate-models.ts` and regenerate. That list is
- *    explicit, not fetched, so an unlisted model does not exist for Prime Agent at all.
- * 2. Raise this constant to a Codex CLI release whose catalog includes that model. `getExecutableModels()`
- *    below intersects the registry with the discovered catalog, so a listed model the catalog omits is
- *    dropped.
- *
- * Skipping step 2 fails silently and asymmetrically: `rlm` subagent delegation and `find_models()` resolve
- * through `getExecutableModels()` and lose the model, while `/model` reads the unfiltered `getAvailable()`
- * and keeps offering it.
- *
- * Catalog behaviour measured 2026-08-13; see #702.
- */
+/** Codex gates discovery by CLI version, not the Prime Agent package version (#702). */
 const OPENAI_CODEX_CLIENT_VERSION = "0.153.4";
 
 function openAICodexModelsUrl(baseUrl: string): string {
@@ -461,6 +451,8 @@ export class ModelRegistry {
 	private authorizedPrivatePrimeInferenceModels: Model<"openai-completions">[] = [];
 	private authorizedPrivatePrimeInferenceTeamId: string | undefined;
 	private explicitPrivatePrimeInferenceModelIds = new Set<string>();
+	private liveOpenAICodexModels: Model<Api>[] = [];
+	private executableOpenAICodexModelIds = new Set<string>();
 	private openAICodexModelsCache: { authFingerprint: string; modelIds: Set<string>; refreshedAt: number } | undefined;
 	private backgroundPrivatePrimeAuthorization: { fingerprint: string; promise: Promise<void> } | undefined;
 	private livePrimeInferenceModels: Model<"openai-completions">[] | undefined;
@@ -491,8 +483,11 @@ export class ModelRegistry {
 		const reference = new WeakRef(this);
 		const unsubscribe = authStorage.onChange(() => {
 			const registry = reference.deref();
-			if (registry) void registry.scheduleCatalogRefresh().catch(() => {});
-			else unsubscribe();
+			if (registry) {
+				registry.liveOpenAICodexModels = [];
+				registry.executableOpenAICodexModelIds = new Set();
+				void registry.scheduleCatalogRefresh().catch(() => {});
+			} else unsubscribe();
 		});
 	}
 
@@ -512,6 +507,8 @@ export class ModelRegistry {
 	 * Reload models from disk (built-in + custom from models.json).
 	 */
 	refresh(): void {
+		this.liveOpenAICodexModels = [];
+		this.executableOpenAICodexModelIds = new Set();
 		this.providerRequestConfigs.clear();
 		this.modelRequestHeaders.clear();
 		this.lastProviderAuthSourceTokens.clear();
@@ -829,7 +826,12 @@ export class ModelRegistry {
 	 * If models.json had errors, returns only built-in models.
 	 */
 	getAll(): Model<Api>[] {
-		return this.models.map((model) => this.getModelForCurrentAuth(model));
+		const catalogIds = new Set(
+			this.models.filter((model) => model.provider === "openai-codex").map((model) => model.id),
+		);
+		return [...this.models, ...this.liveOpenAICodexModels.filter((model) => !catalogIds.has(model.id))].map((model) =>
+			this.getModelForCurrentAuth(model),
+		);
 	}
 
 	getModelForCurrentAuth(model: Model<Api>): Model<Api> {
@@ -912,6 +914,7 @@ export class ModelRegistry {
 			);
 			this.pendingProviderCatalogRefresh = this.refreshProviderCatalog(false).catch(() => undefined);
 			void this.pendingProviderCatalogRefresh;
+			await this.refreshOpenAICodexModels();
 			return this.getAvailable();
 		});
 	}
@@ -1165,22 +1168,28 @@ export class ModelRegistry {
 	private writePrivatePrimeAuthorizationCache(cache: PrivatePrimeAuthorizationCache): void {
 		const cachePath = this.privatePrimeAuthorizationCachePath();
 		if (!cachePath) return;
-		const data = cache.models.map((model) => ({
-			id: model.id,
-			display_name: model.name,
-			pricing: {
-				input_usd_per_mtok: model.cost.input,
-				output_usd_per_mtok: model.cost.output,
-				cache_read_usd_per_mtok: model.cost.cacheRead,
-				cache_write_usd_per_mtok: model.cost.cacheWrite,
-			},
-			specs: {
-				context_window: model.contextWindow,
-				max_output_tokens: model.maxTokens,
-				modalities: { input: model.input, output: ["text"] },
-				supports_reasoning: model.reasoning,
-			},
-		}));
+		const data = cache.models.flatMap((model) => {
+			const cost = getModelCostRates(model.cost);
+			if (!cost) return [];
+			return [
+				{
+					id: model.id,
+					display_name: model.name,
+					pricing: {
+						input_usd_per_mtok: cost.input,
+						output_usd_per_mtok: cost.output,
+						cache_read_usd_per_mtok: cost.cacheRead,
+						cache_write_usd_per_mtok: cost.cacheWrite,
+					},
+					specs: {
+						context_window: model.contextWindow,
+						max_output_tokens: model.maxTokens,
+						modalities: { input: model.input, output: ["text"] },
+						supports_reasoning: model.reasoning,
+					},
+				},
+			];
+		});
 		try {
 			writeFileAtomicSync(
 				cachePath,
@@ -1239,59 +1248,74 @@ export class ModelRegistry {
 		// refresh as the picker, even when no picker has opened in this session.
 		await this.refreshAvailableModels();
 		await this.waitForPendingModelRefreshes(5_000);
-		const availableModels = this.getAvailable();
-		const codexModels = availableModels.filter((model) => model.provider === "openai-codex");
-		if (codexModels.length === 0) {
-			return availableModels;
-		}
+		return this.getAvailable().filter(
+			(model) => model.provider !== "openai-codex" || this.executableOpenAICodexModelIds.has(model.id),
+		);
+	}
 
-		const auth = await this.getApiKeyAndHeaders(codexModels[0]!);
-		if (!auth.ok || !auth.apiKey) {
-			return availableModels.filter((model) => model.provider !== "openai-codex");
-		}
-		const authFingerprint = createHmac("sha256", auth.apiKey)
-			.update("prime-agent:openai-codex-models:v1")
-			.digest("hex");
-		const cached = this.openAICodexModelsCache;
-		if (cached?.authFingerprint === authFingerprint && Date.now() - cached.refreshedAt < 300_000) {
-			return availableModels.filter((model) => model.provider !== "openai-codex" || cached.modelIds.has(model.id));
-		}
-
+	private async refreshOpenAICodexModels(): Promise<void> {
+		// A partial public catalog may omit every Codex entry. Bundled/compiled
+		// definitions supply only the discovery transport, not displayed models.
+		const seed =
+			this.models.find((model) => model.provider === "openai-codex") ??
+			this.bundledCatalogModels.find((model) => model.provider === "openai-codex") ??
+			getModels("openai-codex")[0];
+		if (!seed || !this.hasConfiguredAuth(seed)) return;
+		const auth = await this.getApiKeyAndHeaders(seed);
+		if (!auth.ok || !auth.apiKey) return;
 		const accountId = readOpenAICodexAccountId(auth.apiKey);
-		if (!accountId) {
-			return availableModels.filter((model) => model.provider !== "openai-codex");
-		}
-		try {
-			const response = await fetch(openAICodexModelsUrl(codexModels[0]!.baseUrl), {
-				headers: {
-					...auth.headers,
-					Authorization: `Bearer ${auth.apiKey}`,
-					"chatgpt-account-id": accountId,
-					originator: "pi",
-				},
-				signal: AbortSignal.timeout(5_000),
-			});
-			if (!response.ok) {
-				throw new Error(`OpenAI Codex model discovery failed with HTTP ${response.status}`);
+		if (!accountId) return;
+		const url = openAICodexModelsUrl(seed.baseUrl);
+		const authFingerprint = createHmac("sha256", auth.apiKey).update(url).digest("hex");
+		const cached = this.openAICodexModelsCache;
+		let modelIds = cached?.authFingerprint === authFingerprint ? cached.modelIds : undefined;
+		if (!isOfflineModeEnabled() && (!modelIds || Date.now() - cached!.refreshedAt >= 300_000)) {
+			try {
+				const response = await fetch(url, {
+					headers: {
+						...auth.headers,
+						Authorization: `Bearer ${auth.apiKey}`,
+						"chatgpt-account-id": accountId,
+						originator: "pi",
+					},
+					signal: AbortSignal.timeout(5_000),
+				});
+				if (!response.ok) throw new Error(`OpenAI Codex discovery HTTP ${response.status}`);
+				modelIds = readOpenAICodexModelIds(await response.json());
+			} catch {
+				// Keep only this credential/endpoint's last successful metadata when offline.
 			}
-			const modelIds = readOpenAICodexModelIds(await response.json());
-			this.openAICodexModelsCache = { authFingerprint, modelIds, refreshedAt: Date.now() };
-			return availableModels.filter((model) => model.provider !== "openai-codex" || modelIds.has(model.id));
-		} catch {
-			if (cached?.authFingerprint === authFingerprint && Date.now() - cached.refreshedAt < 300_000) {
-				return availableModels.filter(
-					(model) => model.provider !== "openai-codex" || cached.modelIds.has(model.id),
-				);
-			}
-			return availableModels.filter((model) => model.provider !== "openai-codex");
 		}
+		const currentAuth = await this.getApiKeyAndHeaders(seed);
+		if (!currentAuth.ok || currentAuth.apiKey !== auth.apiKey || !modelIds) return;
+		this.openAICodexModelsCache = {
+			authFingerprint,
+			modelIds,
+			refreshedAt: modelIds === cached?.modelIds ? cached.refreshedAt : Date.now(),
+		};
+		this.executableOpenAICodexModelIds = modelIds;
+		this.liveOpenAICodexModels = [...modelIds].map(
+			(id): Model<Api> => ({
+				id,
+				name: id,
+				provider: "openai-codex",
+				api: "openai-codex-responses",
+				baseUrl: seed.baseUrl,
+				// Existing custom-model client defaults, not capabilities reported by Codex.
+				reasoning: false,
+				input: ["text"],
+				contextWindow: 128000,
+				maxTokens: 16384,
+				cost: { status: "unknown" },
+			}),
+		);
 	}
 
 	/**
 	 * Find a model by provider and ID.
 	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
-		const model = this.models.find((m) => m.provider === provider && m.id === modelId);
+		const model = this.getAll().find((m) => m.provider === provider && m.id === modelId);
 		return model ? this.getModelForCurrentAuth(model) : undefined;
 	}
 
@@ -1906,7 +1930,7 @@ export interface ProviderConfigInput {
 		reasoning: boolean;
 		thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
 		input: ("text" | "image")[];
-		cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+		cost: Model<Api>["cost"];
 		contextWindow: number;
 		maxTokens: number;
 		headers?: Record<string, string>;

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, getUsageCostAmounts, registerFauxProvider } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession } from "../../src/core/agent-session.js";
 import type { AgentSessionRuntimeConfig } from "../../src/core/agent-session-config.js";
@@ -589,7 +589,7 @@ describe("AgentSessionRuntime characterization", () => {
 		if (sessionAssistant?.role !== "assistant") {
 			throw new Error("missing assistant message");
 		}
-		expect(sessionAssistant.usage.cost.total).toBe(0.123);
+		expect(getUsageCostAmounts(sessionAssistant.usage.cost)?.total).toBe(0.123);
 
 		const persistedAssistant = runtime.session.sessionManager
 			.getEntries()
@@ -600,7 +600,7 @@ describe("AgentSessionRuntime characterization", () => {
 		if (persistedAssistant?.role !== "assistant") {
 			throw new Error("missing persisted assistant message");
 		}
-		expect(persistedAssistant.usage.cost.total).toBe(0.123);
+		expect(getUsageCostAmounts(persistedAssistant.usage.cost)?.total).toBe(0.123);
 	});
 
 	it("emits session_before_switch and session_start for new and resume flows", async () => {
@@ -857,11 +857,11 @@ describe("AgentSessionRuntime characterization", () => {
 	it("updates the runtime session cwd on cross-cwd session replacement", async () => {
 		const firstDir = join(tmpdir(), `pi-runtime-cwd-a-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		const secondDir = join(tmpdir(), `pi-runtime-cwd-b-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		mkdirSync(firstDir, { recursive: true });
-		mkdirSync(secondDir, { recursive: true });
+		cleanups.push(() => rmSync(secondDir, { recursive: true, force: true }));
 		const { runtime, faux, tempDir } = await createRuntimeForTest(() => {}, { cwd: firstDir });
 		const otherAuthStorage = AuthStorage.inMemory();
 		otherAuthStorage.setRuntimeApiKey(faux.getModel().provider, "faux-key");
+		SettingsManager.create(secondDir, tempDir).setDefaultModelAndProvider(faux.getModel().provider, "faux-2");
 		const otherRuntimeOptions = {
 			agentDir: tempDir,
 			authStorage: otherAuthStorage,
@@ -904,6 +904,7 @@ describe("AgentSessionRuntime characterization", () => {
 					services,
 					sessionManager,
 					sessionStartEvent,
+					model: faux.getModel(),
 				})),
 				services,
 				diagnostics: services.diagnostics,
@@ -917,12 +918,11 @@ describe("AgentSessionRuntime characterization", () => {
 		cleanups.push(async () => {
 			await otherRuntime.dispose();
 		});
+		expect(otherRuntime.session.model?.id).toBe(faux.getModel().id);
 		await otherRuntime.session.prompt("other");
 		const otherSessionFile = otherRuntime.session.sessionFile!;
 		await otherRuntime.dispose();
-
 		await runtime.switchSession(otherSessionFile);
-
 		expect(realpathSync(runtime.session.sessionManager.getCwd())).toBe(realpathSync(secondDir));
 		expect(realpathSync(runtime.cwd)).toBe(realpathSync(secondDir));
 	});

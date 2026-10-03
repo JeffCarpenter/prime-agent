@@ -31,6 +31,7 @@ import {
 	clampThinkingLevel,
 	cleanupSessionResources,
 	getSupportedThinkingLevels,
+	getUsageCostAmounts,
 	isContextOverflow,
 	modelsAreEqual,
 	resetApiProviders,
@@ -14975,6 +14976,7 @@ export class AgentSession {
 		let totalCacheRead = 0;
 		let totalCacheWrite = 0;
 		let totalCost = 0;
+		let costUnknown = false;
 
 		for (const message of state.messages) {
 			if (message.role === "assistant") {
@@ -14984,7 +14986,9 @@ export class AgentSession {
 				totalOutput += assistantMsg.usage.output;
 				totalCacheRead += assistantMsg.usage.cacheRead;
 				totalCacheWrite += assistantMsg.usage.cacheWrite;
-				totalCost += assistantMsg.usage.cost.total;
+				const cost = getUsageCostAmounts(assistantMsg.usage.cost);
+				if (cost) totalCost += cost.total;
+				else costUnknown = true;
 			}
 		}
 
@@ -15003,7 +15007,7 @@ export class AgentSession {
 				cacheWrite: totalCacheWrite,
 				total: totalInput + totalOutput + totalCacheRead + totalCacheWrite,
 			},
-			cost: totalCost,
+			...(costUnknown ? { costUnknown: true as const } : { cost: totalCost }),
 			contextUsage: this.getContextUsage(),
 		};
 	}

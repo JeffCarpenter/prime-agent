@@ -1,5 +1,6 @@
 import {
 	clampThinkingLevel,
+	getModelCostRates,
 	getSupportedThinkingLevels,
 	type Model,
 	type ModelThinkingLevel,
@@ -863,6 +864,12 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	}
 
 	private renderInlineModelDetails(item: ModelItem, width: number): string[] {
+		const cost = getModelCostRates(item.model.cost);
+		if (!cost) {
+			return ["", theme.fg("muted", "Price unknown"), ...Array.from({ length: width >= 58 ? 2 : 3 }, () => "")].map(
+				(line) => truncateToWidth(` ${line}`, width, "…", true),
+			);
+		}
 		const price = (value: number | undefined) => {
 			if (value === undefined || !Number.isFinite(value) || value < 0) return "—";
 			if (value === 0) return "$0";
@@ -870,9 +877,9 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			return rounded === 0 ? "<0.001" : `$${rounded}`;
 		};
 		const entries = [
-			["Input", price(item.model.cost?.input)],
-			["Cached input", price(item.model.cost?.cacheRead)],
-			["Output", price(item.model.cost?.output)],
+			["Input", price(cost.input)],
+			["Cached input", price(cost.cacheRead)],
+			["Output", price(cost.output)],
 		];
 		const unit = theme.fg("muted", PRICE_UNIT_TEXT);
 		const lines = [""];
