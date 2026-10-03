@@ -21,7 +21,7 @@
 		"check:browser-smoke": "node scripts/check-browser-smoke.mjs",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
-		"test": "pnpm run test --workspaces --if-present",
+		"test": "pnpm --recursive --filter '!prime-agent' run test",
 		"version:patch": "pnpm version patch -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install",
 		"version:minor": "pnpm version minor -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install",
 		"version:major": "pnpm version major -ws --no-git-tag-version && node scripts/sync-versions.js && shx rm -rf node_modules packages/*/node_modules package-lock.json && pnpm install",
