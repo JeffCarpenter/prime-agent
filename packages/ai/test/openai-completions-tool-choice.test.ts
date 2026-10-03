@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getModel, getSupportedThinkingLevels } from "../src/models.js";
+import { getModel, getSupportedThinkingLevels, getUsageCostAmounts } from "../src/models.js";
 import { getOpenRouterReasoningCapabilities } from "../src/openrouter-reasoning.js";
 import { CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL } from "../src/providers/cloudflare.js";
 import { convertMessages } from "../src/providers/openai-completions.js";
@@ -1648,7 +1648,18 @@ describe("openai-completions service tier", () => {
 			{ apiKey: "test", serviceTier: requestedTier },
 		).result();
 
-		expect(response.usage.cost.total).toBeCloseTo(expectedTotal, 10);
+		expect(getUsageCostAmounts(response.usage.cost)?.total).toBeCloseTo(expectedTotal, 10);
+		const unknownResponse = await streamSimple(
+			{ ...serviceTierModel(provider), cost: { status: "unknown" } },
+			{ messages: [{ role: "user", content: "Hi", timestamp: 1 }] },
+			{ apiKey: "test", serviceTier: requestedTier },
+		).result();
+		expect(unknownResponse.stopReason).toBe("stop");
+		if (reported && reported.cost > 0) {
+			expect(getUsageCostAmounts(unknownResponse.usage.cost)?.total).toBeCloseTo(expectedTotal, 10);
+		} else {
+			expect(unknownResponse.usage.cost).toMatchObject({ status: "unknown", unknownContributors: 1 });
+		}
 	});
 });
 

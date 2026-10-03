@@ -186,19 +186,31 @@ export interface ToolCall {
 	thoughtSignature?: string; // Google-specific: opaque signature for reusing thought context
 }
 
+export interface CostRates {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
+
+export interface CostAmounts extends CostRates {
+	total: number;
+}
+
+export type ModelCost = { status: "known"; rates: CostRates } | { status: "unknown" } | CostRates;
+
+export type UsageCost =
+	| { status: "known"; amounts: CostAmounts }
+	| { status: "unknown"; pricedSubtotal: CostAmounts; unknownContributors: number }
+	| CostAmounts;
+
 export interface Usage {
 	input: number;
 	output: number;
 	cacheRead: number;
 	cacheWrite: number;
 	totalTokens: number;
-	cost: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		total: number;
-	};
+	cost: UsageCost;
 }
 
 export type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
@@ -437,12 +449,7 @@ export interface Model<TApi extends Api> {
 	 */
 	thinkingLevelMap?: ThinkingLevelMap;
 	input: ("text" | "image")[];
-	cost: {
-		input: number; // $/million tokens
-		output: number; // $/million tokens
-		cacheRead: number; // $/million tokens
-		cacheWrite: number; // $/million tokens
-	};
+	cost: ModelCost;
 	contextWindow: number;
 	maxTokens: number;
 	/** Flagship model surfaced above non-featured models of the same provider in pickers. */

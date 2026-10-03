@@ -1,3 +1,4 @@
+import { getUsageCostAmounts } from "../models.js";
 import type { ServiceTier, Usage } from "../types.js";
 
 /**
@@ -21,10 +22,15 @@ function getServiceTierCostMultiplier(modelId: string, serviceTier: ServiceTier 
 export function applyServiceTierPricing(usage: Usage, serviceTier: ServiceTier | undefined, modelId: string): void {
 	const multiplier = getServiceTierCostMultiplier(modelId, serviceTier);
 	if (multiplier === 1) return;
-
-	usage.cost.input *= multiplier;
-	usage.cost.output *= multiplier;
-	usage.cost.cacheRead *= multiplier;
-	usage.cost.cacheWrite *= multiplier;
-	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
+	const knownCost = getUsageCostAmounts(usage.cost);
+	if (!knownCost) return;
+	const amounts = {
+		input: knownCost.input * multiplier,
+		output: knownCost.output * multiplier,
+		cacheRead: knownCost.cacheRead * multiplier,
+		cacheWrite: knownCost.cacheWrite * multiplier,
+		total: 0,
+	};
+	amounts.total = amounts.input + amounts.output + amounts.cacheRead + amounts.cacheWrite;
+	usage.cost = { status: "known", amounts };
 }

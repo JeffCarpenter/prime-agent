@@ -26,6 +26,17 @@ const ThinkingLevelMapSchema = strictObject({
 	max: Type.Optional(ThinkingLevelValueSchema),
 });
 const CostSchema = Type.Number({ minimum: 0, maximum: 1_000_000 });
+const CostRatesSchema = strictObject({
+	input: CostSchema,
+	output: CostSchema,
+	cacheRead: CostSchema,
+	cacheWrite: CostSchema,
+});
+const ModelCostSchema = Type.Union([
+	CostRatesSchema,
+	strictObject({ status: Type.Literal("known"), rates: CostRatesSchema }),
+	strictObject({ status: Type.Literal("unknown") }),
+]);
 const CatalogModelSchema = strictObject({
 	id: Type.String({ minLength: 1, maxLength: 1_024, pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f]+$" }),
 	name: Type.String({ minLength: 1, maxLength: 1_024, pattern: "^[^\\u0000-\\u001f\\u007f-\\u009f]+$" }),
@@ -35,12 +46,7 @@ const CatalogModelSchema = strictObject({
 	reasoning: Type.Boolean(),
 	thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
 	input: Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]), { minItems: 1, maxItems: 2 }),
-	cost: Type.Object({
-		input: CostSchema,
-		output: CostSchema,
-		cacheRead: CostSchema,
-		cacheWrite: CostSchema,
-	}),
+	cost: ModelCostSchema,
 	contextWindow: Type.Integer({ minimum: 1, maximum: 100_000_000 }),
 	maxTokens: Type.Integer({ minimum: 1, maximum: 100_000_000 }),
 	featured: Type.Optional(Type.Boolean()),

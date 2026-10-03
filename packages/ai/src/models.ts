@@ -1,5 +1,14 @@
 import { MODELS } from "./models.generated.js";
-import type { Api, KnownProvider, Model, ModelThinkingLevel, ServiceTier, Usage } from "./types.js";
+import type {
+	Api,
+	CostAmounts,
+	CostRates,
+	KnownProvider,
+	Model,
+	ModelThinkingLevel,
+	ServiceTier,
+	Usage,
+} from "./types.js";
 
 const modelRegistry: Map<string, Map<string, Model<Api>>> = new Map();
 
@@ -93,16 +102,39 @@ export interface CostOverrides {
 	cacheWrite?: number;
 }
 
+export function getModelCostRates(cost: Model<Api>["cost"]): CostRates | undefined {
+	if ("status" in cost) return cost.status === "known" ? cost.rates : undefined;
+	return cost;
+}
+
+export function getUsageCostAmounts(cost: Usage["cost"]): CostAmounts | undefined {
+	if ("status" in cost) return cost.status === "known" ? cost.amounts : undefined;
+	return cost;
+}
+
 export function calculateCost<TApi extends Api>(
 	model: Model<TApi>,
 	usage: Usage,
 	overrides?: CostOverrides,
 ): Usage["cost"] {
-	usage.cost.input = (model.cost.input / 1000000) * usage.input;
-	usage.cost.output = (model.cost.output / 1000000) * usage.output;
-	usage.cost.cacheRead = (model.cost.cacheRead / 1000000) * usage.cacheRead;
-	usage.cost.cacheWrite = ((overrides?.cacheWrite ?? model.cost.cacheWrite) / 1000000) * usage.cacheWrite;
-	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
+	if ("status" in model.cost && model.cost.status === "unknown") {
+		usage.cost = {
+			status: "unknown",
+			pricedSubtotal: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			unknownContributors: 1,
+		};
+		return usage.cost;
+	}
+	const rates = "status" in model.cost ? model.cost.rates : model.cost;
+	const amounts = {
+		input: (rates.input / 1000000) * usage.input,
+		output: (rates.output / 1000000) * usage.output,
+		cacheRead: (rates.cacheRead / 1000000) * usage.cacheRead,
+		cacheWrite: ((overrides?.cacheWrite ?? rates.cacheWrite) / 1000000) * usage.cacheWrite,
+		total: 0,
+	};
+	amounts.total = amounts.input + amounts.output + amounts.cacheRead + amounts.cacheWrite;
+	usage.cost = { status: "known", amounts };
 	return usage.cost;
 }
 

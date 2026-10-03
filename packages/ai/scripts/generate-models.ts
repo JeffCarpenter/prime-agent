@@ -16,11 +16,23 @@ import {
 import type {
 	AnthropicMessagesCompat,
 	Api,
+	CostRates,
 	KnownProvider,
 	Model,
 	OpenAICompletionsCompat,
 } from "../src/types.js";
 
+
+function modelCostRates(model: Model<Api>): CostRates | undefined {
+	if ("status" in model.cost) return model.cost.status === "known" ? model.cost.rates : undefined;
+	return model.cost;
+}
+
+function mutableModelCostRates(model: Model<Api>): CostRates {
+	const rates = modelCostRates(model);
+	if (!rates) throw new Error(`Cannot apply catalog pricing override to unknown-priced model ${model.provider}/${model.id}`);
+	return rates;
+}
 
 interface ModelsDevModel {
 	id: string;
@@ -389,6 +401,11 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 			const outputCost = peakPrice("completion");
 			const cacheReadCost = peakPrice("input_cache_read");
 			const cacheWriteCost = peakPrice("input_cache_write");
+			const unknownPrice = [model.pricing, ...timeWindowedTariffs].some((pricing) =>
+				["prompt", "completion", "input_cache_read", "input_cache_write"].some(
+					(field) => Number(pricing?.[field]) < 0,
+				),
+			);
 			const reasoningCapabilities = getOpenRouterReasoningCapabilities(model);
 
 			const normalizedModel: Model<any> = {
@@ -405,12 +422,9 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 					? { compat: { supportsReasoningEffort: false } }
 					: {}),
 				input,
-				cost: {
-					input: inputCost,
-					output: outputCost,
-					cacheRead: cacheReadCost,
-					cacheWrite: cacheWriteCost,
-				},
+				cost: unknownPrice
+					? { status: "unknown" }
+					: { input: inputCost, output: outputCost, cacheRead: cacheReadCost, cacheWrite: cacheWriteCost },
 				contextWindow: model.context_length || 4096,
 				maxTokens: model.top_provider?.max_completion_tokens || 4096,
 			};
@@ -1242,17 +1256,19 @@ async function collectCatalogModelsWithStatus(): Promise<CatalogCollection> {
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
 	// models.dev has 3x the correct pricing (1.5/18.75 instead of 0.5/6.25)
-	const opus45 = allModels.find(m => m.provider === "anthropic" && m.id === "claude-opus-4-5");
+	const opus45 = allModels.find((model) => model.provider === "anthropic" && model.id === "claude-opus-4-5");
 	if (opus45) {
-		opus45.cost.cacheRead = 0.5;
-		opus45.cost.cacheWrite = 6.25;
+		const cost = mutableModelCostRates(opus45);
+		cost.cacheRead = 0.5;
+		cost.cacheWrite = 6.25;
 	}
 
 	// Temporary overrides until upstream model metadata is corrected.
 	for (const candidate of allModels) {
 		if (candidate.provider === "amazon-bedrock" && candidate.id.includes("anthropic.claude-opus-4-6-v1")) {
-			candidate.cost.cacheRead = 0.5;
-			candidate.cost.cacheWrite = 6.25;
+			const cost = mutableModelCostRates(candidate);
+			cost.cacheRead = 0.5;
+			cost.cacheWrite = 6.25;
 		}
 		if (
 			(candidate.provider === "anthropic" ||
@@ -1284,18 +1300,20 @@ async function collectCatalogModelsWithStatus(): Promise<CatalogCollection> {
 		}
 		// Keep selected OpenRouter model metadata stable until upstream settles.
 		if (candidate.provider === "openrouter" && candidate.id === "moonshotai/kimi-k2.5") {
-			candidate.cost.input = 0.41;
-			candidate.cost.output = 2.06;
-			candidate.cost.cacheRead = 0.07;
+			const cost = mutableModelCostRates(candidate);
+			cost.input = 0.41;
+			cost.output = 2.06;
+			cost.cacheRead = 0.07;
 			candidate.maxTokens = 4096;
 		}
 		if (candidate.provider === "openrouter" && candidate.id === "moonshotai/kimi-k3") {
 			candidate.maxTokens = 1048576;
 		}
 		if (candidate.provider === "openrouter" && candidate.id === "z-ai/glm-5") {
-			candidate.cost.input = 0.6;
-			candidate.cost.output = 1.9;
-			candidate.cost.cacheRead = 0.119;
+			const cost = mutableModelCostRates(candidate);
+			cost.input = 0.6;
+			cost.output = 1.9;
+			cost.cacheRead = 0.119;
 		}
 
 	}
@@ -1895,14 +1913,8 @@ async function collectCatalogModelsWithStatus(): Promise<CatalogCollection> {
 			baseUrl: "https://openrouter.ai/api/v1",
 			reasoning: true,
 			input: ["text", "image"],
-			cost: {
-				// we dont know about the costs because OpenRouter auto routes to different models
-				// and then charges you for the underlying used model
-				input:0,
-				output:0,
-				cacheRead:0,
-				cacheWrite:0,
-			},
+			// OpenRouter auto routes to models with different prices.
+			cost: { status: "unknown" },
 			contextWindow: 2000000,
 			maxTokens: 30000,
 		});
@@ -2111,10 +2123,16 @@ function getInvalidModelReason(model: Model<Api>): string | undefined {
 	if (typeof model.reasoning !== "boolean") return "missing reasoning";
 	if (!Array.isArray(model.input) || model.input.length === 0) return "missing input modalities";
 	if (!model.input.every((input) => input === "text" || input === "image")) return "invalid input modality";
-	if (!isFiniteNumber(model.cost?.input)) return "missing input cost";
-	if (!isFiniteNumber(model.cost?.output)) return "missing output cost";
-	if (!isFiniteNumber(model.cost?.cacheRead)) return "missing cacheRead cost";
-	if (!isFiniteNumber(model.cost?.cacheWrite)) return "missing cacheWrite cost";
+	if ("status" in model.cost && model.cost.status === "unknown") {
+		if (!isFiniteNumber(model.contextWindow) || model.contextWindow <= 0) return "missing contextWindow";
+		if (!isFiniteNumber(model.maxTokens) || model.maxTokens <= 0) return "missing maxTokens";
+		return undefined;
+	}
+	const cost = modelCostRates(model);
+	if (!isFiniteNumber(cost?.input)) return "missing input cost";
+	if (!isFiniteNumber(cost?.output)) return "missing output cost";
+	if (!isFiniteNumber(cost?.cacheRead)) return "missing cacheRead cost";
+	if (!isFiniteNumber(cost?.cacheWrite)) return "missing cacheWrite cost";
 	if (!isFiniteNumber(model.contextWindow) || model.contextWindow <= 0) return "missing contextWindow";
 	if (!isFiniteNumber(model.maxTokens) || model.maxTokens <= 0) return "missing maxTokens";
 	return undefined;

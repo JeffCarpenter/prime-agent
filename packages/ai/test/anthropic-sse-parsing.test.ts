@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
+import { getModelCostRates, getUsageCostAmounts } from "../src/models.js";
 import { streamAnthropic } from "../src/providers/anthropic.js";
 import type { Context, ToolCall } from "../src/types.js";
 import { getFixtureModel } from "./fixture-models.js";
@@ -153,7 +154,7 @@ describe("Anthropic raw SSE parsing", () => {
 		).result();
 
 		expect(result.usage.cacheWrite).toBe(1000);
-		expect(result.usage.cost.cacheWrite).toBeCloseTo(testCase.expectedCacheWriteCost);
+		expect(getUsageCostAmounts(result.usage.cost)?.cacheWrite).toBeCloseTo(testCase.expectedCacheWriteCost);
 	});
 
 	it("reprices cache writes from a message_delta usage breakdown", async () => {
@@ -172,7 +173,7 @@ describe("Anthropic raw SSE parsing", () => {
 
 		expect(result.usage.cacheWrite).toBe(2000);
 		// 2000 one-hour tokens at 2x input cost, not the stale 1.25x rate from message_start.
-		expect(result.usage.cost.cacheWrite).toBeCloseTo(0.004, 6);
+		expect(getUsageCostAmounts(result.usage.cost)?.cacheWrite).toBeCloseTo(0.004, 6);
 	});
 	it("preserves configured cache write pricing for non-Anthropic models", async () => {
 		const model = getFixtureModel<"anthropic-messages">("minimax", "MiniMax-M2.7-highspeed");
@@ -186,7 +187,9 @@ describe("Anthropic raw SSE parsing", () => {
 		).result();
 
 		expect(result.usage.cacheWrite).toBe(1000);
-		expect(result.usage.cost.cacheWrite).toBeCloseTo((1000 * model.cost.cacheWrite) / 1_000_000);
+		expect(getUsageCostAmounts(result.usage.cost)?.cacheWrite).toBeCloseTo(
+			(1000 * getModelCostRates(model.cost)!.cacheWrite) / 1_000_000,
+		);
 	});
 
 	it("repairs malformed SSE JSON and malformed streamed tool JSON", async () => {
