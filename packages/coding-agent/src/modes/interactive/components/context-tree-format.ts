@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai";
+import { getUsageCostAmounts, type Usage } from "@earendil-works/pi-ai";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ContextTreeNode } from "../../../core/context-tree.js";
 import type { ContextUsage } from "../../../core/extensions/index.js";
@@ -53,8 +53,9 @@ function spentTokens(usage: Usage): number {
 	return usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 }
 
-function formatCost(cost: number): string {
-	return `$${cost.toFixed(2)}`;
+function formatCost(usage: Usage): string {
+	const cost = getUsageCostAmounts(usage.cost);
+	return cost ? `$${cost.total.toFixed(2)}` : "unknown";
 }
 
 function formatContextColumn(contextUsage: ContextUsage | undefined, withBar: boolean): string {
@@ -113,7 +114,7 @@ export function formatContextTree(root: ContextTreeNode, width: number): string 
 	const rows = flattenContextTree(root);
 
 	const tokenCells = rows.map((row) => formatTokenCount(spentTokens(row.node.ownUsage)));
-	const costCells = rows.map((row) => formatCost(row.node.ownUsage.cost.total));
+	const costCells = rows.map((row) => formatCost(row.node.ownUsage));
 	const tokenHeader = "tokens";
 	const costHeader = "cost";
 	const contextHeader = "context";
@@ -160,7 +161,7 @@ export function formatContextTree(root: ContextTreeNode, width: number): string 
 	lines.push("");
 	lines.push(
 		`${theme.fg("dim", "Total:")} ${formatTokenCount(spentTokens(totals))} tokens ${theme.fg("dim", "·")} ${formatCost(
-			totals.cost.total,
+			totals,
 		)}${agentCount > 1 ? theme.fg("dim", ` across ${agentCount} agents`) : ""}`,
 	);
 
@@ -176,10 +177,11 @@ export function formatContextTree(root: ContextTreeNode, width: number): string 
 	}
 	lines.push(`${theme.fg("dim", "Total:")} ${spentTokens(totals).toLocaleString()}`);
 
-	if (totals.cost.total > 0) {
+	const knownTotalCost = getUsageCostAmounts(totals.cost);
+	if (!knownTotalCost || knownTotalCost.total > 0) {
 		lines.push("");
 		lines.push("Cost");
-		lines.push(`${theme.fg("dim", "Total:")} $${totals.cost.total.toFixed(4)}`);
+		lines.push(`${theme.fg("dim", "Total:")} ${knownTotalCost ? `$${knownTotalCost.total.toFixed(4)}` : "unknown"}`);
 	}
 
 	const rootContext = root.contextUsage;

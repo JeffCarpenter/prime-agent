@@ -107,7 +107,7 @@ export interface CaptureAgentCommandUsedOptions {
 	randomId?: () => string;
 }
 
-interface UsageTotals extends Usage {
+interface UsageTotals extends Omit<Usage, "cost"> {
 	modelCallCount: number;
 }
 
@@ -147,13 +147,6 @@ const EMPTY_USAGE_TOTALS: UsageTotals = {
 	cacheRead: 0,
 	cacheWrite: 0,
 	totalTokens: 0,
-	cost: {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-		total: 0,
-	},
 	modelCallCount: 0,
 };
 
@@ -167,11 +160,6 @@ function addUsage(target: UsageTotals, usage: Usage): void {
 	target.cacheRead += usage.cacheRead;
 	target.cacheWrite += usage.cacheWrite;
 	target.totalTokens += usage.totalTokens;
-	target.cost.input += usage.cost.input;
-	target.cost.output += usage.cost.output;
-	target.cost.cacheRead += usage.cost.cacheRead;
-	target.cost.cacheWrite += usage.cost.cacheWrite;
-	target.cost.total += usage.cost.total;
 	target.modelCallCount++;
 }
 
@@ -181,11 +169,6 @@ function mergeUsage(target: UsageTotals, usage: UsageTotals): void {
 	target.cacheRead += usage.cacheRead;
 	target.cacheWrite += usage.cacheWrite;
 	target.totalTokens += usage.totalTokens;
-	target.cost.input += usage.cost.input;
-	target.cost.output += usage.cost.output;
-	target.cost.cacheRead += usage.cost.cacheRead;
-	target.cost.cacheWrite += usage.cost.cacheWrite;
-	target.cost.total += usage.cost.total;
 	target.modelCallCount += usage.modelCallCount;
 }
 

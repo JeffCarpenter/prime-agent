@@ -18,7 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { getUsageCostAmounts, StringEnum } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -42,6 +42,7 @@ function formatUsageStats(
 		cacheRead: number;
 		cacheWrite: number;
 		cost: number;
+		costUnknown?: boolean;
 		contextTokens?: number;
 		turns?: number;
 	},
@@ -53,7 +54,8 @@ function formatUsageStats(
 	if (usage.output) parts.push(`↓${formatTokens(usage.output)}`);
 	if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
 	if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
-	if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
+	if (usage.costUnknown) parts.push("price unknown");
+	else if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
 	if (usage.contextTokens && usage.contextTokens > 0) {
 		parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
 	}
@@ -103,6 +105,7 @@ interface UsageStats {
 	cacheRead: number;
 	cacheWrite: number;
 	cost: number;
+	costUnknown?: boolean;
 	contextTokens: number;
 	turns: number;
 }
@@ -299,7 +302,9 @@ async function runSingleAgent(
 							currentResult.usage.output += usage.output || 0;
 							currentResult.usage.cacheRead += usage.cacheRead || 0;
 							currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-							currentResult.usage.cost += usage.cost?.total || 0;
+							const amounts = usage.cost && getUsageCostAmounts(usage.cost);
+							if (amounts) currentResult.usage.cost += amounts.total;
+							else if (usage.cost) currentResult.usage.costUnknown = true;
 							currentResult.usage.contextTokens = usage.totalTokens || 0;
 						}
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
@@ -765,13 +770,14 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const aggregateUsage = (results: SingleResult[]) => {
-				const total = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, turns: 0 };
+				const total = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, costUnknown: false, turns: 0 };
 				for (const r of results) {
 					total.input += r.usage.input;
 					total.output += r.usage.output;
 					total.cacheRead += r.usage.cacheRead;
 					total.cacheWrite += r.usage.cacheWrite;
 					total.cost += r.usage.cost;
+					if (r.usage.costUnknown) total.costUnknown = true;
 					total.turns += r.usage.turns;
 				}
 				return total;

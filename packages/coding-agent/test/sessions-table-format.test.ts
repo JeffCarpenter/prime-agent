@@ -83,6 +83,11 @@ describe("formatSessionsTable", () => {
 			["s", "running", `running tools · ${"a".repeat(43)}…`, "", "", ""],
 		],
 		["usage fleet scale", { usage: FLEET_SPEND }, row("s", "idle", "", "", "", "1.6b/2.1m $382.85")],
+		[
+			"usage price unknown",
+			{ usage: { inputTokens: 1234, outputTokens: 567, costUnknown: true } },
+			row("s", "idle", "", "", "", "1.2k/567 price unknown"),
+		],
 		["archived rows", { lifecycle: "archived", rosterStatus: "inactive" }, row("s", "inactive", "archived")],
 		["display id fallback", { id: LONG_ID, sessionName: undefined }, row("fc10e9f8380f", "idle", "")],
 		["newline in name", { sessionName: "sneaky\nagent" }, row("sneaky agent", "idle", "")],

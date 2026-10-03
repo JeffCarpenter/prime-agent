@@ -39,7 +39,7 @@ import {
 	subtractAssistantUsage,
 } from "./usage.js";
 
-export const CURRENT_SESSION_VERSION = 3;
+export const CURRENT_SESSION_VERSION = 4;
 const SESSION_LIST_SEARCH_TEXT_MAX_CHARS = 64 * 1024;
 const SESSION_LIST_PARSE_MAX_LINE_CHARS = 1024 * 1024;
 const SESSION_LIST_LARGE_MESSAGE_PREVIEW_MAX_CHARS = 256;
@@ -382,6 +382,37 @@ function migrateV2ToV3(entries: FileEntry[]): void {
 	}
 }
 
+function normalizeEntryUsageCosts(entry: FileEntry): void {
+	const normalize = (usage: Usage | undefined): void => {
+		// Older transcripts can omit usage or cost entirely.
+		if (!usage?.cost || "status" in usage.cost) return;
+		usage.cost = { status: "known", amounts: { ...usage.cost } };
+	};
+	switch (entry.type) {
+		case "message":
+			if (entry.message.role === "assistant") normalize(entry.message.usage);
+			break;
+		case "compaction":
+		case "branch_summary":
+			normalize(entry.usage);
+			break;
+		case "child_usage_attributed":
+			normalize(entry.childUsage);
+			normalize(entry.aggregateUsage);
+			break;
+	}
+}
+
+function migrateV3ToV4(entries: FileEntry[]): void {
+	for (const entry of entries) {
+		if (entry.type === "session") {
+			entry.version = 4;
+		} else {
+			normalizeEntryUsageCosts(entry);
+		}
+	}
+}
+
 function migrateToCurrentVersion(entries: FileEntry[]): boolean {
 	const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 	const version = header?.version ?? 1;
@@ -390,6 +421,7 @@ function migrateToCurrentVersion(entries: FileEntry[]): boolean {
 
 	if (version < 2) migrateV1ToV2(entries);
 	if (version < 3) migrateV2ToV3(entries);
+	if (version < 4) migrateV3ToV4(entries);
 
 	return true;
 }

@@ -104,7 +104,8 @@ function formatUsageCell(usage: SessionUsageSummary | undefined): string {
 	if (!usage) {
 		return "";
 	}
-	return `${formatTokenCount(usage.inputTokens)}/${formatTokenCount(usage.outputTokens)} $${usage.cost.toFixed(2)}`;
+	const cost = usage.costUnknown ? "price unknown" : usage.cost === undefined ? "" : `$${usage.cost.toFixed(2)}`;
+	return `${formatTokenCount(usage.inputTokens)}/${formatTokenCount(usage.outputTokens)}${cost ? ` ${cost}` : ""}`;
 }
 
 function formatTokenCount(tokens: number): string {

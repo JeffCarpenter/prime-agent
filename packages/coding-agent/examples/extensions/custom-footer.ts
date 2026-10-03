@@ -8,7 +8,7 @@
  * Token stats come from ctx.sessionManager/ctx.model (already accessible).
  */
 
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { type AssistantMessage, getUsageCostAmounts } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
@@ -32,12 +32,15 @@ export default function (pi: ExtensionAPI) {
 							let input = 0,
 								output = 0,
 								cost = 0;
+							let costUnknown = false;
 							for (const e of ctx.sessionManager.getBranch()) {
 								if (e.type === "message" && e.message.role === "assistant") {
 									const m = e.message as AssistantMessage;
 									input += m.usage.input;
 									output += m.usage.output;
-									cost += m.usage.cost.total;
+									const amounts = getUsageCostAmounts(m.usage.cost);
+									if (amounts) cost += amounts.total;
+									else costUnknown = true;
 								}
 							}
 
@@ -45,7 +48,10 @@ export default function (pi: ExtensionAPI) {
 							const branch = footerData.getGitBranch();
 							const fmt = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`);
 
-							const left = theme.fg("dim", `↑${fmt(input)} ↓${fmt(output)} $${cost.toFixed(3)}`);
+							const left = theme.fg(
+								"dim",
+								`↑${fmt(input)} ↓${fmt(output)} ${costUnknown ? "price unknown" : `$${cost.toFixed(3)}`}`,
+							);
 							const branchStr = branch ? ` (${branch})` : "";
 							const right = theme.fg("dim", `${ctx.model?.id || "no-model"}${branchStr}`);
 

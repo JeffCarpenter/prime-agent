@@ -15,6 +15,7 @@ export interface SessionStats {
 		cacheWrite: number;
 		total: number;
 	};
-	cost: number;
+	cost?: number;
+	costUnknown?: true;
 	contextUsage?: ContextUsage;
 }

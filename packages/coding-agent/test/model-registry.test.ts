@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai";
-import { getApiProvider, getModels } from "@earendil-works/pi-ai";
+import { createModelCatalog, getApiProvider, getModelCostRates, getModels } from "@earendil-works/pi-ai";
 import { getOAuthProvider, registerOAuthProvider } from "@earendil-works/pi-ai/oauth";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.js";
@@ -331,7 +331,10 @@ describe("ModelRegistry", () => {
 			const catalogEntries = bundled.map((model) => ({
 				id: model.id,
 				display_name: `Live ${model.name}`,
-				pricing: { input_usd_per_mtok: model.cost.input, output_usd_per_mtok: model.cost.output },
+				pricing: {
+					input_usd_per_mtok: getModelCostRates(model.cost)?.input ?? 0,
+					output_usd_per_mtok: getModelCostRates(model.cost)?.output ?? 0,
+				},
 				specs: {
 					context_window: model.contextWindow,
 					max_output_tokens: model.maxTokens,
@@ -459,7 +462,11 @@ describe("ModelRegistry", () => {
 				{ compat: { openRouterRouting: { only: ["amazon-bedrock"] } } },
 				{ compat: { openRouterRouting: { only: ["amazon-bedrock"] } } },
 			],
-			["changes cost fields partially", { cost: { input: 99 } }, { cost: { input: 99 } }],
+			[
+				"changes cost fields partially",
+				{ cost: { input: 99 } },
+				{ cost: { status: "known", rates: { input: 99 } } },
+			],
 		])("%s and leaves sibling models alone", (_name, override, expected) => {
 			const registry = withOverrides({ [sonnetId]: override });
 
@@ -1195,7 +1202,10 @@ describe("subagent Prime Inference discovery", () => {
 			const entries = bundled.map((model) => ({
 				id: model.id,
 				display_name: model.name,
-				pricing: { input_usd_per_mtok: model.cost.input, output_usd_per_mtok: model.cost.output },
+				pricing: {
+					input_usd_per_mtok: getModelCostRates(model.cost)?.input ?? 0,
+					output_usd_per_mtok: getModelCostRates(model.cost)?.output ?? 0,
+				},
 				specs: {
 					context_window: model.contextWindow,
 					max_output_tokens: model.maxTokens,
@@ -1253,6 +1263,85 @@ describe("issue #702 codex model discovery client version", () => {
 		).toString("base64url");
 		return `header.${payload}.signature`;
 	}
+
+	test("discovers live-only Codex models omitted by the public catalog without inventing prices", async () => {
+		const authPath = join(codexTempDir, "auth.json");
+		writeFileSync(
+			authPath,
+			JSON.stringify({
+				"openai-codex": {
+					type: "oauth",
+					access: codexAccessToken("account-123"),
+					refresh: "refresh-token",
+					expires: Date.now() + 60 * 60 * 1000,
+					accountId: "account-123",
+				},
+			}),
+		);
+		const registry = ModelRegistry.create(AuthStorage.create(authPath), join(codexTempDir, "models.json"));
+		globalThis.fetch = (async (input: Parameters<typeof globalThis.fetch>[0]) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			return url.includes("prime-agent-catalog/main/models/catalog.v1.json")
+				? new Response(JSON.stringify(createModelCatalog([getModels("anthropic")[0]!])), { status: 200 })
+				: url.includes("/codex/models")
+					? new Response(JSON.stringify({ models: [{ slug: "gpt-5.9-codex" }] }), { status: 200 })
+					: new Response("unavailable", { status: 404 });
+		}) as typeof globalThis.fetch;
+
+		const catalog = await registry.refreshModelCatalog();
+		expect(catalog.models.filter((model) => model.provider === "openai-codex").map((model) => model.id)).toEqual([
+			"gpt-5.9-codex",
+		]);
+		const liveModel = catalog.models.find(
+			(model) => model.provider === "openai-codex" && model.id === "gpt-5.9-codex",
+		);
+
+		expect(liveModel).toMatchObject({
+			provider: "openai-codex",
+			id: "gpt-5.9-codex",
+			cost: { status: "unknown" },
+		});
+		await expect(registry.canUseModel(liveModel!)).resolves.toBe(true);
+		expect(registry.find("openai-codex", "gpt-5.9-codex")).toEqual(liveModel);
+		expect((await registry.getExecutableModels()).find((model) => model.id === "gpt-5.9-codex")).toEqual(liveModel);
+	});
+
+	test.each(["offline", "malformed", "rotated", "missing", "expired"])(
+		"#702 isolates cached live discovery after %s",
+		async (change) => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.stubEnv("PI_OFFLINE", "0");
+			const auth = AuthStorage.inMemory();
+			auth.setRuntimeApiKey("openai-codex", codexAccessToken("first"));
+			const registry = ModelRegistry.inMemory(auth);
+			let requests = 0;
+			globalThis.fetch = async (input) => {
+				if (!String(input).includes("/codex/models")) return new Response("missing", { status: 404 });
+				requests++;
+				return new Response(JSON.stringify(requests === 1 ? { models: [{ slug: "live-only" }] } : {}));
+			};
+			try {
+				await registry.refreshModelCatalog();
+				expect((await registry.getExecutableModels()).some((model) => model.id === "live-only")).toBe(true);
+				expect(requests).toBe(1);
+				vi.setSystemTime(Date.now() + 300_001);
+				if (change === "offline") vi.stubEnv("PI_OFFLINE", "1");
+				if (change === "rotated") auth.setRuntimeApiKey("openai-codex", codexAccessToken("second"));
+				if (change === "missing") auth.removeRuntimeApiKey("openai-codex");
+				if (change === "expired") auth.setRuntimeApiKey("openai-codex", "invalid-token");
+				const models = await registry.getExecutableModels();
+				expect(models.some((model) => model.id === "live-only")).toBe(
+					change === "offline" || change === "malformed",
+				);
+				expect(registry.find("openai-codex", "live-only") !== undefined).toBe(
+					change === "offline" || change === "malformed",
+				);
+			} finally {
+				vi.useRealTimers();
+				vi.unstubAllEnvs();
+			}
+		},
+	);
 
 	test("sends a Codex CLI client version on the discovery request instead of the package version", async () => {
 		const authPath = join(codexTempDir, "auth.json");
