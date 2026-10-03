@@ -45,7 +45,7 @@ import {
 	streamFailureMessage,
 	truncateRawPayload,
 } from "../utils/stream-failure.js";
-
+import { claudeCodeVersion } from "./claude-code-version.js";
 import { resolveCloudflareBaseUrl } from "./cloudflare.js";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
 import { withOpenCodeHeaders } from "./opencode-headers.js";
@@ -82,9 +82,6 @@ function getCacheControl(
 }
 
 // Stealth mode: Mimic Claude Code's tool naming exactly
-// The API gates newer models on the claimed client version (e.g. claude-opus-5.5
-// requires >= 2.280), so keep this at or above the latest released Claude Code.
-const claudeCodeVersion = "2.1.281";
 
 // Claude Code 2.x tool names (canonical casing)
 // Source: https://cchistory.mariozechner.at/data/prompts-2.1.11.md

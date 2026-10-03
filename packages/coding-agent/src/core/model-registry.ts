@@ -9,6 +9,7 @@ import {
 	type Api,
 	type AssistantMessageEventStream,
 	type Context,
+	claudeCodeVersion,
 	getModelCostRates,
 	getModels,
 	getProviders,
@@ -1372,6 +1373,7 @@ export class ModelRegistry {
 					? {
 							Authorization: `Bearer ${auth.apiKey}`,
 							"anthropic-beta": "claude-code-20250219,oauth-2025-04-20",
+							"user-agent": `claude-cli/${claudeCodeVersion}`,
 							"x-app": "cli",
 						}
 					: { "x-api-key": auth.apiKey };
