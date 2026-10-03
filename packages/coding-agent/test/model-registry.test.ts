@@ -1420,6 +1420,7 @@ describe("anthropic live model discovery", () => {
 		const available = await registry.refreshAvailableModels();
 
 		expect(headers?.get(header)).toBe(value);
+		expect(headers?.has("user-agent")).toBe(header === "authorization");
 		expect(available.find((m) => m.id === "claude-live-only")).toMatchObject({
 			provider: "anthropic",
 			reasoning: true,
