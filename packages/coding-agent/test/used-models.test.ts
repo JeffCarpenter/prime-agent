@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { loadUsedModelsCache, scanUsedModels } from "../src/core/used-models.js";
+import { listUsedModels, loadUsedModelsCache, scanUsedModels } from "../src/core/used-models.js";
 
 const change = (provider: string, modelId: string, timestamp = "2026-01-01T00:00:00.000Z") =>
 	JSON.stringify({ type: "model_change", id: "x", provider, modelId, timestamp });
@@ -74,6 +74,8 @@ describe("used models scan", () => {
 
 		expect(loadUsedModelsCache(cache).files).toEqual({});
 		expect((await scanUsedModels(sessions, cache)).map((m) => m.modelId)).toEqual(["m"]);
+		writeFileSync(cache, JSON.stringify({ version: 1, files: { a: { models: 5 }, b: null, c: { models: [null] } } }));
+		expect(listUsedModels(loadUsedModelsCache(cache))).toEqual([]);
 	});
 
 	test("returns nothing for a missing sessions directory", async () => {
