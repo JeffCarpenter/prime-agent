@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { COPILOT_CLIENT_HEADERS } from "../src/copilot-client-version.js";
 import { getOpenRouterReasoningCapabilities } from "../src/openrouter-reasoning.js";
 import { parseModelCatalog } from "../src/model-catalog.js";
+import { getModelCostRates } from "../src/models.js";
 import {
 	CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
 	CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
@@ -24,8 +25,7 @@ import type {
 
 
 function modelCostRates(model: Model<Api>): CostRates | undefined {
-	if ("status" in model.cost) return model.cost.status === "known" ? model.cost.rates : undefined;
-	return model.cost;
+	return getModelCostRates(model.cost);
 }
 
 function mutableModelCostRates(model: Model<Api>): CostRates {
@@ -423,7 +423,7 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 					: {}),
 				input,
 				cost: unknownPrice
-					? { status: "unknown" }
+					? { source: "none" }
 					: { input: inputCost, output: outputCost, cacheRead: cacheReadCost, cacheWrite: cacheWriteCost },
 				contextWindow: model.context_length || 4096,
 				maxTokens: model.top_provider?.max_completion_tokens || 4096,
@@ -1914,7 +1914,7 @@ async function collectCatalogModelsWithStatus(): Promise<CatalogCollection> {
 			reasoning: true,
 			input: ["text", "image"],
 			// OpenRouter auto routes to models with different prices.
-			cost: { status: "unknown" },
+			cost: { source: "none" },
 			contextWindow: 2000000,
 			maxTokens: 30000,
 		});
@@ -2123,7 +2123,7 @@ function getInvalidModelReason(model: Model<Api>): string | undefined {
 	if (typeof model.reasoning !== "boolean") return "missing reasoning";
 	if (!Array.isArray(model.input) || model.input.length === 0) return "missing input modalities";
 	if (!model.input.every((input) => input === "text" || input === "image")) return "invalid input modality";
-	if ("status" in model.cost && model.cost.status === "unknown") {
+	if ("source" in model.cost && model.cost.source === "none") {
 		if (!isFiniteNumber(model.contextWindow) || model.contextWindow <= 0) return "missing contextWindow";
 		if (!isFiniteNumber(model.maxTokens) || model.maxTokens <= 0) return "missing maxTokens";
 		return undefined;

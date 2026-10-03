@@ -1,0 +1,1 @@
+- Refactored model and usage costs to generic Cost<T> with explicit provenance source tags ("none" | "provider" | "aggregate").

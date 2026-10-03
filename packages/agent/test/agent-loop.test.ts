@@ -502,8 +502,8 @@ describe("agentLoop with AgentMessage", () => {
 		const controller = new AbortController();
 		const partialMessage = createAssistantMessage([{ type: "text", text: "partial" }]);
 		partialMessage.usage.cost = {
-			status: "known",
-			amounts: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 1 },
+			source: "aggregate",
+			value: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 1 },
 		};
 		const config: AgentLoopConfig = {
 			model: createModel(),
@@ -531,8 +531,8 @@ describe("agentLoop with AgentMessage", () => {
 			text.text = "mutated";
 		}
 		partialMessage.usage.cost = {
-			status: "known",
-			amounts: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 99 },
+			source: "aggregate",
+			value: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 99 },
 		};
 
 		expect(assistant?.role).toBe("assistant");

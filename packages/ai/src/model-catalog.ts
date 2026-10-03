@@ -34,6 +34,11 @@ const CostRatesSchema = strictObject({
 });
 const ModelCostSchema = Type.Union([
 	CostRatesSchema,
+	strictObject({
+		source: Type.Union([Type.Literal("provider"), Type.Literal("aggregate")]),
+		value: CostRatesSchema,
+	}),
+	strictObject({ source: Type.Literal("none") }),
 	strictObject({ status: Type.Literal("known"), rates: CostRatesSchema }),
 	strictObject({ status: Type.Literal("unknown") }),
 ]);

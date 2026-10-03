@@ -1170,7 +1170,7 @@ function parseChunkUsage(
 							total: reportedCost,
 						}
 					: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: reportedCost };
-		usage.cost = { status: "known", amounts };
+		usage.cost = { source: "provider", value: amounts };
 	}
 	return usage;
 }

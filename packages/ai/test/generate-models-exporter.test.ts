@@ -307,9 +307,9 @@ describe("model catalog exporter merge", () => {
 describe("model catalog exporter emit", () => {
 	test("accepts tagged known and unknown costs without weakening legacy cost validation", () => {
 		const known = model("known", {
-			cost: { status: "known", rates: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.2 } },
+			cost: { source: "aggregate", value: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0.2 } },
 		});
-		const unknown = model("unknown", { cost: { status: "unknown" } });
+		const unknown = model("unknown", { cost: { source: "none" } });
 		const catalog = { schemaVersion: 1, models: [known, unknown, model("legacy")] };
 		expect(parseModelCatalog(catalog).models.map((entry) => entry.cost)).toEqual([
 			known.cost,
@@ -319,7 +319,7 @@ describe("model catalog exporter emit", () => {
 		expect(() =>
 			parseModelCatalog({
 				schemaVersion: 1,
-				models: [model("invalid", { cost: { status: "unknown", input: 0 } as Model<Api>["cost"] })],
+				models: [model("invalid", { cost: { source: "none", input: 0 } as unknown as Model<Api>["cost"] })],
 			}),
 		).toThrow();
 	});
@@ -349,8 +349,8 @@ describe("model catalog exporter emit", () => {
 			]);
 			expect(catalog.models[0]).toMatchObject({ name: "Fresh kept", featured: true });
 			expect(catalog.models.slice(3, 5).map((entry: Model<Api>) => entry.cost)).toEqual([
-				{ status: "unknown" },
-				{ status: "unknown" },
+				{ source: "none" },
+				{ source: "none" },
 			]);
 			expect(manifest).toEqual({
 				schemaVersion: 1,
