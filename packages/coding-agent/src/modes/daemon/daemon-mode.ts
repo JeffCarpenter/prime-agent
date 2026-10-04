@@ -5112,12 +5112,7 @@ export class AgentDaemon {
 				const model =
 					availableModels.find(
 						(candidate) => candidate.provider === command.provider && candidate.id === command.modelId,
-					) ??
-					// Stale-auth providers are excluded from the available list; the lookup
-					// never mutates stale state (session.setModel owns the clear).
-					(session.modelRegistry.getProviderAuthStatus(command.provider).source === "stale"
-						? session.modelRegistry.find(command.provider, command.modelId)
-						: undefined);
+					) ?? session.modelRegistry.findOrFallback(command.provider, command.modelId);
 				if (!model) {
 					throw new Error(`Model not found: ${command.provider}/${command.modelId}`);
 				}

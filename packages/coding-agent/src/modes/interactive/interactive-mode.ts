@@ -8492,7 +8492,31 @@ export class InteractiveMode {
 			return;
 		}
 
-		const model = await this.findExactModelMatch(searchTerm);
+		let model = await this.findExactModelMatch(searchTerm);
+		if (!model) {
+			const slashIndex = searchTerm.indexOf("/");
+			if (slashIndex !== -1) {
+				const provider = searchTerm.substring(0, slashIndex).trim();
+				const modelId = searchTerm.substring(slashIndex + 1).trim();
+				if (provider && modelId) {
+					model = this.modelRegistry.findOrFallback(provider, modelId);
+				}
+			} else {
+				const candidates = this.getCachedModelCandidates();
+				const hasFuzzyMatch = candidates.some(
+					(m) =>
+						m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+						m.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+				);
+				if (!hasFuzzyMatch) {
+					const provider = this.getCurrentModel()?.provider ?? this.settingsManager.getDefaultProvider();
+					if (provider) {
+						model = this.modelRegistry.findOrFallback(provider, searchTerm.trim());
+					}
+				}
+			}
+		}
+
 		if (model) {
 			try {
 				const authFlows = this.createAuthFlows();

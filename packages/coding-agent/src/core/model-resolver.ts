@@ -490,6 +490,16 @@ export function resolveCliModel(options: {
 				: `Model "${pattern}" not found for provider "${provider}". Using custom model id.`;
 			return { model: fallbackModel, thinkingLevel: undefined, warning: fallbackWarning, error: undefined };
 		}
+	} else if (availableModels.length > 0) {
+		const defaultProvider =
+			availableModels.find((m) => m.provider === "prime-inference")?.provider ?? availableModels[0].provider;
+		const fallbackModel = buildFallbackModel(defaultProvider, pattern, availableModels);
+		if (fallbackModel) {
+			const fallbackWarning = warning
+				? `${warning} Model "${pattern}" not found. Using custom model id on "${defaultProvider}".`
+				: `Model "${pattern}" not found. Using custom model id on "${defaultProvider}".`;
+			return { model: fallbackModel, thinkingLevel: undefined, warning: fallbackWarning, error: undefined };
+		}
 	}
 
 	const display = provider ? `${provider}/${pattern}` : cliModel;

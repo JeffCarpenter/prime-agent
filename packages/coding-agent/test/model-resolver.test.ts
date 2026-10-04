@@ -126,6 +126,11 @@ describe("resolveCliModel", () => {
 			{ pattern: "zai/glm-5", models: [...allModels, zaiDirect, zaiGateway] },
 			{ provider: "zai", id: "glm-5" },
 		],
+		[
+			"a bare arbitrary model id falls back to prime-inference",
+			{ pattern: "custom-oss-99b", models: [...allModels, primeInference("default-model")] },
+			{ provider: "prime-inference", id: "custom-oss-99b" },
+		],
 	])("resolves %s", (_label, { provider, pattern, models }, expected) => {
 		const result = resolveCliModel({
 			cliProvider: provider,

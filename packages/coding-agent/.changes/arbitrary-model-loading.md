@@ -1,0 +1,1 @@
+- Added support for loading arbitrary model names at runtime via CLI and /model.

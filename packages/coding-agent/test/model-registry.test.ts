@@ -1294,4 +1294,19 @@ describe("issue #702 codex model discovery client version", () => {
 		expect((major ?? 0) > 0 || (minor ?? 0) >= 155).toBe(true);
 		expect(executable.some((model) => model.provider === "openai-codex")).toBe(true);
 	});
+
+	test("findOrFallback returns existing models or synthesizes a fallback model for known providers", () => {
+		const registry = ModelRegistry.create(AuthStorage.inMemory());
+		const existing = registry.find("openai", "gpt-5.4");
+		expect(existing).toBeDefined();
+		expect(registry.findOrFallback("openai", "gpt-5.4")?.id).toBe("gpt-5.4");
+
+		const custom = registry.findOrFallback("openai", "gpt-custom-preview");
+		expect(custom).toBeDefined();
+		expect(custom?.id).toBe("gpt-custom-preview");
+		expect(custom?.provider).toBe("openai");
+		expect(custom?.api).toBe(existing?.api);
+
+		expect(registry.findOrFallback("unknown-provider", "arbitrary-id")).toBeUndefined();
+	});
 });

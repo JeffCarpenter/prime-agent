@@ -1295,6 +1295,32 @@ export class ModelRegistry {
 	}
 
 	/**
+	 * Find a model by provider and ID, synthesizing a fallback model if absent
+	 * from the catalog but the provider is known.
+	 */
+	findOrFallback(provider: string, modelId: string): Model<Api> | undefined {
+		const exact = this.find(provider, modelId);
+		if (exact) {
+			return exact;
+		}
+		const providerModels = this.models.filter((m) => m.provider === provider);
+		if (providerModels.length === 0) {
+			return undefined;
+		}
+		if (isPrivatePrimeInferenceModel({ provider, id: modelId })) {
+			const privateTemplate = providerModels.find((m) => isPrivatePrimeInferenceModel(m));
+			if (!privateTemplate) return undefined;
+			return this.getModelForCurrentAuth({ ...privateTemplate, id: modelId, name: modelId });
+		}
+		const seed = providerModels[0];
+		return this.getModelForCurrentAuth({
+			...seed,
+			id: modelId,
+			name: modelId,
+		});
+	}
+
+	/**
 	 * Get API key for a model.
 	 */
 	hasConfiguredAuth(model: Model<Api>): boolean {
