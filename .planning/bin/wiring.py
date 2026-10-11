@@ -1,5 +1,6 @@
 """Expected kernel-state paths as Python 3.14 template strings."""
 
+from functools import partial
 from pathlib import Path
 from string.templatelib import Interpolation, Template
 
@@ -9,9 +10,13 @@ def real_path_template(home: Path, session_id: str) -> Template:
     return t"{home}/.prime/agent/session-artifacts/{session_id}/xonsh/kernel-state.dill"
 
 
-def symlink_path_template(repo_root: Path, session_id: str) -> Template:
+def symlink_path_template(session_id: str, *, repo_root: Path) -> Template:
     """Bind a session to its repository-local symlink path."""
     return t"{repo_root}/.planning/kernel-state/{session_id}"
+
+
+source = partial(real_path_template, Path.home())
+destination = partial(symlink_path_template, repo_root=Path("."))
 
 
 def path_from_template(template: Template) -> Path:
