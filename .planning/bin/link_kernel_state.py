@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
-from wiring import path_from_template, real_path_template, symlink_path_template
+import wiring
 
 
 def link_kernel_state(
@@ -29,11 +29,13 @@ def link_kernel_state(
     ):
         raise ValueError(f"invalid plan ID: {plan_id}")
 
-    source = path_from_template(real_path_template(Path.home(), session_id))
+    source = wiring.path_from_template(wiring.source(session_id))
     if not source.is_file():
         raise FileNotFoundError(f"kernel state does not exist: {source}")
 
-    destination = path_from_template(symlink_path_template(repo_root, session_id))
+    destination = wiring.path_from_template(
+        wiring.destination(session_id, repo_root=repo_root)
+    )
     destination_dir = destination.parent
     if destination_dir.is_symlink():
         raise FileExistsError(f"destination directory is a symlink: {destination_dir}")
