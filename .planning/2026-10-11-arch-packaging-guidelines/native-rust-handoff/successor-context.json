@@ -1,0 +1,392 @@
+{
+  "schema_version": 1,
+  "kind": "native-rust-arch-pkgbuild-handoff",
+  "context": {
+    "root": "/home/jeff/code/fork/prime-agent",
+    "scratchpad": "../../skills/incubator/scratchpad.yaml",
+    "session_id": "01a12c8b-285b-7303-960b-2dd5e97400e1",
+    "readme": "README.md",
+    "mission": "MISSION.md",
+    "scope": "本案立案交接：既有 TS 配方失敗乃歷證；今之產品脈絡為 upstream v0.10.0 上原生 Rust xonsh 移植，工作樹見 native-trajectory。",
+    "tags": [
+      "通則",
+      "建包",
+      "驗交",
+      "立約後閱",
+      "三技已修待行測",
+      "待造需求與風險徵詢技能",
+      "原生Rust-v0.10.0",
+      "舊TS失敗僅歷證",
+      "用戶糾正源系推斷",
+      "用戶明定Rust後端"
+    ]
+  },
+  "state": {
+    "status": "native-rust-port-package-unverified",
+    "technical_build_complete": false,
+    "active_build_worker": false,
+    "previous_goal_status": "complete 非建成",
+    "last_attempt": "舊 TS 隔離 makepkg exit 4；新 native Rust 分支未行 cargo release 或 Arch 建包，勿稱成功。"
+  },
+  "sources": [
+    {
+      "id": "consultant",
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/consultant.json",
+      "role": "源系裁斷及因果勘誤"
+    },
+    {
+      "id": "build",
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/build-attempt.json",
+      "role": "首錯及保全"
+    },
+    {
+      "id": "verification",
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff-verification.json",
+      "role": "新員獨核"
+    },
+    {
+      "id": "handoff",
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff.json",
+      "role": "前期索引"
+    },
+    {
+      "id": "queries",
+      "path": "/home/jeff/code/skills/incubator/queries.md",
+      "role": "按需閱綱與取段"
+    },
+    {
+      "id": "contract",
+      "path": "/home/jeff/code/skills/incubator/handoff-contract.md",
+      "role": "先允後閱之約契"
+    },
+    {
+      "id": "packet",
+      "path": "/home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/successor-context.json",
+      "role": "近旁完整交接封包"
+    },
+    {
+      "id": "hire-skill",
+      "path": "/home/jeff/code/skills/incubator/hire-expensive-consultant/SKILL.md",
+      "role": "受審技能原稿"
+    },
+    {
+      "id": "review-transcript",
+      "path": "/home/jeff/.prime/agent/sessions/01a12c8b-285b-7303-960b-2dd5e97400e1.jsonl",
+      "role": "GPT-6 Astra v2 唯讀一稿評審原訊"
+    },
+    {
+      "id": "pressure",
+      "path": "/home/jeff/code/skills/incubator/tests/hire-expensive-consultant-pressure.md",
+      "role": "評審所導四情境、前稿反證及修稿驗法"
+    },
+    {
+      "id": "spend-skill",
+      "path": "/home/jeff/code/skills/incubator/spend-control-expensive-consultant/SKILL.md",
+      "role": "Astra 審後修訂之控費稿"
+    },
+    {
+      "id": "manage-skill",
+      "path": "/home/jeff/code/skills/incubator/managing-expensive-consultant/SKILL.md",
+      "role": "Astra 審後修訂之贊助稿"
+    },
+    {
+      "id": "spend-pressure",
+      "path": "/home/jeff/code/skills/incubator/tests/spend-control-expensive-consultant-pressure.md",
+      "role": "控費三情境與前稿缺口"
+    },
+    {
+      "id": "manage-pressure",
+      "path": "/home/jeff/code/skills/incubator/tests/managing-expensive-consultant-pressure.md",
+      "role": "贊助三情境與前稿缺口"
+    },
+    {
+      "id": "user-risk-request",
+      "path": "/home/jeff/.prime/agent/sessions/01a12c8b-285b-7303-960b-2dd5e97400e1.jsonl",
+      "role": "用戶原令：開案先問風險與需求技能待辦"
+    },
+    {
+      "id": "native-trajectory",
+      "path": "/home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-native-2026-10-11/evidence/native-trajectory.md",
+      "role": "工作樹、tag 解參、版本、dirty 與無新建之有界命令錄"
+    },
+    {
+      "id": "native-plan",
+      "path": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/task_plan.md",
+      "role": "v0.10.0 Rust 移植路線與 Phase5 包裝"
+    },
+    {
+      "id": "native-manifest",
+      "path": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-cli/Cargo.toml",
+      "role": "原生 prime-agent 二進位宣告"
+    },
+    {
+      "id": "legacy-pkgbuild",
+      "path": "/home/jeff/code/fork/prime-agent/pkgbuild/PKGBUILD",
+      "role": "舊 TS 0.9.8 配方，主樹既有改動須存"
+    },
+    {
+      "id": "user-correction",
+      "path": "/home/jeff/.prime/agent/sessions/01a12c8b-285b-7303-960b-2dd5e97400e1.jsonl",
+      "role": "用戶明撤根索源系前提並責失建"
+    },
+    {
+      "id": "native-packet",
+      "path": "/home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-native-2026-10-11/successor-context.json",
+      "role": "現 Rust 版完整交接封包，35 檔 SHA256 自驗"
+    }
+  ],
+  "facts": [
+    {
+      "id": "root-first",
+      "claim": "小問根自核；先定決策與缺證，再取最小切片。",
+      "evidence": [
+        "consultant"
+      ]
+    },
+    {
+      "id": "spend",
+      "claim": "路徑傳檔，報只新增證；token I/O 無實測則明言；足裁即止，勿以委任代根思。",
+      "evidence": [
+        "consultant"
+      ]
+    },
+    {
+      "id": "regularity",
+      "claim": "索引同形、條目有序；JSON 以 jq、YAML 以 yq，同路徑可查；異語後端須轉譯。",
+      "evidence": [
+        "queries"
+      ]
+    },
+    {
+      "id": "lineage",
+      "claim": "先驗共祖，再論沿革；HEAD 與 39bc99a91 無共祖，他系史非本樹失檔因。誤則明撤。",
+      "evidence": [
+        "consultant",
+        "verification"
+      ]
+    },
+    {
+      "id": "source-mix",
+      "claim": "歷證：主樹 Node 0.9.8 與 Rust scaffold 0.1.0 雜處，非今 native v0.10.0 worktree；勿混源，勿以舊 stub 斷今 CLI。",
+      "evidence": [
+        "consultant"
+      ]
+    },
+    {
+      "id": "first-failure",
+      "claim": "首錯可掩源樹缺件；postinstall 缺檔止 pnpm，越首障非建成；build/check/package 未行。",
+      "evidence": [
+        "build",
+        "verification"
+      ]
+    },
+    {
+      "id": "handoff-not-execution",
+      "claim": "舊員退，新員已獨核；goal complete 非工成，便箋非排程，驗交非實建。",
+      "evidence": [
+        "verification",
+        "handoff"
+      ]
+    },
+    {
+      "id": "query-first-consent",
+      "claim": "先書可問之句，再定同形鍵；接任者先讀約明允，方授封包；便箋非排程。",
+      "evidence": [
+        "queries",
+        "contract"
+      ]
+    },
+    {
+      "id": "hire-precedence",
+      "claim": "明令聘顧問，無論指名與否，根先查不可拒聘；若已釋疑，轉作有界獨核。原稿①③先拒、⑤後承，優先未明。",
+      "evidence": [
+        "hire-skill",
+        "review-transcript"
+      ]
+    },
+    {
+      "id": "hire-marginal-cost",
+      "claim": "比顧問增量 token I/O 與根自行續作；須計檔案重讀、重覆脈絡、追問及委工，非僅初稿長短。",
+      "evidence": [
+        "hire-skill",
+        "review-transcript"
+      ]
+    },
+    {
+      "id": "hire-bounded-stop",
+      "claim": "根先查與顧問派工均須先立可驗檔量、呼次、輸出限；至限交未決證據，勿自擴。",
+      "evidence": [
+        "hire-skill",
+        "review-transcript"
+      ]
+    },
+    {
+      "id": "hire-revision",
+      "claim": "根據評審三隙已修 hire 稿：明聘優先且可有界覆核；較根自行續作之增量 I/O；先立可驗檢讀輸出限。四情境條款靜核過，尚未行受控代理對照。",
+      "evidence": [
+        "hire-skill",
+        "review-transcript",
+        "pressure"
+      ]
+    },
+    {
+      "id": "spend-review",
+      "claim": "評審三疵俱採：計費遺重讀、追問、回文再入；無遙測難止；併發限不禁輪番啟工與續問。自審辨：token 目標非硬額，可控讀次、摘錄、訊輪與累計工者須硬限。",
+      "evidence": [
+        "spend-skill",
+        "review-transcript",
+        "spend-pressure"
+      ]
+    },
+    {
+      "id": "spend-revision",
+      "claim": "已修控費稿：跨代理全程增量 I/O 含工具回文與再入；前置整數代理限；每讀、追、重試、催、啟工前核，越限止呈缺口；三情境條款靜核過。",
+      "evidence": [
+        "spend-skill",
+        "spend-pressure"
+      ]
+    },
+    {
+      "id": "manage-review",
+      "claim": "評審三疵俱採：贊助人不得越用戶授權；主證失效須停牽涉驗收與工、撤相干准；預立可驗驗收與時費硬限，止工記退。自審辨：只止牽涉者，續權仍由用戶定。",
+      "evidence": [
+        "manage-skill",
+        "review-transcript",
+        "manage-pressure"
+      ]
+    },
+    {
+      "id": "manage-revision",
+      "claim": "已修贊助稿：權界、證倒停工撤准、限至終止在役工者與記退皆明；三情境條款靜核過。非代理行測，亦非實測節費。",
+      "evidence": [
+        "manage-skill",
+        "manage-pressure"
+      ]
+    },
+    {
+      "id": "risk-elicitation-preference",
+      "claim": "用戶欲每項新功能、重構或大修開端，根先徵其風險胃納：技術／碼險須辨我方原作缺陷與上游所致，兼問需求未詳之險；不逕自代定。",
+      "evidence": [
+        "user-risk-request"
+      ]
+    },
+    {
+      "id": "native-product-line",
+      "claim": "用戶明定 Rust 後端；計畫與圖指 upstream v0.10.0 原生 Rust xonsh 移植，branch feat/native-rust-xonsh@2da0c33ed，tag v0.10.0 解參為 763094e1b。舊 TS 非待選。",
+      "evidence": [
+        "native-trajectory",
+        "native-plan",
+        "user-correction"
+      ]
+    },
+    {
+      "id": "native-dirty-and-package",
+      "claim": "原生樹五 TUI 檔已改、skills/zsh 未追蹤；無 pkgbuild 配方，Phase5 未做。舊主樹 PKGBUILD 已改不可覆；新 Rust release／Arch 包均未驗。",
+      "evidence": [
+        "native-trajectory",
+        "native-plan",
+        "native-manifest",
+        "legacy-pkgbuild"
+      ]
+    },
+    {
+      "id": "root-error",
+      "claim": "根誤以源系待用戶選而止步，聘昂貴員後亦未順圖驗 native 建包；已明撤此阻。便箋與舊 build 不證新包。",
+      "evidence": [
+        "native-trajectory",
+        "user-correction"
+      ]
+    },
+    {
+      "id": "native-handoff-verified",
+      "claim": "新 Rust 封包 35 檔雜湊皆合，舊十九檔史包亦核；JSON／文言 YAML 同值、同形、合 schema，源徑與證引皆通；交接非建成。",
+      "evidence": [
+        "native-packet",
+        "native-trajectory",
+        "queries"
+      ]
+    },
+    {
+      "id": "trajectory-preflight-lesson",
+      "claim": "根初以舊 TS 配方首錯、舊 Rust stub 代今產品，雖顧問有源混警訊，仍未先合 active plan、worktree 圖、native Cargo 與用戶明定 Rust，遂虛設源系二擇。好技當先核「目標樹／譜系／配方」三者同源，異則停舊包工而轉正路。",
+      "evidence": [
+        "native-trajectory",
+        "native-plan",
+        "legacy-pkgbuild",
+        "user-correction",
+        "consultant"
+      ]
+    }
+  ],
+  "known-unknowns": [
+    {
+      "id": "unreached-phases",
+      "question": "新源樹之 build/check/package、成品與執行契約未驗。"
+    },
+    {
+      "id": "three-controlled-evals",
+      "question": "三孵育技能雖各據評審改稿、條款靜核，尚未作受控有／無技代理行測；勿安裝，勿稱合行。"
+    },
+    {
+      "id": "requirements-risk-skill",
+      "question": "日後待造需求徵詢技能：應用何精簡提問、各類險度量與止問準則？今僅列待辦，不造技能。"
+    },
+    {
+      "id": "native-port-package",
+      "question": "native@2da0c33ed 加現存 dirty TUI、skills/zsh 之完整度、release build、Arch 包清單與 CLI 起動尚未實驗。"
+    },
+    {
+      "id": "trajectory-preflight-skill",
+      "question": "日後需求徵詢技宜含廉價譜系預檢：active plan、git worktrees/ancestry、manifest/配方同源，辨歷史失敗與今目標；具體壓測尚未設，未造技。"
+    }
+  ],
+  "decision": {
+    "owner": "根負讀圖與執行；用戶定本案容險",
+    "question": "既定 Rust 後端：如何保全 dirty 工作，續 upstream v0.10.0 移植而實證 Arch 包與 CLI？",
+    "options": [
+      "沿既有 feat/native-rust-xonsh 驗／補 Phase4、Phase5",
+      "於隔離副本重現同 commit 與必要 dirty 變更後驗包"
+    ],
+    "required": [
+      "用戶已定 Rust 後端；開工徵本案容險，不再索源系二擇",
+      "記 native commit 與 dirty 輸入，保全既物",
+      "以實測 build/check/package、CLI 證成"
+    ]
+  },
+  "constraints": {
+    "writes": "主樹 PKGBUILD、.SRCINFO、舊包，及 native 五 TUI dirty 檔、skills/zsh 未追蹤樹，俱先保全；勿擅覆。必要修補另置隔離工作。",
+    "builds": "本輪僅讀圖、備交；未起 Rust cargo release 或 Arch makepkg。後續宜循 native v0.10.0 路線驗，不再以舊 TS 首錯代言。",
+    "preservation": [
+      "主樹 pkgbuild/PKGBUILD 既改、.SRCINFO 與舊 0.9.8 成品",
+      "native worktree 五 TUI 改檔與 skills/zsh/ 未追蹤",
+      "舊封包 19 檔與 SHA256SUMS 為歷史快照"
+    ]
+  },
+  "next": [
+    {
+      "when": "接續此案而將作大修／建包。",
+      "action": "先徵本案容險，辨我方原作、上游與規格未足；據 native 計畫及圖定路，毋再請用戶二擇 TS／Rust。",
+      "accept": "源系 native v0.10.0 已明；風險與 dirty 保全界線有錄。"
+    },
+    {
+      "when": "欲實建。",
+      "action": "先保全 native dirty，記 HEAD 及輸入雜湊；於隔離輸出試 Rust release、繼作 Phase5 Arch 配方，舊包與主樹勿覆。",
+      "accept": "命令、exit、日誌、源 rev、dirty 輸入、新包路徑俱記。"
+    },
+    {
+      "when": "新包確成。",
+      "action": "驗 prime-agent --version、依賴、包清單與 CLI 啟動；辨失敗屬我方改動抑上游。",
+      "accept": "build/check/package 與實際執行皆有證；未達則明未達。"
+    },
+    {
+      "when": "父欲安裝任一孵育技能。",
+      "action": "按各 pressure.md 作受控有／無技行測，核遵行、來源與增量 I/O；不得以靜核代行測。",
+      "accept": "實測可覆、父核可，方安裝。"
+    },
+    {
+      "when": "日後擬新功能、重構、大修或造需求徵詢技能時。",
+      "action": "先問用戶逐案風險胃納，分我方原作、上游、規格未足諸險；後設簡問與停問壓測，另行造技能。",
+      "accept": "用戶明示本案容險與來源辨析；技能未得另令不作不安裝。"
+    }
+  ]
+}

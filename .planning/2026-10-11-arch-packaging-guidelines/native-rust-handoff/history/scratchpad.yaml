@@ -1,0 +1,110 @@
+schema_version: 1
+kind: wenyan-scratchpad
+context:
+  root: /home/jeff/code/fork/prime-agent
+  readme: README.md
+  mission: MISSION.md
+  scope: 查證、節用與本案續接；README/MISSION 述願景，非完工證。
+  tags:
+  - 通則
+  - 建包
+  - 驗交
+  - 立約後閱
+state:
+  status: blocked-awaiting-product-source
+  technical_build_complete: false
+  active_build_worker: false
+  previous_goal_status: complete 非建成
+  last_attempt: 隔離 makepkg exit 4；postinstall 缺檔；build/check/package 未行。
+sources:
+- id: consultant
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/consultant.json
+  role: 源系裁斷及因果勘誤
+- id: build
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/build-attempt.json
+  role: 首錯及保全
+- id: verification
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff-verification.json
+  role: 新員獨核
+- id: handoff
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff.json
+  role: 前期索引
+- id: queries
+  path: /home/jeff/code/skills/incubator/queries.md
+  role: 按需閱綱與取段
+- id: contract
+  path: /home/jeff/code/skills/incubator/handoff-contract.md
+  role: 先允後閱之約契
+- id: packet
+  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/successor-context.json
+  role: 近旁完整交接封包
+facts:
+- id: root-first
+  claim: 小問根自核；先定決策與缺證，再取最小切片。
+  evidence:
+  - consultant
+- id: spend
+  claim: 路徑傳檔，報只新增證；token I/O 無實測則明言；足裁即止，勿以委任代根思。
+  evidence:
+  - consultant
+- id: regularity
+  claim: 索引同形、條目有序；JSON 以 jq、YAML 以 yq，同路徑可查；異語後端須轉譯。
+  evidence:
+  - queries
+- id: lineage
+  claim: 先驗共祖，再論沿革；HEAD 與 39bc99a91 無共祖，他系史非本樹失檔因。誤則明撤。
+  evidence:
+  - consultant
+  - verification
+- id: source-mix
+  claim: 根 Node manifest 版 0.9.8，Rust workspace 版 0.1.0、Apache-2.0，Rust CLI 佔位；版號、授權、入口、建置材各核。
+  evidence:
+  - consultant
+- id: first-failure
+  claim: 首錯可掩源樹缺件；postinstall 缺檔止 pnpm，越首障非建成；build/check/package 未行。
+  evidence:
+  - build
+  - verification
+- id: handoff-not-execution
+  claim: 舊員退，新員已獨核；goal complete 非工成，便箋非排程，驗交非實建。
+  evidence:
+  - verification
+  - handoff
+- id: query-first-consent
+  claim: 先書可問之句，再定同形鍵；接任者先讀約明允，方授封包；便箋非排程。
+  evidence:
+  - queries
+  - contract
+known-unknowns:
+- id: product-source
+  question: 完整 TS 0.9.8 抑完整 Rust 發行？可用固定 revision 何在？
+- id: unreached-phases
+  question: 新源樹之 build/check/package、成品與執行契約未驗。
+decision:
+  owner: 用戶／來源維護者
+  question: 定完整源系、固定 revision 與具體修補權。
+  options:
+  - 完整 TS 0.9.8
+  - 完整 Rust 發行（非此佔位）
+  required:
+  - 明定產品
+  - 固定 revision
+  - 准許具體修改及新隔離建包
+constraints:
+  writes: 未得核可，不改源、配方、.SRCINFO、舊包與舊暫目錄。
+  builds: 源系、revision、權限未定則勿建；便箋非排程。
+  preservation:
+  - pkgbuild/PKGBUILD 既存改動
+  - pkgbuild/.SRCINFO 舊且未追蹤
+  - 既有 0.9.8 成品
+  - pkgbuild/.makepkg-test.9PpgMi/
+next:
+- when: 父尚未定源系、revision 與修補權。
+  action: 問此一決策；毋派建包、毋補首錯冒充建成。
+  accept: 三件俱定。
+- when: 三件既定且完整源樹可取。
+  action: 另起 GPT-6 Luna 據 handoff/consultant/verification 及新源樹，於新隔離 PKGDEST/BUILDDIR/LOGDEST 阻提權試建；勿覆舊物。
+  accept: 實錄命令、階段、日志與新包；既包雜湊無變。
+- when: 新包確成。
+  action: 驗 CLI --version、包清單、依賴及必要選用契約；報單一巢狀 JSON。
+  accept: 有 build/check/package 與執行實證，餘險明列。
