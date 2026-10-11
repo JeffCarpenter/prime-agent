@@ -1,0 +1,3 @@
+# Kernel states belong to local sessions, not the repository.
+*
+!.gitignore
