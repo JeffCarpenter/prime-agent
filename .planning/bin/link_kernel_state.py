@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from uuid import UUID
 
+from wiring import path_from_template, real_path_template, symlink_path_template
+
 
 def link_kernel_state(
     session_id: str, repo_root: Path, plan_id: str | None = None
@@ -27,20 +29,15 @@ def link_kernel_state(
     ):
         raise ValueError(f"invalid plan ID: {plan_id}")
 
-    source = (
-        Path.home()
-        / ".prime/agent/session-artifacts"
-        / session_id
-        / "xonsh/kernel-state.dill"
-    )
+    source = path_from_template(real_path_template(Path.home(), session_id))
     if not source.is_file():
         raise FileNotFoundError(f"kernel state does not exist: {source}")
 
-    destination_dir = repo_root / ".planning/kernel-state"
+    destination = path_from_template(symlink_path_template(repo_root, session_id))
+    destination_dir = destination.parent
     if destination_dir.is_symlink():
         raise FileExistsError(f"destination directory is a symlink: {destination_dir}")
     destination_dir.mkdir(parents=True, exist_ok=True)
-    destination = destination_dir / session_id
     if os.path.lexists(destination):
         if not destination.is_symlink() or destination.resolve() != source.resolve():
             raise FileExistsError(
