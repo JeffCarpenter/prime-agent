@@ -111,6 +111,27 @@ class KernelStateLinkTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.link.parent.exists())
 
+    def test_public_partials_bind_home_and_override_repo_root(self):
+        program = (
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from wiring import destination, path_from_template, source\n"
+            "repo, session_id = Path(sys.argv[1]), sys.argv[2]\n"
+            "assert path_from_template(source(session_id)) == "
+            "Path.home() / '.prime/agent/session-artifacts' / session_id / 'xonsh/kernel-state.dill'\n"
+            "assert path_from_template(destination(session_id, repo_root=repo)) == "
+            "repo / '.planning/kernel-state' / session_id\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(self.repo), SESSION_ID],
+            cwd=SCRIPT.parent,
+            env={**os.environ, "HOME": str(self.home)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
