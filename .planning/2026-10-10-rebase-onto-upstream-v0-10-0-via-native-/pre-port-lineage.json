@@ -1,0 +1,1971 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "question": "Which pre-xonsh fork release histories precede the Rust transition?",
+    "repository": "/home/jeff/code/fork/prime-agent",
+    "snapshot_utc": "2026-10-11T22:30:27.974276+00:00",
+    "ref_policy": "local refs and remote-tracking snapshots; no fetch; no source edits",
+    "definition": "provenance and patch-level lineage only; behavioral parity is the next step"
+  },
+  "boundary": {
+    "last_upstream_ts_release": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+    "rust_port_commit": "39bc99a91d102c46474c090fdc7ae7cd5037ffcf",
+    "rust_port_parent": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+    "native_release": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "native_xonsh_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6"
+  },
+  "release_replays": [
+    {
+      "base_tag": "v0.9.5",
+      "base_commit": "a7d791bc1be09793ed5f3ec05bf4cccbc60679ea",
+      "reference": "stable-prime",
+      "prefix_tip": "987effdd82b8714c363b8d8d98d27034fc715895",
+      "pre_xonsh_commits": [
+        {
+          "hash": "091bd72a7b0ede3638928cadef11c6d154633fbf",
+          "author": "Jeff C",
+          "subject": "use pnpm"
+        },
+        {
+          "hash": "b126cceecc2b50bb46546da9ff8edc29b8625d63",
+          "author": "Jeff C",
+          "subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies"
+        },
+        {
+          "hash": "eeb4a19fcd48bf496dc561dec7dd1e2ded3ec24c",
+          "author": "Jeff C",
+          "subject": "chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies"
+        },
+        {
+          "hash": "6ea9da2a15a4b0a1483e3e3d490a2bf73bdc852d",
+          "author": "Jeff C",
+          "subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix"
+        },
+        {
+          "hash": "37bfd406f4f0cebac4f9cfd05717826e21c91f78",
+          "author": "Jeff C",
+          "subject": "feat: add dotenv for environment variable management"
+        },
+        {
+          "hash": "987effdd82b8714c363b8d8d98d27034fc715895",
+          "author": "Jeff C",
+          "subject": "scripts: move install.xsh to scripts/ directory"
+        }
+      ]
+    },
+    {
+      "base_tag": "v0.9.6",
+      "base_commit": "e260085dd8f742e0def3d871860c9a888b114851",
+      "reference": "xonsh-installer-port",
+      "prefix_tip": "8709d1ac5e858013512b547f96cc94cb52b25d2d",
+      "pre_xonsh_commits": [
+        {
+          "hash": "7bb7584cdf257b30adf438f20a00c17a41762cc1",
+          "author": "Jeff C",
+          "subject": "use pnpm"
+        },
+        {
+          "hash": "2da60581c5880a9e5b59fae7a0296a67f350fbb4",
+          "author": "Jeff C",
+          "subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies"
+        },
+        {
+          "hash": "842e4ad6cc01023da5319192312a769506887046",
+          "author": "Jeff C",
+          "subject": "chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies"
+        },
+        {
+          "hash": "1ebfa991581eefde842696e29d4c9445cf8cf7d9",
+          "author": "Jeff C",
+          "subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix"
+        },
+        {
+          "hash": "3a2c294259c309ea9227f932730d0db10124af66",
+          "author": "Jeff C",
+          "subject": "feat: add dotenv for environment variable management"
+        },
+        {
+          "hash": "8709d1ac5e858013512b547f96cc94cb52b25d2d",
+          "author": "Jeff C",
+          "subject": "scripts: move install.xsh to scripts/ directory"
+        }
+      ]
+    },
+    {
+      "base_tag": "v0.9.8",
+      "base_commit": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+      "reference": "xonsh-repl",
+      "prefix_tip": "06bdcf1cb16d6f1d5ca403e00db7817b289b94c4",
+      "pre_xonsh_commits": [
+        {
+          "hash": "eb8c041889f1e8b6b130ef18ba42f1defc6fb9a4",
+          "author": "Jeff C",
+          "subject": "use pnpm"
+        },
+        {
+          "hash": "fd74dfdd17c8293c224ff67e50b94241cd3a2395",
+          "author": "Jeff C",
+          "subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies"
+        },
+        {
+          "hash": "3e0fd245ee575475ef50eef20deb5acdb00404fa",
+          "author": "Jeff C",
+          "subject": "chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies"
+        },
+        {
+          "hash": "2f8c890b6b07444f670043476c94dfbef3889bcb",
+          "author": "Jeff C",
+          "subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix"
+        },
+        {
+          "hash": "f3e865f0302b2026fba0d24e50e2dbc61bff7718",
+          "author": "Jeff C",
+          "subject": "feat: add dotenv for environment variable management"
+        },
+        {
+          "hash": "06bdcf1cb16d6f1d5ca403e00db7817b289b94c4",
+          "author": "Jeff C",
+          "subject": "scripts: move install.xsh to scripts/ directory"
+        }
+      ]
+    }
+  ],
+  "variant": {
+    "ref": "origin/stable-prime",
+    "base_tag": "v0.9.5",
+    "tip": "6d3fb504f5c3f439dc197d566671dda9544500eb",
+    "commits": [
+      {
+        "hash": "467e5b613216bbb95dedce6e633aac2b55c19485",
+        "author": "Jeff C",
+        "subject": "use pnpm"
+      },
+      {
+        "hash": "b1b9bef8c0653771afabecccd6372e484b9d82fa",
+        "author": "Jeff C",
+        "subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies"
+      },
+      {
+        "hash": "fc044257f1cf6c5def30c45be3bc3c412125ffd8",
+        "author": "Jeff C",
+        "subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix"
+      },
+      {
+        "hash": "472a576a008e6a2a17629280c4bed6f15e26bf17",
+        "author": "Jeff C",
+        "subject": "feat: add dotenv for environment variable management"
+      },
+      {
+        "hash": "6d3fb504f5c3f439dc197d566671dda9544500eb",
+        "author": "Jeff C",
+        "subject": "scripts: move install.xsh to scripts/ directory"
+      }
+    ],
+    "note": "five-commit remote-tracking variant, not presumed current remote state"
+  },
+  "reroot_reference": {
+    "branch": "xonsh-rust",
+    "base": "5ac9d0650",
+    "prefix_tip": "b511c66fbb35e2b8007f1e403983b322e4f11c8b",
+    "commits": [
+      {
+        "hash": "4bfc4a4fbe2c39929fb6fd02b5d860c4253e4a58",
+        "author": "Jeff C",
+        "subject": "use pnpm"
+      },
+      {
+        "hash": "acb92392d3c43511e27fc07a1d3fd97171fa8d74",
+        "author": "Jeff C",
+        "subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies"
+      },
+      {
+        "hash": "1a37222a34caaf871fb54cac161a814f70b95429",
+        "author": "Jeff C",
+        "subject": "chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies"
+      },
+      {
+        "hash": "c37dcb8319084018343b63d6b8899b6d61478b23",
+        "author": "Jeff C",
+        "subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix"
+      },
+      {
+        "hash": "f76c91bfb2d3918afc98b6d8e398d8cc88938d65",
+        "author": "Jeff C",
+        "subject": "feat: add dotenv for environment variable management"
+      },
+      {
+        "hash": "b511c66fbb35e2b8007f1e403983b322e4f11c8b",
+        "author": "Jeff C",
+        "subject": "scripts: move install.xsh to scripts/ directory"
+      }
+    ],
+    "note": "no common ancestor with upstream Rust; patch comparison only"
+  },
+  "range_diffs": {
+    "v095_v096": {
+      "command": "git range-diff --no-color v0.9.5..stable-prime v0.9.6..8709d1ac5",
+      "exit_code": 0,
+      "pairs": [
+        "1:  091bd72a7 ! 1:  7bb7584cd use pnpm",
+        "2:  b126cceec ! 2:  2da60581c chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies",
+        "3:  eeb4a19fc = 3:  842e4ad6c chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies",
+        "4:  6ea9da2a1 = 4:  1ebfa9915 windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix",
+        "5:  37bfd406f = 5:  3a2c29425 feat: add dotenv for environment variable management",
+        "6:  987effdd8 = 6:  8709d1ac5 scripts: move install.xsh to scripts/ directory"
+      ],
+      "exact": 4,
+      "changed": 2,
+      "unmatched_rows": 0
+    },
+    "v096_v098": {
+      "command": "git range-diff --no-color v0.9.6..8709d1ac5 v0.9.8..06bdcf1cb",
+      "exit_code": 0,
+      "pairs": [
+        "1:  7bb7584cd ! 1:  eb8c04188 use pnpm",
+        "2:  2da60581c ! 2:  fd74dfdd1 chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies",
+        "3:  842e4ad6c = 3:  3e0fd245e chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies",
+        "4:  1ebfa9915 = 4:  2f8c890b6 windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix",
+        "5:  3a2c29425 = 5:  f3e865f03 feat: add dotenv for environment variable management",
+        "6:  8709d1ac5 = 6:  06bdcf1cb scripts: move install.xsh to scripts/ directory"
+      ],
+      "exact": 4,
+      "changed": 2,
+      "unmatched_rows": 0
+    },
+    "reroot_v098": {
+      "command": "git range-diff --no-color 5ac9d0650..b511c66fb v0.9.8..06bdcf1cb",
+      "exit_code": 0,
+      "pairs": [
+        "1:  4bfc4a4fb < -:  --------- use pnpm",
+        "-:  --------- > 1:  eb8c04188 use pnpm",
+        "2:  acb92392d = 2:  fd74dfdd1 chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies",
+        "3:  1a37222a3 = 3:  3e0fd245e chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies",
+        "4:  c37dcb831 = 4:  2f8c890b6 windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix",
+        "5:  f76c91bfb = 5:  f3e865f03 feat: add dotenv for environment variable management",
+        "6:  b511c66fb = 6:  06bdcf1cb scripts: move install.xsh to scripts/ directory"
+      ],
+      "exact": 5,
+      "changed": 0,
+      "unmatched_rows": 2
+    }
+  },
+  "legacy_parallel_line": {
+    "ref": "origin/main",
+    "tip": "af263b3f735142e26e629cb829afb3761bf83309",
+    "merge_base_with_v0.9.8": "a9b5d88b50db50860088772a408e867f8071b507",
+    "also_merge_base_with_native": "a9b5d88b50db50860088772a408e867f8071b507",
+    "commit_count": 322,
+    "author_counts": {
+      "Batuhan Edgüer": 7,
+      "Lauritz Timm": 2,
+      "Junho Yeo": 41,
+      "Dr Kennedy Umege": 2,
+      "Sereja": 1,
+      "alitayin": 2,
+      "kritikagarg": 2,
+      "Subr1ata": 3,
+      "twaldin": 3,
+      "creatifcoding": 1,
+      "Achuth Reddy": 1,
+      "Jeff C": 63,
+      "Seth Karten": 6,
+      "Andrew Fischer": 1,
+      "Adolanium": 7,
+      "ohboyftw": 3,
+      "Ayush Nangia": 4,
+      "tshewangrinzin": 1,
+      "Gabriel Gomes": 1,
+      "Antonio Linares": 1,
+      "Reyansh Gupta": 2,
+      "Dmitry Patrakov": 3,
+      "Mamdouh Aboammar": 3,
+      "aobazk": 1,
+      "Noah Sabaj": 1,
+      "fettpl": 34,
+      "hotragn": 4,
+      "Jason Kneen": 2,
+      "Phil McLaughlin": 1,
+      "morluto": 3,
+      "hunter": 2,
+      "Parker Pettit": 1,
+      "Chaitanya": 3,
+      "Christian Stewart": 3,
+      "Kevin Thomas": 7,
+      "Sebastian": 1,
+      "andreolf": 2,
+      "Nikita": 1,
+      "v.podlinov_automacon.ru": 1,
+      "Andrew Neilson": 1,
+      "RelaxJonh": 1,
+      "Gitlipe": 1,
+      "Parithosh Jayanthi": 2,
+      "AI Assistant": 1,
+      "BILLKISHORE": 8,
+      "Joel Tony": 1,
+      "Alan Li": 1,
+      "Rohit Behera": 4,
+      "warmshao": 1,
+      "Norman Nunley, Jr": 2,
+      "Teddy Tennant": 1,
+      "emindagg": 2,
+      "pushpraj-core": 1,
+      "rbalachandar": 1,
+      "yurekami": 1,
+      "kudala-bharani": 2,
+      "anusbutt": 2,
+      "0xqtpie": 3,
+      "ayushcodes13": 1,
+      "aoright": 1,
+      "Ralf Waldukat": 3,
+      "Diyon18": 2,
+      "Alan": 4,
+      "Seth": 33,
+      "icy000z": 1,
+      "Cooper Miller": 4,
+      "nickadminroot": 4,
+      "Slimydog21": 1,
+      "mj-cjm": 1,
+      "irl-dan": 1,
+      "Evgenii": 2,
+      "liuyu": 1
+    },
+    "jeff_authored_count": 63,
+    "patch_id_comparison_to_v0.9.8": {
+      "command": "git cherry -v v0.9.8 origin/main a9b5d88b50db50860088772a408e867f8071b507",
+      "nonidentical": 322,
+      "identical": 0,
+      "limit": "patch-identity does not establish ownership or semantic absence"
+    },
+    "commits_after_merge_base": [
+      {
+        "hash": "38a055915e8b36e93d5b01b303c407d4ce771831",
+        "author": "Batuhan Edgüer",
+        "subject": "feat(coding-agent): add capability-aware subagent thinking"
+      },
+      {
+        "hash": "1c40e2e850b48685565a7c94766f8eb51fc20595",
+        "author": "Batuhan Edgüer",
+        "subject": "feat(coding-agent): add thinking to reusable subagents"
+      },
+      {
+        "hash": "421f8ef62a50a49f91e4f77bdd937151e7b99a42",
+        "author": "Batuhan Edgüer",
+        "subject": "fix(coding-agent): defer profile thinking validation"
+      },
+      {
+        "hash": "30cd977a6c7da87d38e9cf4d9e7aea28ad92ee2a",
+        "author": "Batuhan Edgüer",
+        "subject": "feat(coding-agent): resolve profile thinking by model"
+      },
+      {
+        "hash": "3bc6936b4ab31c85bdc15801c8fe76155e133ccf",
+        "author": "Lauritz Timm",
+        "subject": "fix(coding-agent): coalesce child usage attribution"
+      },
+      {
+        "hash": "7c774529f051e49b2d87b453301e530665498f92",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): revive archived sessions on prompt instead of dead-ending"
+      },
+      {
+        "hash": "10d84cff51e6480d75cd6a5c8580956dea16a845",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): harden session revival for telemetry, late rebinds, and failed snapshot streams"
+      },
+      {
+        "hash": "fe7bb4cccff0c270945524113dfda7a702aa4bb6",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): discard a late revived snapshot when the binding moves mid-stream"
+      },
+      {
+        "hash": "84cb92bf3dfd80db26fdb802f1ac7d6d2e16316e",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): discard late revived snapshots superseded by a concurrent switch"
+      },
+      {
+        "hash": "608dcb59c82860b2945dfd0518e122f1766896a9",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): admit only snapshot transfer frames for pending binding targets"
+      },
+      {
+        "hash": "67365da431a954e89380d9dd292fd5b46e573c6a",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): do not revive an archived session for a cancelled prompt"
+      },
+      {
+        "hash": "943054202f554d73c3ff5bb1469e101ca940322c",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): apply catch-up resyncs buffered while a revived binding was pending"
+      },
+      {
+        "hash": "658fe1856829ceeadb4d12c3508431edaace4441",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): skip terminal snapshot recovery for pending transition targets"
+      },
+      {
+        "hash": "5d72867aa96612c7f2dd30ddd981d644db04687a",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): re-read state when a pending catch-up failed before publication"
+      },
+      {
+        "hash": "aba3a9f3628c25a900866b31b4f16bcf3e362664",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): drop a buffered catch-up superseded by a newer failed one"
+      },
+      {
+        "hash": "559fb842b8c7c36fa0ab0c2bf7f5ca2727f6dc55",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): keep a newer catch-up applied during the attach snapshot await"
+      },
+      {
+        "hash": "1d7fe5fa09d7682ad37cfd44a0fd26450d8d6980",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): keep the revived session attached when a switch published the same binding"
+      },
+      {
+        "hash": "613eb89c5b83267be6ca028e7c2d5429e5706601",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): preserve live-event invalidation across the attach snapshot await"
+      },
+      {
+        "hash": "bf26b1adb2692a428d11dd04e2e63c46c4cc3b26",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): verify the transcript identity before retrying a revived prompt"
+      },
+      {
+        "hash": "1ee2d3907f3695687a5444cb2f90385c03ce2358",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): only detach a revived session this revival actually attached"
+      },
+      {
+        "hash": "9f43fdd45c9fc3abc73e9ef67c72d0a8320f2034",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): suppress the revival resync when the transcript identity moved"
+      },
+      {
+        "hash": "f6c23402b7a5a8f907fe341f30203a91888842e8",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): report attach ownership so cleanup cannot detach a sibling's entry"
+      },
+      {
+        "hash": "fa13dc7bea59d0af05eb46695235a170c1761635",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): version the attach ownership field and identity-guard background resyncs"
+      },
+      {
+        "hash": "59e991d74feca8becb47be5e5e13976063672410",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): recreate revived sessions with the invocation's launch context"
+      },
+      {
+        "hash": "5a2716b8c3daf66cb4b6078e4a144baec98393b0",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): give agents-view chat connections their revive config"
+      },
+      {
+        "hash": "38822d041c741bd828a889773a9524e5daec3345",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): negotiate attach ownership and keep revive cwd per transcript"
+      },
+      {
+        "hash": "d103fef07a1af87a83f7958bdc6a97050d889bb6",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): capture the revived identity from the attach response, not post-stream state"
+      },
+      {
+        "hash": "5535c66ac2308d549a21da7ff0a5386e5653b194",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): revive a switched transcript with its selected fallback cwd"
+      },
+      {
+        "hash": "c3b2b5750f659c4b16011999a19d89a71c9de6ce",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): carry the resume's config into the reply delivery connection"
+      },
+      {
+        "hash": "66a400dd9618628ab5fec0836015a7b16cad774b",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): retain the fallback cwd across the reattach switch path"
+      },
+      {
+        "hash": "b032983b9ef27d22e36e31a281a7c305cf3d0d83",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): treat a fileless first attach as foreign to every transcript"
+      },
+      {
+        "hash": "c8f3ef0a24e223ef39847ae3e6341fbe60afa7a6",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): preserve the fileless transcript marker across reconnects"
+      },
+      {
+        "hash": "c50f6821c31544f22c8d38c457da0dec23b7d5f9",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): preserve legacy sibling attachments during revival"
+      },
+      {
+        "hash": "87818f57f49bc483b0da1d780d4c9e9cd6c2065b",
+        "author": "Dr Kennedy Umege",
+        "subject": "fix(coding-agent): keep shutdown admission through delays"
+      },
+      {
+        "hash": "368d3feaa5dfb414ef956c88062609bc709ed2f4",
+        "author": "Sereja",
+        "subject": "fix(coding-agent): delete empty draft sessions on shutdown and sweep ghosts at startup"
+      },
+      {
+        "hash": "dfa0566ce42d0098e0717f5def0dcf48cb60d105",
+        "author": "alitayin",
+        "subject": "fix(coding-agent): clarify active session message errors"
+      },
+      {
+        "hash": "26f6ce4b0bb63c95ca2beed86737efee491f98b7",
+        "author": "kritikagarg",
+        "subject": "fix(package-manager): stop ancestor walk at home dir to prevent ~/.agents/skills being project-scoped"
+      },
+      {
+        "hash": "4cb4fb5ddb3d7d76c2fab784cf3992ea9e79c047",
+        "author": "kritikagarg",
+        "subject": "fix(coding-agent): bind extension registerShortcut handlers in daemon-backed clients"
+      },
+      {
+        "hash": "0df57792d0080fbcbdff56094674f91879b1ea2d",
+        "author": "Subr1ata",
+        "subject": "feat(coding-agent): add provider and model allowlist"
+      },
+      {
+        "hash": "5a89711f82abb1b7dc6971d3896f503ba2eade65",
+        "author": "Subr1ata",
+        "subject": "docs(coding-agent): document model allowlist"
+      },
+      {
+        "hash": "a2eb1e0cc34e98c55ff32c38c11b13843e3660de",
+        "author": "alitayin",
+        "subject": "fix(coding-agent): prefer durable IDs in agent message labels"
+      },
+      {
+        "hash": "3ea6890a524d0d44000e7fcfdcb3c7ba8f1de7ed",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): stop treating a reused worker pid as the worker, and keep one failed worker from failing global heartbeats_list"
+      },
+      {
+        "hash": "1e07006a807dcc2a3fdcd577ca184a7f718db884",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): guard adoption pre-kill and revalidate process identity at each stop-path signal"
+      },
+      {
+        "hash": "2586533b7405e1fb7a1dec21eceb876df5cc08f4",
+        "author": "Junho Yeo",
+        "subject": "test(coding-agent): add issue #1045 regression tests to suite/regressions"
+      },
+      {
+        "hash": "cd998ff6c836ec6ee70fa8b676d79064decf077c",
+        "author": "Junho Yeo",
+        "subject": "test(coding-agent): remove standalone stop-identity tests"
+      },
+      {
+        "hash": "8121030d9ad766f48eb9e764c8686e54d0b20729",
+        "author": "Junho Yeo",
+        "subject": "test(coding-agent): remove heartbeats regression test"
+      },
+      {
+        "hash": "adeb17783a192e3d73cb6a8238dcd7990708447b",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): pin the portable process start id to an invariant rendering"
+      },
+      {
+        "hash": "2f9faa16a7a43dc37dc76343de9a3b7961f15c4a",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): preserve live identities across token formats"
+      },
+      {
+        "hash": "b22b9783fb5920f26efaa12874f2857152b17141",
+        "author": "twaldin",
+        "subject": "feat(coding-agent): accept cwd on rlm spawn so children load project context"
+      },
+      {
+        "hash": "b5ee32280c9e266f292efba029271fe9943afd5e",
+        "author": "creatifcoding",
+        "subject": "fix(coding-agent): renew imported session IDs"
+      },
+      {
+        "hash": "4e7425fd790362bb5d90d3f71dfbe78546f3d80b",
+        "author": "Achuth Reddy",
+        "subject": "fix(runtime): preserve MCP tool inputSchema from SDK fields"
+      },
+      {
+        "hash": "ac5d2576e2f689e148385202f0854bef11568daa",
+        "author": "Jeff C",
+        "subject": "chore: add pnpm workspace configuration"
+      },
+      {
+        "hash": "ab3e820d765e28051e83edc6c379c96f825405b5",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): use full-width auth selector"
+      },
+      {
+        "hash": "67ce55ba5dd84aa4471ccc081d3f4fde10dec322",
+        "author": "Jeff C",
+        "subject": "chore: complete pnpm workspace support"
+      },
+      {
+        "hash": "395f286e311c9ddab7422b9365c18c1a815929c5",
+        "author": "Jeff C",
+        "subject": "chore: migrate workspace scripts to pnpm"
+      },
+      {
+        "hash": "d7f8e1265ca850e31d757c4e5a5fdb7dc237ea01",
+        "author": "Jeff C",
+        "subject": "fix(auth): use ChatGPT device login"
+      },
+      {
+        "hash": "e4a1fe4ee42cc55a26e1e932869ad98a35d1ec98",
+        "author": "Jeff C",
+        "subject": "docs: organize implementation reports"
+      },
+      {
+        "hash": "acf5de6a09bf1da8c096b170c14fe65663b50803",
+        "author": "Jeff C",
+        "subject": "feat(ai): support Anthropic manual OAuth"
+      },
+      {
+        "hash": "fd036a5ff0a1f25855e962cd5fc9c10dfc38b413",
+        "author": "Jeff C",
+        "subject": "fix(auth): make remote login links usable"
+      },
+      {
+        "hash": "b40639a9a4bfe868cc0d5149cd94b07be39cacc0",
+        "author": "Jeff C",
+        "subject": "test: expose Vitest from workspace root"
+      },
+      {
+        "hash": "290e0d05b9cf010e071551eaeea8ae866ccb572d",
+        "author": "Jeff C",
+        "subject": "refactor(auth): select ChatGPT login flow"
+      },
+      {
+        "hash": "4408043455ef1f3781c01a38bfe09929389cb97a",
+        "author": "Jeff C",
+        "subject": "fix: make pnpm source installs PATH-safe"
+      },
+      {
+        "hash": "041c2f9b6891e2d05495cc5e1b6271c22dad053e",
+        "author": "Jeff C",
+        "subject": "refactor(auth): select Anthropic login flow"
+      },
+      {
+        "hash": "281cf207d4b000e82505357491ce6c134d77a7ad",
+        "author": "Jeff C",
+        "subject": "depend on httpx & mcp. depend on pytest in dev"
+      },
+      {
+        "hash": "46a4a479e0b67f126ac55c881fb2221c0f9d91c2",
+        "author": "Seth Karten",
+        "subject": "fix(coding-agent): retain root kill cleanup ownership (#1240)"
+      },
+      {
+        "hash": "8e5d71dd3ef5216a56a9a51ca3646ae2efc209ae",
+        "author": "Batuhan Edgüer",
+        "subject": "feat(coding-agent): add capability-aware subagent thinking"
+      },
+      {
+        "hash": "4b975b96abcb25496f8ddd8282d6221b8b507f8d",
+        "author": "Batuhan Edgüer",
+        "subject": "docs(coding-agent): attribute subagent thinking change"
+      },
+      {
+        "hash": "2ddcaf55ca385b9474a5ea15c8e7d5a3ff97dea9",
+        "author": "Batuhan Edgüer",
+        "subject": "feat(coding-agent): add thinking to reusable subagents"
+      },
+      {
+        "hash": "6b311f1f9d6f812efa195897c4a77af38f744efc",
+        "author": "Lauritz Timm",
+        "subject": "fix(coding-agent): coalesce child usage attribution"
+      },
+      {
+        "hash": "b26a5b9236825aad6fccd9a5980e14a1e561beb5",
+        "author": "Dr Kennedy Umege",
+        "subject": "fix(coding-agent): keep shutdown admission through delays"
+      },
+      {
+        "hash": "26423f6b116ed328ce0ea70c09a2d71ccfc29921",
+        "author": "Subr1ata",
+        "subject": "feat(coding-agent): add provider and model allowlist"
+      },
+      {
+        "hash": "4e792d63b9c95bcab086549d173f09eb33c8f543",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): stop treating a reused worker pid as the worker, and keep one failed worker from failing global heartbeats_list"
+      },
+      {
+        "hash": "846aebb734224d32632c156c450c9b918eb6189a",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): guard adoption pre-kill and revalidate process identity at each stop-path signal"
+      },
+      {
+        "hash": "ceae809b376065fba6da1a31288c147a5abf7dbd",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): preserve live identities across token formats"
+      },
+      {
+        "hash": "dab18ec942a4bec0ffca7879ef72a811311fd421",
+        "author": "Jeff C",
+        "subject": "fix: make source launcher cwd-independent"
+      },
+      {
+        "hash": "42cedafdab6cc526469e1a32d1436203eadd3db1",
+        "author": "twaldin",
+        "subject": "fix(coding-agent): preserve live workers during recovery"
+      },
+      {
+        "hash": "86a03197ee21744c52ef28971628c631a8838efb",
+        "author": "Andrew Fischer",
+        "subject": "fix(coding-agent): honor model scope for subagents"
+      },
+      {
+        "hash": "605c28be5e8c6e19e409f546f70a5fccc7c2269b",
+        "author": "Adolanium",
+        "subject": "fix(tui): stop wrap recursion on wide graphemes and recover from lost paste end"
+      },
+      {
+        "hash": "68f051eb7db6742477375c8f07f026b19a0cea01",
+        "author": "Adolanium",
+        "subject": "fix(ai): flush trailing SSE events and keep unparented text deltas"
+      },
+      {
+        "hash": "344f0dd6aceb398a4e4c656f11a7962191bfdbfb",
+        "author": "Adolanium",
+        "subject": "fix(ai): drop tool results whose parent tool call was aborted"
+      },
+      {
+        "hash": "8f51fdd7f55d665627ae2bf2f753037b6c60bd69",
+        "author": "Adolanium",
+        "subject": "fix(coding-agent): run OAuth refresh outside the auth.json file lock"
+      },
+      {
+        "hash": "92302ae592b56415546bae4991f55536de13dfb3",
+        "author": "ohboyftw",
+        "subject": "fix(coding-agent): cache process start id to fix daemon handshake livelock on Windows"
+      },
+      {
+        "hash": "558db03d9a1ab4c132d96aab7b271f14032fe74b",
+        "author": "ohboyftw",
+        "subject": "fix(coding-agent): compute cache expiry after the lookup, not before"
+      },
+      {
+        "hash": "6d92f57a2feda7759cfe48cc8f44f0688499ac2d",
+        "author": "ohboyftw",
+        "subject": "docs(coding-agent): tighten process start id cache comments"
+      },
+      {
+        "hash": "6182cded4df5566a97ce899111c912267ee9100b",
+        "author": "Ayush Nangia",
+        "subject": "fix: keep worker socket paths under the sun_path limit"
+      },
+      {
+        "hash": "ffee07f06d4e97140ae065b091491da2744e6e84",
+        "author": "Ayush Nangia",
+        "subject": "fix: apply BSD sun_path limit beyond darwin and skip unix-only tests on win32"
+      },
+      {
+        "hash": "6e1dd22fbfb273036443ffcde8e5a305640847dd",
+        "author": "tshewangrinzin",
+        "subject": "fix(coding-agent): resolve kernel venv python on Windows"
+      },
+      {
+        "hash": "0ca57236e55551fb0177906a7a368bac33be3420",
+        "author": "Gabriel Gomes",
+        "subject": "fix(coding-agent): tolerate unsupported directory fsync"
+      },
+      {
+        "hash": "273b046b9e31529fc204c95d60bb60edebdc6998",
+        "author": "Antonio Linares",
+        "subject": "fix(coding-agent): run %%bash cells in Git Bash on Windows, not WSL bash"
+      },
+      {
+        "hash": "3de2e12f698f218ea80e329aba5752691e7debfa",
+        "author": "Reyansh Gupta",
+        "subject": "fix(ai): repair invalid unicode escape prefixes"
+      },
+      {
+        "hash": "79e7e9ffac0394c66f3e3182f696ceb481a06823",
+        "author": "Dmitry Patrakov",
+        "subject": "fix(ai): omit service tier for GitHub Copilot"
+      },
+      {
+        "hash": "7640bb40573a053a3cfed231d3188e8f861b86eb",
+        "author": "Dmitry Patrakov",
+        "subject": "docs(ai): attribute Copilot service-tier fix"
+      },
+      {
+        "hash": "3413395668d869a76bd7d37fcd15752271e3f9c3",
+        "author": "Mamdouh Aboammar",
+        "subject": "fix(coding-agent): include Bedrock in Node bundle"
+      },
+      {
+        "hash": "11880465cf45ad96a593d9d7dc5d17758e4869ac",
+        "author": "aobazk",
+        "subject": "fix(runtime): use SDK HTTP client factory for streamable MCP transport"
+      },
+      {
+        "hash": "daedc5d6a47d925eeac753a6a8ad686b065c64e0",
+        "author": "Dmitry Patrakov",
+        "subject": "fix(coding-agent): preserve sessions during daemon startup"
+      },
+      {
+        "hash": "379c6673736e9e85f558a014eb2339bfb2ba015f",
+        "author": "Ayush Nangia",
+        "subject": "fix: npm 10+ compatibility across the update and install surfaces"
+      },
+      {
+        "hash": "e715648d30164d9702c85a415ce7bc9a47af769d",
+        "author": "Ayush Nangia",
+        "subject": "fix: pass allow-remote=all to npm >= 12 during install"
+      },
+      {
+        "hash": "68c4e7ecf2360a55f27e07cdf0aced5ab6a58500",
+        "author": "Noah Sabaj",
+        "subject": "fix(windows): terminate orphaned process trees, not just their roots"
+      },
+      {
+        "hash": "2cc5143fac0b3caabc343af68b970ea0d479eda9",
+        "author": "fettpl",
+        "subject": "fix(tui): recover autocomplete request queue"
+      },
+      {
+        "hash": "7248cd38848f9f1bbdcf781890d4723fb7c0db53",
+        "author": "hotragn",
+        "subject": "fix(coding-agent): keep retried agent messages on one supervisor journal key"
+      },
+      {
+        "hash": "bf1a9e095e74206d7d0106ed559e11bd1e3f5fda",
+        "author": "Jason Kneen",
+        "subject": "fix(coding-agent): drop compact stream deltas that would leave content gaps"
+      },
+      {
+        "hash": "2f337e9a2ed39c5e7e4e9f6d18a75356b5fe577a",
+        "author": "Jason Kneen",
+        "subject": "Potential fix for pull request finding"
+      },
+      {
+        "hash": "99aada615d76f67ab7d53077b36ed35fc189336d",
+        "author": "Phil McLaughlin",
+        "subject": "fix(ai): emit Bedrock cache points for Claude 5 models"
+      },
+      {
+        "hash": "9d0a668c675945bf68b37ac67a40bc691ca35dfd",
+        "author": "morluto",
+        "subject": "fix(coding-agent): validate session persistence boundaries"
+      },
+      {
+        "hash": "a6483d89b4f1482ba2344b5696f19a3e5b5d07d1",
+        "author": "morluto",
+        "subject": "fix(coding-agent): preserve legacy session metadata"
+      },
+      {
+        "hash": "644c882ab8d298c308f62b0e2df5237efc603ed8",
+        "author": "morluto",
+        "subject": "fix(coding-agent): retain cancelled bash history"
+      },
+      {
+        "hash": "3a5f6792963a7351025d0007425a2b72db6e318a",
+        "author": "hunter",
+        "subject": "fix(coding-agent): wait out provider outages in auto-retry"
+      },
+      {
+        "hash": "53b4205f0ceb694cc42bb2c221db3319a654d97e",
+        "author": "hunter",
+        "subject": "fix(coding-agent): honor Retry-After past the backoff cap"
+      },
+      {
+        "hash": "61c0f7d2b783c1f3f41919352103e0c9ee085143",
+        "author": "fettpl",
+        "subject": "fix(ai): bound streamed argument parsing (fixes #942)"
+      },
+      {
+        "hash": "8e6101cb4600436a32091921133c7e6a1a154a0f",
+        "author": "fettpl",
+        "subject": "fix(ai): finalize streamed arguments on errors (fixes #942)"
+      },
+      {
+        "hash": "8599ab9cf295f5c582db771ce3fc3285e16d79e0",
+        "author": "twaldin",
+        "subject": "fix(coding-agent): wait for child compaction continuation"
+      },
+      {
+        "hash": "dea6855960daf0ea3ce7274361076f3b9077ef5c",
+        "author": "Parker Pettit",
+        "subject": "fix(coding-agent): close the abort-listener registration race"
+      },
+      {
+        "hash": "1718051e267819491548913b4ce196671697b6ae",
+        "author": "Chaitanya",
+        "subject": "fix(coding-agent): sanitize side-question tool history"
+      },
+      {
+        "hash": "ac9f5adb896f543ff45d79b484608f45f617681f",
+        "author": "Christian Stewart",
+        "subject": "fix(rlm): accept empty Codex model catalogs"
+      },
+      {
+        "hash": "5ff24754d7b555a4bd57f7ad6c0b6295446d80f8",
+        "author": "Christian Stewart",
+        "subject": "fix(goal): pause blocked autonomous continuation"
+      },
+      {
+        "hash": "a922a781233e389452d91b87875404d6f97600a8",
+        "author": "Kevin Thomas",
+        "subject": "fix(coding-agent): honor no-env across auth flows (ENG-4528)"
+      },
+      {
+        "hash": "ba1b78035ccc91c77daa8b31943cf5d04b80732d",
+        "author": "Kevin Thomas",
+        "subject": "fix(coding-agent): isolate trace login credentials (ENG-4528)"
+      },
+      {
+        "hash": "d215e02f4f2f12c22dcb09a6719bc6731033cd4d",
+        "author": "Sebastian",
+        "subject": "fix(coding-agent): make subagent cancellation explicit"
+      },
+      {
+        "hash": "c6d0351941242d8d035f456445ab671425fb823c",
+        "author": "andreolf",
+        "subject": "fix(coding-agent): reclaim stale session leases on Windows"
+      },
+      {
+        "hash": "7006c250c15d78f51606a33467ec44b40f235076",
+        "author": "andreolf",
+        "subject": "fix(coding-agent): treat an unreadable lease owner as active, not stale"
+      },
+      {
+        "hash": "ef7fd5ff37d2aebc35950efaba1ac4ca6aa6b92a",
+        "author": "Nikita",
+        "subject": "fix(coding-agent): rebuild the kernel venv while a kernel is running on Windows"
+      },
+      {
+        "hash": "d2b80a313fac72835914971965a5a78777ed546a",
+        "author": "v.podlinov_automacon.ru",
+        "subject": "fix(prime-agent-runtime): kill subprocess tree on TimeoutExpired to prevent Windows kernel hangs"
+      },
+      {
+        "hash": "f9e1ac4f3df37b1a07de20f56c8b0b4239ea7db3",
+        "author": "Andrew Neilson",
+        "subject": "fix(coding-agent): prevent input corruption in external editors"
+      },
+      {
+        "hash": "9c29b48a4a9de89d4bb5837da6a6045c8f34f9ee",
+        "author": "RelaxJonh",
+        "subject": "fix(ai): normalize unknown provider stop/status values as structured failures"
+      },
+      {
+        "hash": "af7ea05b338f14b532f7ff2b629091ff93afd794",
+        "author": "Gitlipe",
+        "subject": "fix(agent): stop parallel tool preflight after abort"
+      },
+      {
+        "hash": "5c4c3c511c4919db25dc745b0b369a985b53b4d9",
+        "author": "Christian Stewart",
+        "subject": "fix(coding-agent): decode large worker frames linearly"
+      },
+      {
+        "hash": "790e883754d951cabd69bcb6f266763c08deb76e",
+        "author": "Parithosh Jayanthi",
+        "subject": "fix(coding-agent): make /login sign-in URL copyable from headless terminals"
+      },
+      {
+        "hash": "cadd46e07a9597f823bb014800364765874d1137",
+        "author": "Parithosh Jayanthi",
+        "subject": "fix based on review"
+      },
+      {
+        "hash": "8913ebeff8d55159fd683d557b3512e15a27993f",
+        "author": "AI Assistant",
+        "subject": "fix(launcher): pass root tsconfig to tsx, fix send help flags, match rlm attributes"
+      },
+      {
+        "hash": "1b4c612210d19f55ed59a8c29e1b852ad8b3776a",
+        "author": "Chaitanya",
+        "subject": "fix(coding-agent): stabilize macOS process identity"
+      },
+      {
+        "hash": "2208c5957ce065ae115c2f0f51b39fefed79b6d7",
+        "author": "BILLKISHORE",
+        "subject": "fix(coding-agent): spread bare find_models across providers"
+      },
+      {
+        "hash": "bc980903c3c9db52bff8df5b57088fd8d77a084f",
+        "author": "BILLKISHORE",
+        "subject": "test(coding-agent): add issue 799 regression"
+      },
+      {
+        "hash": "ee61371118aafe21904b759b8cae7a221a3de22a",
+        "author": "BILLKISHORE",
+        "subject": "docs(changelog): note find_models provider spread"
+      },
+      {
+        "hash": "4102fab7c3befa7d2c59ff69e46afc188df67630",
+        "author": "Mamdouh Aboammar",
+        "subject": "fix(coding-agent): keep Homebrew installs package-manager owned"
+      },
+      {
+        "hash": "b4315328010c8a7ee05cc4800ae2f3a1ec5ca6b4",
+        "author": "hotragn",
+        "subject": "fix(coding-agent): defer and report heartbeat fires a busy session declines"
+      },
+      {
+        "hash": "be2cce3ebb8d9b92a1cc656b5ec12b4ef4ab50c8",
+        "author": "hotragn",
+        "subject": "fix(coding-agent): make continual harness state reachable from the prompt"
+      },
+      {
+        "hash": "c927b7ceaf9eefb15e882206ad39cb704965e4ad",
+        "author": "Joel Tony",
+        "subject": "fix(ai): route Copilot Grok 4.5 to responses"
+      },
+      {
+        "hash": "2e816dd9c1f58f9ddd8ac2972bd92907550914ab",
+        "author": "fettpl",
+        "subject": "fix(ai): declare Smithy dependencies (fixes #948)"
+      },
+      {
+        "hash": "a4da8e7741b5ed0ff34369575ebf6bef7f11a1e7",
+        "author": "fettpl",
+        "subject": "test(ai): harden Smithy package contract (fixes #948)"
+      },
+      {
+        "hash": "93185a4170fe2e2373028715500882c44988282f",
+        "author": "Adolanium",
+        "subject": "fix(ai): reprice Anthropic cache writes from final stream usage"
+      },
+      {
+        "hash": "8d706ef812295edcde6c3ef6534668eaa643756a",
+        "author": "Adolanium",
+        "subject": "fix(coding-agent): isolate throwing tool_call extension handlers"
+      },
+      {
+        "hash": "4f255f617fcd0cf7c2d0ca8c5653e010dc702ec0",
+        "author": "Reyansh Gupta",
+        "subject": "fix(coding-agent): bound JSONL command reads from untrusted local peers"
+      },
+      {
+        "hash": "5779e494305ab2df282ba7743410e1de61e0282a",
+        "author": "BILLKISHORE",
+        "subject": "fix(ai): let explicit maxTokens bypass output cap"
+      },
+      {
+        "hash": "0c12785599e69ed58f37a4a83bb1db6253bba4cf",
+        "author": "BILLKISHORE",
+        "subject": "fix(coding-agent): flag configured maxTokens"
+      },
+      {
+        "hash": "d4062df0b297bdd3207fb4911d9019a51097cdfd",
+        "author": "BILLKISHORE",
+        "subject": "test(ai): cover explicit maxTokens passthrough"
+      },
+      {
+        "hash": "f7822c8a71c90fd29d7e891d0064cb3e88c31313",
+        "author": "BILLKISHORE",
+        "subject": "test(coding-agent): add issue 755 regression"
+      },
+      {
+        "hash": "bffa12b18b428dbbd7a8be5ad920d9abdda137e6",
+        "author": "BILLKISHORE",
+        "subject": "docs(changelog): note configured maxTokens fix"
+      },
+      {
+        "hash": "d46b502ca98f907b6891544e1feb1f975e434023",
+        "author": "Alan Li",
+        "subject": "fix(coding-agent): retain goal skill with --no-skills"
+      },
+      {
+        "hash": "9d86d1a56c07439ce7568d17d115d1f9c054e956",
+        "author": "Kevin Thomas",
+        "subject": "fix(ai): normalize anthropic record tool schemas"
+      },
+      {
+        "hash": "ee709f7343f71ced7db44031078d3d5d1fe370b7",
+        "author": "Kevin Thomas",
+        "subject": "fix(ai): keep record schema fix unreleased"
+      },
+      {
+        "hash": "c4155acc5315ed8101834b0ed3ac6c38bb3aad80",
+        "author": "Kevin Thomas",
+        "subject": "docs(ai): restore changelog spacing"
+      },
+      {
+        "hash": "8955517c1fa7f2c502e764a63f9bdbde8cccc889",
+        "author": "Kevin Thomas",
+        "subject": "fix(ai): preserve anthropic tool schema semantics"
+      },
+      {
+        "hash": "80f03a1ad4e937488c57865992a0c4170d3032ce",
+        "author": "Kevin Thomas",
+        "subject": "fix(ai): filter anthropic root schema metadata"
+      },
+      {
+        "hash": "09142dc810955eab7c4f21e8ae9c7ddda1709403",
+        "author": "Rohit Behera",
+        "subject": "fix(coding-agent): wait for the kernel to exit in dispose"
+      },
+      {
+        "hash": "24cebb3dbb42fce2b43e40d87dfbdc774db34363",
+        "author": "Rohit Behera",
+        "subject": "fix(coding-agent): escalate to SIGKILL when the kernel ignores SIGTERM"
+      },
+      {
+        "hash": "b5705ac286d72bbb0556ec18b5e5ad5f53475c6a",
+        "author": "Rohit Behera",
+        "subject": "test(coding-agent): cover the caller's cwd, not just the kernel pid"
+      },
+      {
+        "hash": "d96df7d9ee6353a507040dc632100f01af00af87",
+        "author": "Rohit Behera",
+        "subject": "test(coding-agent): pin direct-spawn in the dispose regression"
+      },
+      {
+        "hash": "55ef5824fec9cc3dd2e90aee84f8188b8d531e2c",
+        "author": "Jeff C",
+        "subject": "fix: resolve tier 2 integration issues"
+      },
+      {
+        "hash": "57d105e886149b51055772ebc0fc73662d051bae",
+        "author": "Jeff C",
+        "subject": "fix: refresh lockfile after upstream rebase"
+      },
+      {
+        "hash": "4ffd1331d9508aabd1f0163db59024d5f5a8a5de",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): standardize cron scheduling (fixes #940)"
+      },
+      {
+        "hash": "4dd75c04799633418ac1db8db93c920b63bdd414",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): migrate persisted cron semantics (fixes #940)"
+      },
+      {
+        "hash": "a293383b8ef9287610533763434d20ba3472a03c",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): migrate late cron artifacts (fixes #940)"
+      },
+      {
+        "hash": "c03a44f0214e3ad06aaf4a3674de943bd53d1409",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): coalesce daemon peer sync (fixes #943)"
+      },
+      {
+        "hash": "7d01221fd5dfb065e587f41be1b49a654d5637a0",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): retry stale peer catalogs (fixes #943)"
+      },
+      {
+        "hash": "0e03b8682d24ddda542dd13223b85c1707c2bf25",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): hand off settling peer sync (fixes #943)"
+      },
+      {
+        "hash": "9f2cbd3344b08cd9388e63cc5247344cf63ceadf",
+        "author": "hotragn",
+        "subject": "fix(coding-agent): stamp agent messages with the sender's compose time"
+      },
+      {
+        "hash": "333307d622701d1aced3b76f5de6b475f58e7695",
+        "author": "warmshao",
+        "subject": "fix(coding-agent): hide Windows console windows for spawned subprocesses"
+      },
+      {
+        "hash": "48825af61c3e13758992e05217754c8e73fec6b4",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): cover hidden clipboard subprocess"
+      },
+      {
+        "hash": "412065c01d84a789a19ffa9e29a6973a313deb75",
+        "author": "Norman Nunley, Jr",
+        "subject": "fix(coding-agent): acknowledge queued prompts"
+      },
+      {
+        "hash": "81750291ab9996da6273f07b8ff487578b545063",
+        "author": "Norman Nunley, Jr",
+        "subject": "docs(coding-agent): note steering acknowledgement"
+      },
+      {
+        "hash": "96654ac8f45bf8f02a173f0e49daf0f42453e8bc",
+        "author": "fettpl",
+        "subject": "docs(tui): design packed quick start, fixes #952"
+      },
+      {
+        "hash": "7134788ed4edc6f13e67d2543c07940b48c3c3f5",
+        "author": "fettpl",
+        "subject": "fix(tui): make packed quick start runnable, fixes #952"
+      },
+      {
+        "hash": "2d559e81bcca68c2df2582486fe19c04b80cfdfb",
+        "author": "fettpl",
+        "subject": "test(tui): harden packed quick start smoke, fixes #952"
+      },
+      {
+        "hash": "d86f614c4aa4770f1cda190daf550cdc3c903d2a",
+        "author": "fettpl",
+        "subject": "test(tui): run npm CLI portably, fixes #952"
+      },
+      {
+        "hash": "50579e2be6cb676f43ebcad271b49eccc241938b",
+        "author": "Jeff C",
+        "subject": "test(tui): resolve packed dependencies from package root, fixes #952"
+      },
+      {
+        "hash": "b5886ad7353da17857f2d465c29a2cdf18e13a36",
+        "author": "Teddy Tennant",
+        "subject": "fix(ai): map Codex stream errors from nested error fields"
+      },
+      {
+        "hash": "6cf9b9f856512095074699a3a0abcd520b8f4f62",
+        "author": "emindagg",
+        "subject": "fix(installer): handle missing POSIX shell on Windows"
+      },
+      {
+        "hash": "6ff2a8c20790fdb7e382e6c700acdd174a20ca02",
+        "author": "emindagg",
+        "subject": "fix(installer): validate source before shell probe"
+      },
+      {
+        "hash": "c8125a830cf427c66a0be224d5a4a390c5fd3cc2",
+        "author": "Chaitanya",
+        "subject": "fix(coding-agent): reclaim reused Termux lease pids"
+      },
+      {
+        "hash": "111a593b570b95d9b96c49ff5897cf9bf19b49a8",
+        "author": "pushpraj-core",
+        "subject": "fix(coding-agent): reject ctx.ui.custom() under daemon/RPC instead of silent no-op"
+      },
+      {
+        "hash": "54f0105157a111ea9d9ce4dfe4acf99f5e9ade3a",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): cover unsupported custom UI, fixes #680"
+      },
+      {
+        "hash": "4919dfe0ce64c480cc0797f219ced171e083ca1e",
+        "author": "rbalachandar",
+        "subject": "fix(tui): detect tmux hyperlink support"
+      },
+      {
+        "hash": "2301c5c0930f7e03b46495f247d67c5776555f0a",
+        "author": "Jeff C",
+        "subject": "fix(tui): harden tmux capability probing, fixes #686"
+      },
+      {
+        "hash": "a4a279b578ff407887b4b6fed37e47abf1aa50c2",
+        "author": "yurekami",
+        "subject": "fix(coding-agent): report the worker exit status when the startup gate fails"
+      },
+      {
+        "hash": "5478f0e5e8562fbb0f31e6c83e4fdaf759cde658",
+        "author": "Mamdouh Aboammar",
+        "subject": "fix(coding-agent): add Prime process marker"
+      },
+      {
+        "hash": "2348062da1b123e5bfb49e22835fdebc0172b51b",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): verify process marker inheritance, fixes #750"
+      },
+      {
+        "hash": "15922396539fc5195118e095708ee9da058d5687",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): show progress while refine runs"
+      },
+      {
+        "hash": "774568308027e5de3155cf00a5e9af7f50f546a1",
+        "author": "Junho Yeo",
+        "subject": "docs(coding-agent): note refine progress feedback"
+      },
+      {
+        "hash": "166c24c2e03590b7383abeb585163ceb75a1d81b",
+        "author": "Junho Yeo",
+        "subject": "fix(coding-agent): reconcile refine loader on attach"
+      },
+      {
+        "hash": "f151b68307c6e1c1bf718788cb1ef318b65afd02",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): align refine status harness, fixes #1035"
+      },
+      {
+        "hash": "9c8f3b89968170cc97ba1762a3c8b172c23ec91a",
+        "author": "kudala-bharani",
+        "subject": "fix(coding-agent): show onboarding skip key"
+      },
+      {
+        "hash": "55629b9cd9129b265b91fe7c6e6848a8ea1c9c53",
+        "author": "kudala-bharani",
+        "subject": "docs(coding-agent): note onboarding skip hint"
+      },
+      {
+        "hash": "a84d83115b95e7f93b8713ccaa7ea1000fc73ee6",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): cover onboarding skip states, fixes #992"
+      },
+      {
+        "hash": "de4b9fa1dba3eac64fd4bc4d6323ee1f0b4889a0",
+        "author": "anusbutt",
+        "subject": "fix(coding-agent): update messaging docs, fixes #951"
+      },
+      {
+        "hash": "0bc22c5c7071ce57f72fa2091b012f571698b958",
+        "author": "anusbutt",
+        "subject": "docs(coding-agent): fix changelog attribution (fixes #951)"
+      },
+      {
+        "hash": "6e4cfcae607487c7cf88e0440904895adfc16045",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): support TypeScript 7 docs validation, fixes #951"
+      },
+      {
+        "hash": "5e752e1028b8e60c40019b60e68191a37dad69e3",
+        "author": "0xqtpie",
+        "subject": "fix(coding-agent): preserve untouched bytes when fuzzy edit matching is used"
+      },
+      {
+        "hash": "be5089857ac12a7bdf8e6a3766380082d0f24f5e",
+        "author": "0xqtpie",
+        "subject": "test(coding-agent): drive fuzzy edit regressions through the suite harness"
+      },
+      {
+        "hash": "8f8b391f87a4403ddcdf94a74b73264d071fc8bd",
+        "author": "0xqtpie",
+        "subject": "fix(coding-agent): keep preceding trailing whitespace when a fuzzy match starts with a newline"
+      },
+      {
+        "hash": "8ed096bff271c77ea1902104fae6de771a3f4b7f",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden fuzzy edit boundaries, fixes #654"
+      },
+      {
+        "hash": "ae8c711fa1fcf978764a46047a4728db82047677",
+        "author": "ayushcodes13",
+        "subject": "fix(installer): isolate npm tarball install prefix"
+      },
+      {
+        "hash": "547b3f94491833d0bed4abbe8a85cf4ae4cf08a0",
+        "author": "Jeff C",
+        "subject": "fix(installer): harden owned-prefix migration (fixes #1042)"
+      },
+      {
+        "hash": "fcd4df186b580e16f575113b5ea4691a87b8ed05",
+        "author": "aoright",
+        "subject": "fix(coding-agent): preserve cwd when resuming sessions"
+      },
+      {
+        "hash": "dd1624582ec27a15e23d4e87dc5ab16b9d36895b",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): harden resumed cwd regression (fixes #1124)"
+      },
+      {
+        "hash": "aecc39bf34cb1911ff97ea6fccb7d3144a5d031a",
+        "author": "Ralf Waldukat",
+        "subject": "fix(coding-agent): invalidate snapshot cache when worker recovery drops operations"
+      },
+      {
+        "hash": "0af9838da83d6baaf352b38d73a7b2d34fc4cf12",
+        "author": "Ralf Waldukat",
+        "subject": "fix(coding-agent): contain malformed snapshot duplicates"
+      },
+      {
+        "hash": "6180305fa898c303f80d45c18e50aea179b754ff",
+        "author": "Ralf Waldukat",
+        "subject": "test(coding-agent): strengthen recovery cache invalidation"
+      },
+      {
+        "hash": "5c6bef5d8ed5d0fb7602e7f58e2d31898db29202",
+        "author": "Adolanium",
+        "subject": "fix(coding-agent): kill the background install command on installer interrupt"
+      },
+      {
+        "hash": "99faace18b13b3cda134eeeaf8bed46165cc593a",
+        "author": "Jeff C",
+        "subject": "fix(installer): harden interrupted process cleanup (fixes #1008)"
+      },
+      {
+        "hash": "14f6dd919c90541ec72c6a1c6f6142ce30118e94",
+        "author": "Diyon18",
+        "subject": "fix(coding-agent): replay startup notifications on first attach"
+      },
+      {
+        "hash": "6c3ada50715281224205c400c7fa8f81bdef11ac",
+        "author": "Diyon18",
+        "subject": "fix(coding-agent): scope startup notification replay"
+      },
+      {
+        "hash": "223e7f91591dadc2fa148fb53b1cff80ebd3f0e8",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden startup notification replay (fixes #1032)"
+      },
+      {
+        "hash": "afef190cfe6038bd2ddfef38f8d48f800af6760f",
+        "author": "Alan",
+        "subject": "fix(coding-agent): bound IPython host requests"
+      },
+      {
+        "hash": "57b26300a2f69be4e03845d807f9929a9d1fff49",
+        "author": "Alan",
+        "subject": "fix(coding-agent): propagate host request aborts"
+      },
+      {
+        "hash": "35f5c13fdf4714959e9a9cf154434b60d725f2bb",
+        "author": "Alan",
+        "subject": "fix(coding-agent): drain lost-idle executions"
+      },
+      {
+        "hash": "c8d52c365f58812e4ce2bf224ddbc04b97480f7b",
+        "author": "Alan",
+        "subject": "test(coding-agent): run lost-idle regression"
+      },
+      {
+        "hash": "b5614c38422ead1d114180068192d77d0a50ce31",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden kernel host request lifecycle (fixes #848)"
+      },
+      {
+        "hash": "d1d93e952430fe52d5a70c2b11871e4ef9360835",
+        "author": "fettpl",
+        "subject": "fix(ai): make OAuth waits terminal and leak-free fixes #938"
+      },
+      {
+        "hash": "8ae1f15e6222c2cbc77311216f44274c0d8e2a79",
+        "author": "fettpl",
+        "subject": "fix(ai): cover OAuth callback startup failures fixes #938"
+      },
+      {
+        "hash": "ab8f6f38e91be599fba4f664e5dfcebd9a296750",
+        "author": "Jeff C",
+        "subject": "fix(ai): adapt terminal OAuth waits to current flows (fixes #938)"
+      },
+      {
+        "hash": "479263b308fa44e61859effdaf6d42e54e8ac477",
+        "author": "Seth",
+        "subject": "fix(coding-agent): passivate quiescent roots after restart"
+      },
+      {
+        "hash": "f4eecd048401f1223609d89975d86a7826955f1e",
+        "author": "Seth",
+        "subject": "fix(coding-agent): make passivated workers processless"
+      },
+      {
+        "hash": "7f984c9005bd0ca0611d2ba19df23f0010f70363",
+        "author": "Seth",
+        "subject": "test(coding-agent): cover retained root restart passivation"
+      },
+      {
+        "hash": "7d6aeefe18f49edd1276f44e6a5a21bef9d0aa05",
+        "author": "Seth",
+        "subject": "fix(coding-agent): fail closed on passivation recovery state"
+      },
+      {
+        "hash": "0629eaef81c0f472695344791ce9dd7b400112e0",
+        "author": "Seth",
+        "subject": "fix(coding-agent): reject incompatible passive attaches before wake"
+      },
+      {
+        "hash": "aef4c180a6a976749ff788448e77b4b2f965ffd8",
+        "author": "Seth",
+        "subject": "fix(coding-agent): wake abort state operations"
+      },
+      {
+        "hash": "5e25f742ef2e19393cc589b150c866203a7c7bff",
+        "author": "Seth",
+        "subject": "fix(coding-agent): skip passive roots during update prepare"
+      },
+      {
+        "hash": "170aef74a34d9305c5ee8e767d9caf30d4245a79",
+        "author": "Seth",
+        "subject": "fix(coding-agent): fence passive stop finalization"
+      },
+      {
+        "hash": "11cd3a740371221a1f9dbeced15fbaea085e7fba",
+        "author": "Seth",
+        "subject": "fix(coding-agent): retain non-deleting stop routes"
+      },
+      {
+        "hash": "2cb7b4fccbf1ce595e250b9ea5ccf31c7e6bc68c",
+        "author": "Seth",
+        "subject": "fix(daemon): recover persisted heartbeat roots"
+      },
+      {
+        "hash": "c18380509960cb87bffc96c0f0cc5d69e8a4640b",
+        "author": "Seth",
+        "subject": "fix(daemon): preserve concurrent stop intents"
+      },
+      {
+        "hash": "f815698519df2624c8d8fcf2a61625aa83ff38a2",
+        "author": "Seth",
+        "subject": "fix(daemon): complete concurrent stop finalization"
+      },
+      {
+        "hash": "23b6c91df7c13b8a16f3f095c17138c3ee8601ba",
+        "author": "Seth",
+        "subject": "fix(daemon): finalize late archive deletion"
+      },
+      {
+        "hash": "a8adeeb1f09583ad28007539280ac4655408fabe",
+        "author": "Seth",
+        "subject": "fix(daemon): defer processless owned worker recovery"
+      },
+      {
+        "hash": "dad00c898a7096ffde31c1197d20635b2ea76ed1",
+        "author": "Seth",
+        "subject": "style(coding-agent): format cron recovery guard"
+      },
+      {
+        "hash": "36a7aa55fcca38c10bb8adc3d03b0914b985e530",
+        "author": "Seth",
+        "subject": "test(coding-agent): type restart passivation fixtures"
+      },
+      {
+        "hash": "10847570d5c962ecffb484359b6dcb3f2c3a65d2",
+        "author": "Seth",
+        "subject": "fix(daemon): fail closed on stale passive worker state"
+      },
+      {
+        "hash": "80f5cc9c7ec83a5c7a4ded5ce9f7b7a67c7a09ca",
+        "author": "Seth",
+        "subject": "style(coding-agent): format passive recovery fixes"
+      },
+      {
+        "hash": "3fbbc342782c5b4d599bac7c4ef6613e698fdf85",
+        "author": "Seth",
+        "subject": "fix(daemon): preserve passive recovery invariants"
+      },
+      {
+        "hash": "f640dfa6f9971b8aa02d423f2593be793c3055c5",
+        "author": "Seth",
+        "subject": "fix(daemon): preserve passive heartbeat and legacy recovery state"
+      },
+      {
+        "hash": "61bb58977e1637d3f2eeaf7e640d899d1d559d9c",
+        "author": "Seth",
+        "subject": "fix(daemon): retain processless recovering descriptors"
+      },
+      {
+        "hash": "3513efed329aa8fe0a1a68abc909c94ae3d74b4d",
+        "author": "Seth",
+        "subject": "fix(daemon): reject malformed recovering identities"
+      },
+      {
+        "hash": "e91de46c7e9c4dc594e44d65593958f0a38dc412",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden restart passivation (refs #1107)"
+      },
+      {
+        "hash": "ca28b313c212b0e9bc46e08c9a046358f2661983",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): make harness writes transactional (fixes #929)"
+      },
+      {
+        "hash": "8726dc665e54335766ef854d2fe26e09d3f18e79",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): fence harness state locks (fixes #929)"
+      },
+      {
+        "hash": "737a68dea00c01695208b26bb7c26819d35d3d8b",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): bound harness locks to one host (fixes #929)"
+      },
+      {
+        "hash": "846504afa8807f168b507381f7f29828511764dc",
+        "author": "fettpl",
+        "subject": "fix(coding-agent): preserve unreadable harness locks (fixes #929)"
+      },
+      {
+        "hash": "39e75cc400af92efe3565bdfa1899cb1ca711c24",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden cross-runtime harness commits (fixes #929)"
+      },
+      {
+        "hash": "3c9a3a4c7e5bfef3b927fd2a78bba1adef7052b5",
+        "author": "fettpl",
+        "subject": "docs: design integrated release workflow"
+      },
+      {
+        "hash": "1502085d322c23bc6a10e052e802270a7213ac2b",
+        "author": "fettpl",
+        "subject": "docs: plan integrated release workflow"
+      },
+      {
+        "hash": "911d00f1ef93f81220e547d9c79b1b493af5d4b6",
+        "author": "fettpl",
+        "subject": "docs: define supported package artifacts (fixes #949)"
+      },
+      {
+        "hash": "f96c5bf9396614c6cde3d5c0d861c8b409fb132c",
+        "author": "fettpl",
+        "subject": "fix(packaging): support branded release artifacts (fixes #949)"
+      },
+      {
+        "hash": "5242460f20ebf026ed62473b5b3778a32695ca6f",
+        "author": "fettpl",
+        "subject": "docs: define CI-authoritative release lifecycle (fixes #934)"
+      },
+      {
+        "hash": "6f7b3ad1f861ae5ee4d6e84d299120ac6b07c6e1",
+        "author": "fettpl",
+        "subject": "fix(release): make CI the release authority (fixes #934)"
+      },
+      {
+        "hash": "f3a95e2a91939185144c2d1d0b641451a132a69b",
+        "author": "fettpl",
+        "subject": "fix(release): harden retry and recovery paths (fixes #934)"
+      },
+      {
+        "hash": "2818991e8fabc31d6b7d1efe895ec5486ff609a5",
+        "author": "fettpl",
+        "subject": "fix(release): bind manual operations to trusted workflows (fixes #934)"
+      },
+      {
+        "hash": "54bbbe2f6336aab60ba187b5bc5ea7289569f1e6",
+        "author": "fettpl",
+        "subject": "fix(release): authorize rollback before serialization (fixes #934)"
+      },
+      {
+        "hash": "af3bb17ff3fe7295e5f946b28fd7191bf3371178",
+        "author": "fettpl",
+        "subject": "fix(ci): gate releases on exact tested SHA (fixes #927)"
+      },
+      {
+        "hash": "1766631185e635c2e268a321566daa178d09cf04",
+        "author": "fettpl",
+        "subject": "fix(ci): harden workflow privileges (fixes #926)"
+      },
+      {
+        "hash": "dbd33d194485db59ab71cc3bb2f708322196183e",
+        "author": "fettpl",
+        "subject": "fix(release): integrate verified distribution lifecycle"
+      },
+      {
+        "hash": "a85997a426af5585964ddaebde13d822dafadba5",
+        "author": "fettpl",
+        "subject": "fix(release): bind publication to gated runs"
+      },
+      {
+        "hash": "50cfcf6c9400c0117d74a16fe69521c7909bc773",
+        "author": "Jeff C",
+        "subject": "fix(release): harden verified publication (fixes #926, fixes #927, fixes #934, fixes #949)"
+      },
+      {
+        "hash": "c08433fcbef68b74eaac6dd049dda925fe06c4d4",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): complete Windows parity (#1053)"
+      },
+      {
+        "hash": "64a9232c7c7a7057007189a4ada9d4fe665569c0",
+        "author": "icy000z",
+        "subject": "refactor: replace hardcoded keys with configurable keybindings"
+      },
+      {
+        "hash": "57ff7200d512cafbe13dfd4ff52f4ec7d1e2913c",
+        "author": "Jeff C",
+        "subject": "test: cover configurable keybinding routing (#915)"
+      },
+      {
+        "hash": "819050a4fa818e651f9d42c53a5679dea2ade813",
+        "author": "Cooper Miller",
+        "subject": "fix(agent): fail closed on provider quota exhaustion"
+      },
+      {
+        "hash": "683d38fc370cbfd5085a5de3b166021486b9612a",
+        "author": "Cooper Miller",
+        "subject": "fix: harden provider quota circuit and failure recovery"
+      },
+      {
+        "hash": "465558858964f1e9112de5e71367d3a0aa20250c",
+        "author": "Cooper Miller",
+        "subject": "fix: block model-backed commands while quota circuit is open"
+      },
+      {
+        "hash": "d14c9b0d07bf164cae9b979a9085452e12be7c7f",
+        "author": "Cooper Miller",
+        "subject": "fix: rollback blocked despite no inference"
+      },
+      {
+        "hash": "3781db68aed32126f3ebc840cee97ecc4377a13f",
+        "author": "Jeff C",
+        "subject": "fix(agent): harden quota containment, fixes #795"
+      },
+      {
+        "hash": "dd897495d76887de567751572e25affcb067af8b",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): refresh command-only peer activity (fixes #565)"
+      },
+      {
+        "hash": "521a751cb7cacb2103264ab77a5cff0493ca7fd5",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): isolate snapshot transcript caches (fixes #427)"
+      },
+      {
+        "hash": "8ea00ab0a007902bc86e6d0c59cb1bcc427a4476",
+        "author": "nickadminroot",
+        "subject": "Fix extension status rendering in footer"
+      },
+      {
+        "hash": "4c94f96cfc532d95cfbc7bcfa0bc629fb1eed8a1",
+        "author": "nickadminroot",
+        "subject": "Preserve extension status across session replacement"
+      },
+      {
+        "hash": "eeefe119c82e1506f7a2380008d15890e862f534",
+        "author": "nickadminroot",
+        "subject": "Harden extension status restoration across daemon sessions"
+      },
+      {
+        "hash": "2cca550ab2d4af2952046ea34fdc3f8ef7851bac",
+        "author": "nickadminroot",
+        "subject": "Fix extension status snapshot compatibility"
+      },
+      {
+        "hash": "7b38d914c3717faa9fa9f48f0722736aacde2d90",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): adapt extension status recovery, fixes #737"
+      },
+      {
+        "hash": "5e0f3a97dfe991c5ba9a1e9e78de9cb65799aedb",
+        "author": "Slimydog21",
+        "subject": "fix(daemon): create parent dir for custom --daemon-socket paths"
+      },
+      {
+        "hash": "8fbc3715a118bbd9ceabf6a6f20f1eff5d470b45",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): harden custom socket setup (fixes #1292)"
+      },
+      {
+        "hash": "930d7512ff63781701ca7a45acbddb88d11fa252",
+        "author": "Seth Karten",
+        "subject": "fix(security): contain private session artifacts"
+      },
+      {
+        "hash": "acc8e6d5bc51ab0226068de22fbf5d047ac7977b",
+        "author": "Seth Karten",
+        "subject": "fix(security): harden remaining private file sinks"
+      },
+      {
+        "hash": "747a5a25eb9bb4eb759b4fe38d9431df1e958665",
+        "author": "Seth",
+        "subject": "fix(security): recover private session races"
+      },
+      {
+        "hash": "abfc5ffe1124f78d4252bb755693741fa8bb33d7",
+        "author": "Seth",
+        "subject": "test(security): cover unsafe harness loads"
+      },
+      {
+        "hash": "01af9b5ef41873ffda8327500c146f7d6d36558c",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): adapt private artifact containment (fixes #1249)"
+      },
+      {
+        "hash": "ffb6fecba9f0514aa2a78ab5301d3b0da2983f73",
+        "author": "Seth Karten",
+        "subject": "docs(security): define autonomous run isolation"
+      },
+      {
+        "hash": "fac22821cb180fb685395e80759379bb5da95a08",
+        "author": "Seth Karten",
+        "subject": "fix(security): keep no-session descendants ephemeral"
+      },
+      {
+        "hash": "a17ae6c07678bb851b294fe6cac79210fe1d9f90",
+        "author": "Seth Karten",
+        "subject": "docs(security): correct ephemeral RLM cleanup"
+      },
+      {
+        "hash": "d5938b083b7f72d2dcbe6cb5fa592021d7fa531f",
+        "author": "Seth",
+        "subject": "fix(security): preserve ephemeral descendant depth"
+      },
+      {
+        "hash": "b9ee009e380114364e69a2c42f2f516de1fd46f3",
+        "author": "Seth",
+        "subject": "docs(security): clarify explicit tool overrides"
+      },
+      {
+        "hash": "390daa6195095966499cae834990c4eca6fc6b18",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): keep transient sessions private (fixes #1120)"
+      },
+      {
+        "hash": "53e4781e194c0af1796fb88cdb3f57b1e500566e",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): materialize assigned session files (fixes #1249)"
+      },
+      {
+        "hash": "c450a2629559806618ef6049157b569975fccc08",
+        "author": "Seth",
+        "subject": "fix(security): cancel admitted RLM work on host teardown"
+      },
+      {
+        "hash": "8b6d7419db41d07bbcb4a1a2c99e4ca5c1b383c6",
+        "author": "Jeff C",
+        "subject": "docs(coding-agent): record kernel-hosted RLM cleanup (fixes #1253)"
+      },
+      {
+        "hash": "b3ab61289c7558732736b6ea4be24f29e4a80700",
+        "author": "Seth",
+        "subject": "fix(coding-agent): retain root kill cleanup ownership (fixes #1240)"
+      },
+      {
+        "hash": "3e526a8f1c2669e08e99dfb741860cfb0c8425d6",
+        "author": "mj-cjm",
+        "subject": "fix(ai): reject invalid OAuth provider selections"
+      },
+      {
+        "hash": "f23b4fff3cd40fbb7072276dcf5827b15368f862",
+        "author": "Seth",
+        "subject": "fix(daemon): preserve recovered worker registry authority (#1267)"
+      },
+      {
+        "hash": "fed8b554839c7c508c1e1ab9f2b14b15152451f8",
+        "author": "Seth",
+        "subject": "fix(lifecycle): overlap refinement drain with kernel teardown"
+      },
+      {
+        "hash": "d21bb28bf02ef34cffdc0a919b76fb499e13fcae",
+        "author": "Seth",
+        "subject": "fix(lifecycle): observe concurrent drain rejection"
+      },
+      {
+        "hash": "3e26eabea2a8cead4e0e7e24703a4df5ead2936d",
+        "author": "Seth",
+        "subject": "fix(lifecycle): finalize failed async disposal"
+      },
+      {
+        "hash": "6e1b1c5b109196d1e90a58d7289c25ccbe413f2c",
+        "author": "Seth",
+        "subject": "fix(lifecycle): fence runtime rebuild during teardown"
+      },
+      {
+        "hash": "33279976c0e9bad23a1648aa76f1705ecec484c1",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): fence session teardown"
+      },
+      {
+        "hash": "1663e202704a3b582815b04316e37462e2130766",
+        "author": "irl-dan",
+        "subject": "fix(coding-agent): restore externally deleted supervisor owner records"
+      },
+      {
+        "hash": "1898e4e76e284a38dabf4c02ae0010b965366f30",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): harden supervisor owner restoration"
+      },
+      {
+        "hash": "6188c46db4e358445c9f214c636866f3e80e21cd",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): fence owner repair during update restart"
+      },
+      {
+        "hash": "a1a3f964f7fb36bd81268be25c64fa7babd19c96",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): anchor saved sibling names (#1262)"
+      },
+      {
+        "hash": "5555667ddb680e65e05bd8f33625cba5cb5aab11",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): reconcile host request contexts"
+      },
+      {
+        "hash": "471c3487c5187953b888bd7f389d21593c6e4a4a",
+        "author": "Jeff C",
+        "subject": "test(coding-agent): align disposal lifecycle assertion"
+      },
+      {
+        "hash": "b4ce7098a135a08235fd207f99d67280e9ca3432",
+        "author": "Evgenii",
+        "subject": "fix(coding-agent): allow the self-update tarball install on npm 12"
+      },
+      {
+        "hash": "888584959a71519dcb220fe7f78427da0e28242d",
+        "author": "Evgenii",
+        "subject": "docs(coding-agent): changelog entry for the npm 12 self-update fix"
+      },
+      {
+        "hash": "f505990172c3882f27776a6c0a16c5fb3619e4c4",
+        "author": "liuyu",
+        "subject": "fix(coding-agent): pickle callable Python skill modules by reference"
+      },
+      {
+        "hash": "cbb038b10b58860974434356c8d352bb875b9932",
+        "author": "Jeff C",
+        "subject": "updated pnpm"
+      },
+      {
+        "hash": "bd23a7a5234ce0c41105551de09658867ecfc32c",
+        "author": "Jeff C",
+        "subject": "chore: reconcile origin/main after rebase"
+      },
+      {
+        "hash": "66a67d775767f792174dd3a10de4e3e4a8414c98",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): reconcile upstream rebase artifacts"
+      },
+      {
+        "hash": "009690e1d0735d77271cd14d90771feaf5ceacad",
+        "author": "Jeff C",
+        "subject": "test.sh: use pnpm test"
+      },
+      {
+        "hash": "abfde1b59de7075838743f6d3e21a3519f65fae4",
+        "author": "Jeff C",
+        "subject": "test: add reusable fast bisect runners"
+      },
+      {
+        "hash": "7b1f7e3ae7754d4076b06688b0d633b94504988c",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): reconcile daemon startup after rebase"
+      },
+      {
+        "hash": "0cd3969542d8db623d1261f1b042b8e5b63876b1",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): preserve worker recovery artifacts"
+      },
+      {
+        "hash": "d823978f00bcc97a28939cfd9acd0fa08cd7613b",
+        "author": "Jeff C",
+        "subject": "chore(ai): refresh generated model catalog"
+      },
+      {
+        "hash": "f49bab51b65188dc7bb535dfd2742f976501059a",
+        "author": "Jeff C",
+        "subject": "chore: add local HEAD installer"
+      },
+      {
+        "hash": "392e57df65794aa080bbce8c9b8d0c245dfb4c23",
+        "author": "Jeff C",
+        "subject": "fix(coding-agent): reconcile rebased lifecycle types"
+      },
+      {
+        "hash": "d927adfee4e5adb25daf7b92fa7b688f09335f87",
+        "author": "Jeff C",
+        "subject": "fix(ai): retain Workers AI gateway model mirrors"
+      },
+      {
+        "hash": "af263b3f735142e26e629cb829afb3761bf83309",
+        "author": "Jeff C",
+        "subject": "docs(coding-agent): restore rebased changelog fragments"
+      }
+    ],
+    "note": "separate older fork line; candidates for later semantic triage, not part of six-commit replay by ancestry"
+  },
+  "other_refs": {
+    "xonsh-and-regi": "shares pre-xonsh prefix but diverges later, 19 unique commits against xonsh-repl; not cleaner boundary",
+    "arbitrary-model-loading": "one commit after xonsh-repl; post-xonsh",
+    "xonsh-repl-pre-v0.9.8-rebase": "same six-commit prefix rebased to v0.9.6",
+    "origin/xonsh-repl": "same tip as local xonsh-repl"
+  },
+  "targeted_authorship": {
+    "scripts/install.xsh:1-36": "06bdcf1cb Jeff C",
+    "install.ps1:1-16": "2f8c890b6 Jeff C",
+    "pnpm-workspace.yaml:1-16": "fd74dfdd1 Jeff C",
+    "package.json:47 dotenv": "f3e865f03 Jeff C"
+  },
+  "unknowns": [
+    "Whether upstream Rust v0.10.0 already supplies equivalent behavior for any commit",
+    "Which separate origin/main changes are still intended product requirements",
+    "Whether stale remote-tracking refs match current remotes; no network fetch performed",
+    "The first pnpm change differs in patch shape after re-rooting; require behavior-level review"
+  ]
+}
