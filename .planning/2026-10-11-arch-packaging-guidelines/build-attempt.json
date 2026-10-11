@@ -1,0 +1,77 @@
+{
+  "agent": "buildeng-luna",
+  "process_state": {
+    "agent": "buildeng-luna",
+    "state": "blocked",
+    "evidence": "/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/logs/prime-agent-0.9.8-1-x86_64-build.log",
+    "blocker": "pnpm install 的 postinstall lifecycle 引用不存在的 packages/coding-agent/postinstall.cjs，導致 MODULE_NOT_FOUND。",
+    "next": "待父決是否修復來源缺檔後另行重試；本次未重試。"
+  },
+  "build_attempt": {
+    "working_directory": "/home/jeff/code/fork/prime-agent/pkgbuild",
+    "command": "LC_ALL=C PKGDEST=/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/packages BUILDDIR=/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/build LOGDEST=/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/logs MAKEPKG_CONF=/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/makepkg.conf timeout 900s makepkg --syncdeps --cleanbuild --log",
+    "exit_code": 4,
+    "duration_seconds": 119.58,
+    "result": "失敗；未產生套件檔。",
+    "phases": {
+      "prepare": "成功。",
+      "pnpm_install_frozen_lockfile": "鎖檔驗證通過，解析並安裝 409 套件；postinstall lifecycle 失敗。",
+      "pnpm_run_build": "未執行。",
+      "check_and_package": "未執行。"
+    },
+    "primary_error": {
+      "message": "Error: Cannot find module '/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/build/prime-agent/src/prime-agent/packages/coding-agent/postinstall.cjs'",
+      "code": "MODULE_NOT_FOUND",
+      "pnpm_error": "ERR_PNPM_EXECUTOR_LIFECYCLE_SCRIPT_FAILED",
+      "makepkg_error": "A failure occurred in build()."
+    },
+    "evidence": {
+      "package_json_postinstall": "packages/coding-agent/package.json 設 scripts.postinstall 為 node postinstall.cjs。",
+      "checkout_file_exists": false,
+      "build_copy_file_exists": false,
+      "git_tracks_file": false,
+      "check_command": "git ls-files --error-unmatch packages/coding-agent/postinstall.cjs",
+      "check_exit_code": 1,
+      "check_stderr": "error: pathspec 'packages/coding-agent/postinstall.cjs' did not match any file(s) known to git"
+    }
+  },
+  "environment_and_safety": {
+    "checkout_version": "0.9.8",
+    "pkgbuild_version": "0.9.8",
+    "node": "v26.10.0",
+    "pnpm": "12.3.4",
+    "makepkg": "pacman 7.1.0",
+    "runtime_and_build_dependencies": "nodejs, python, uv, pnpm, rsync 已安裝。",
+    "isolated_temp_directory": "/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi",
+    "output_directories": {
+      "PKGDEST": "/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/packages",
+      "BUILDDIR": "/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/build",
+      "LOGDEST": "/home/jeff/code/fork/prime-agent/pkgbuild/.makepkg-test.9PpgMi/logs"
+    },
+    "privilege_guard": "隔離 MAKEPKG_CONF 設 PACMAN_AUTH=(/bin/false)；未觸發 sudo，未修改系統。",
+    "produced_package_files": []
+  },
+  "preservation": {
+    "preexisting_0_9_8_artifact_checksums_after_build": {
+      "prime-agent-0.9.8-1-x86_64.pkg.tar.zst": {
+        "sha256": "ced93ff2642cf4b6553fd6d8596c9520707d5ec27ca6797f3d9d5b4c1ebbb972",
+        "size_bytes": 29467347
+      },
+      "prime-agent-debug-0.9.8-1-x86_64.pkg.tar.zst": {
+        "sha256": "ba82cbd315743f0ff8578daced009c7613c7d7035c426727523638e9c56133fa",
+        "size_bytes": 110860
+      }
+    },
+    "files_modified_by_agent": [],
+    "notes": [
+      "PKGBUILD 有既存用戶修改（pkgver 0.9.6 至 0.9.8）；本次未更動。",
+      ".SRCINFO 為既存未追蹤檔；本次未刷新或更動。",
+      "既有 0.9.8 套件成品 checksum 建置後仍相同。",
+      "僅新增隔離暫建目錄 pkgbuild/.makepkg-test.9PpgMi/；其中保留失敗建置與日誌。"
+    ]
+  },
+  "pending_decisions": [
+    "是否由來源維護方補足或修正 postinstall.cjs 引用；未經授權不改原始碼或 PKGBUILD。",
+    "來源修正並經父核可後，是否另啟隔離建置。"
+  ]
+}

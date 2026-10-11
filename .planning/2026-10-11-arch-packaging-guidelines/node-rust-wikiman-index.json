@@ -1,0 +1,95 @@
+{
+  "agent": "interface-intel-luna",
+  "state": "done",
+  "evidence": {
+    "body_read": false,
+    "searches": [
+      {
+        "query": "wikiman -R -s arch -l en -q \"Node.js package guidelines\" 2>/dev/null",
+        "exit": 0,
+        "exact_guideline_title": false,
+        "relevant_hits": [
+          {
+            "title": "Node.js",
+            "path": "/usr/share/doc/arch-wiki/html/en/Node.js.html"
+          },
+          {
+            "title": "Arch package guidelines",
+            "path": "/usr/share/doc/arch-wiki/html/en/Arch_package_guidelines.html"
+          }
+        ]
+      },
+      {
+        "query": "wikiman -R -s arch -l en -q \"Rust package guidelines\" 2>/dev/null",
+        "exit": 0,
+        "exact_guideline_title": false,
+        "relevant_hits": [
+          {
+            "title": "Rust",
+            "path": "/usr/share/doc/arch-wiki/html/en/Rust.html"
+          },
+          {
+            "title": "Arch package guidelines",
+            "path": "/usr/share/doc/arch-wiki/html/en/Arch_package_guidelines.html"
+          }
+        ]
+      },
+      {
+        "query": "wikiman -R -s arch -l en -q \"Node.js\" 2>/dev/null",
+        "exit": 0,
+        "hits": [
+          {
+            "title": "Node.js",
+            "path": "/usr/share/doc/arch-wiki/html/en/Node.js.html"
+          }
+        ]
+      },
+      {
+        "query": "wikiman -R -s arch -l en -q \"npm\" 2>/dev/null",
+        "exit": 255,
+        "hits": []
+      },
+      {
+        "query": "wikiman -R -s arch -l en -q \"Rust\" 2>/dev/null",
+        "exit": 0,
+        "hits": [
+          {
+            "title": "Rust",
+            "path": "/usr/share/doc/arch-wiki/html/en/Rust.html"
+          },
+          {
+            "title": "Trusted Platform Module",
+            "path": "/usr/share/doc/arch-wiki/html/en/Trusted_Platform_Module.html"
+          },
+          {
+            "title": "Trusted Platform Module/1.2",
+            "path": "/usr/share/doc/arch-wiki/html/en/Trusted_Platform_Module/1.2.html"
+          }
+        ]
+      },
+      {
+        "query": "wikiman -R -s arch -l en -q \"Cargo\" 2>/dev/null",
+        "exit": 255,
+        "hits": []
+      },
+      {
+        "query": "wikiman -R -s arch -l en -a \"Node.js packaging\" 2>/dev/null",
+        "exit": 0,
+        "hits": [
+          {
+            "title": "Node.js",
+            "path": "/usr/share/doc/arch-wiki/html/en/Node.js.html"
+          }
+        ]
+      },
+      {
+        "query": "wikiman -R -s arch -l en -a \"Rust packaging\" 2>/dev/null",
+        "exit": 255,
+        "hits": []
+      }
+    ],
+    "note": "兩次 guidelines 查詢皆非精確標題命中；退出 0 係模糊命中。npm、Cargo 與 Rust packaging 無匹配，255 為無匹配，非故障。"
+  },
+  "blocker": null,
+  "next": "止"
+}

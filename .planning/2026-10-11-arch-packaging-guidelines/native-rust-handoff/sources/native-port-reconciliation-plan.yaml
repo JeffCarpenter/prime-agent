@@ -1,0 +1,133 @@
+schema_version: 1.0.0
+generated_at: "2026-10-10T16:04:00-07:00"
+title: "Native Rust Port Reconciliation Plan: xonsh REPL onto Prime Agent v0.10.0"
+
+metadata:
+  target_upstream_release: &ref_target_release
+    tag: "v0.10.0"
+    hash: "8de18adda5d6fdea3dc31843d5955d311c92cb9e"
+    architecture: "Rust monorepo (crates/)"
+  reference_branch: &ref_source_branch
+    name: "xonsh-repl"
+    hash: "e4ff354a184f22af3ba78ef0963018472f17af96"
+    base: "v0.9.8"
+    architecture: "TypeScript monorepo (packages/) + Python runtime"
+  isolated_worktree: &ref_worktree
+    branch: "feat/native-rust-xonsh"
+    path: ".worktrees/feat-native-rust-xonsh"
+
+phases:
+  - id: "phase-1"
+    name: "Worktree Isolation & Base Setup"
+    status: "pending"
+    goal: "Establish isolated workspace on upstream v0.10.0 without disturbing existing branch"
+    tasks:
+      - id: "p1-t1"
+        action: "Create isolated worktree and branch from upstream v0.10.0"
+        command: "git worktree add -b feat/native-rust-xonsh .worktrees/feat-native-rust-xonsh v0.10.0"
+      - id: "p1-t2"
+        action: "Verify upstream baseline compilation and clean test pass"
+        command: "cargo check --workspace"
+        expected: "exit code 0, 0 compilation errors"
+      - id: "p1-t3"
+        action: "Confirm main worktree staged/untracked status remains untouched"
+
+  - id: "phase-2"
+    name: "Runtime Sidecar Port"
+    status: "pending"
+    target_dir: "prime-agent-runtime/"
+    goal: "Reconcile Python-side xonsh execution with v0.10.0 factory FSM and protocol"
+    inputs:
+      reference_file: "prime-agent-runtime/src/rlm/repl.py (from xonsh-repl)"
+      target_file: "prime-agent-runtime/src/rlm/repl.py (from v0.10.0)"
+    tasks:
+      - id: "p2-t1"
+        action: "Extract xonsh execution and syntax handling patches from reference branch"
+        files:
+          - "prime-agent-runtime/src/rlm/repl.py"
+          - "prime-agent-runtime/src/rlm/repl.md"
+      - id: "p2-t2"
+        action: "Port xonsh handlers into v0.10.0 runtime preserving factory FSM and Rust daemon hooks"
+      - id: "p2-t3"
+        action: "Port test cases into prime-agent-runtime/test/test_repl.py"
+    verification:
+      command: "pytest prime-agent-runtime/test/test_repl.py"
+      criteria: "All REPL integration and xonsh test cases pass"
+
+  - id: "phase-3"
+    name: "Rust Core Tool & Kernel Integration"
+    status: "pending"
+    target_crate: "crates/pa-core"
+    goal: "Expose xonsh tool and dual-kernel management in native Rust core"
+    tasks:
+      - id: "p3-t1"
+        name: "Tool Definition"
+        action: "Implement crates/pa-core/src/tools/xonsh.rs"
+        template: "crates/pa-core/src/tools/ipython.rs"
+        registration: "Register XonshTool in crates/pa-core/src/tools/mod.rs and ToolRegistry"
+      - id: "p3-t2"
+        name: "Kernel Provisioning"
+        action: "Update crates/pa-core/src/kernel/ to manage xonsh beside ipython"
+        files:
+          - "crates/pa-core/src/kernel/provisioner.rs"
+          - "crates/pa-core/src/kernel/protocol.rs"
+          - "crates/pa-core/src/kernel/manager/"
+      - id: "p3-t3"
+        name: "Syntax Highlighting & Code Preview"
+        action: "Add xonsh language tagging and preview support"
+        files:
+          - "crates/pa-core/src/tools/code_preview.rs"
+    verification:
+      command: "cargo test -p pa-core"
+      criteria: "Core tool execution and kernel management unit tests green"
+
+  - id: "phase-4"
+    name: "TUI & Skill Integration"
+    status: "pending"
+    target_crates: ["crates/pa-tui", "skills/"]
+    goal: "Render xonsh cells in Ratatui and migrate zsh builtin skill"
+    tasks:
+      - id: "p4-t1"
+        name: "Skills Migration"
+        action: "Relocate packages/coding-agent/skills/zsh to root skills/zsh"
+        files:
+          - "skills/zsh/SKILL.md"
+          - "skills/zsh/pyproject.toml"
+          - "skills/zsh/src/zsh/__init__.py"
+      - id: "p4-t2"
+        name: "TUI Card & Component Formatting"
+        action: "Update tool execution card rendering in crates/pa-tui/src/chat/"
+        details: "Render xonsh cell headers, outputs, and status badges matching Ratatui conventions"
+    verification:
+      command: "cargo test -p pa-tui"
+
+  - id: "phase-5"
+    name: "Packaging & Quality Gate Verification"
+    status: "pending"
+    goal: "Align build and package distribution with native Rust binaries and pass merge gates"
+    tasks:
+      - id: "p5-t1"
+        name: "Arch Linux PKGBUILD Update"
+        action: "Reconfigure pkgbuild/PKGBUILD to build native release binary via cargo build --release"
+        target: "pkgbuild/PKGBUILD"
+      - id: "p5-t2"
+        name: "Installer Script Port"
+        action: "Align scripts/install.xsh with native layout (binary adjacent to runtime and skills)"
+        target: "scripts/install.xsh"
+      - id: "p5-t3"
+        name: "Full Merge Gate Execution"
+        action: "Run comprehensive repository quality gates per AGENTS.md / Makefile"
+        command: "make check"
+        subcommands:
+          - "cargo fmt --all --check"
+          - "cargo clippy --workspace --all-targets -- -D warnings"
+          - "cargo test --workspace"
+          - "cargo build --release --workspace"
+
+risk_matrix:
+  - risk: "Upstream factory state machine divergence in repl.py"
+    mitigation: "Isolate xonsh handler hooks to execution dispatcher; do not mutate factory FSM graph"
+  - risk: "Rust kernel session lease deadlocks"
+    mitigation: "Follow crates/pa-core/src/kernel/manager/ execution and teardown lifecycle semantics"
+  - risk: "Dirty worktree contamination"
+    mitigation: "Strict execution exclusively within isolated worktree; main worktree remains read-only reference"
