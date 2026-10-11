@@ -238,6 +238,22 @@ class ReplTest(unittest.TestCase):
         events = self.repl.execute("d", "_ + 40")
         self.assertEqual(one(events, "result")["text"], "42")
 
+    def test_xonsh_mode_executes_native_shell_syntax(self):
+        self.repl.send(
+            {
+                "type": "execute",
+                "id": "xonsh",
+                "mode": "xonsh",
+                "code": 'import asyncio\n$PHASE6_TEST = "value"\nprint($PHASE6_TEST)\nprint($(printf hi))\nawait asyncio.sleep(0)\n$[echo phase6]',
+            }
+        )
+        events = self.repl.until_done("xonsh")
+        output = stream_text(events, "stdout")
+        self.assertIn("value", output)
+        self.assertIn("hi", output)
+        self.assertIn("phase6", output)
+        self.assertEqual(one(events, "done")["status"], "ok")
+
     def test_stdout_stderr_and_direct_fd_writes(self):
         code = "\n".join(
             [
