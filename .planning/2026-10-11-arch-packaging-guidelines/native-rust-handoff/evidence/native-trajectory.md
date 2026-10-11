@@ -1,0 +1,16 @@
+# Native Rust trajectory: observed 2026-10-11
+
+- Primary checkout: `/home/jeff/code/fork/prime-agent`, `xonsh-rust` at `e718d2faae0b7fcae34885385896f3a69c0fb023`; its **modified** `pkgbuild/PKGBUILD` targets TypeScript 0.9.8. The isolated `makepkg` failed at missing `packages/coding-agent/postinstall.cjs`; no later build/check/package phase ran. This is historical, not the current intended product line.
+- Intended port: `/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh` at committed `2da0c33edc52db1d767b08537f6db8b75778f1c6`, on peeled upstream `v0.10.0` commit `763094e1b6a7c17450ee8399b06cda1853847ca5` (annotated tag object `8de18adda5d6fdea3dc31843d5955d311c92cb9e`). Commits `33489b01b` and `2da0c33ed` port the Python runtime and Rust core xonsh tool. `Cargo.toml` workspace version is 0.10.0; `pa-cli` declares the `prime-agent` binary.
+- Native port status from worktree: M crates/pa-tui/src/code_preview/bash.rs;  M crates/pa-tui/src/tool_card/bash.rs;  M crates/pa-tui/src/tool_card/ipython.rs;  M crates/pa-tui/src/tool_card/mod.rs;  M crates/pa-tui/src/tree_display.rs; ?? skills/zsh/. Preserve all modified TUI files and untracked `skills/zsh/`; they may be ongoing user work. The old planning Phase 3 label predates commit `2da0c33ed`; Phase 4 TUI edits remain uncommitted, and Phase 5 Rust Arch packaging has not been done.
+- Native worktree contains **no `pkgbuild/PKGBUILD`**; `packaging/` has Homebrew only. No new cargo build or makepkg was started in this investigation. A historical upstream baseline `cargo check --workspace` and Python sidecar 144 tests passed per planning log, not a current release/package verification.
+- User correction: do **not** demand a fresh TS-vs-Rust product-source decision. Infer the native v0.10.0 port from the graph and plans. Preserve worktrees/artifacts, assess risk at the outset of substantial repair, then pursue native build and Arch package with actual evidence. Do not claim it already works.
+
+## Bounded command record
+
+- `git -C /home/jeff/code/fork/prime-agent rev-parse HEAD` → exit 0: e718d2faae0b7fcae34885385896f3a69c0fb023
+- `git -C /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh rev-parse HEAD` → exit 0: 2da0c33edc52db1d767b08537f6db8b75778f1c6
+- `git -C /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh rev-parse v0.10.0` → exit 0: 8de18adda5d6fdea3dc31843d5955d311c92cb9e
+- `git -C /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh status --short` → exit 0: M crates/pa-tui/src/code_preview/bash.rs;  M crates/pa-tui/src/tool_card/bash.rs;  M crates/pa-tui/src/tool_card/ipython.rs;  M crates/pa-tui/src/tool_card/mod.rs;  M crates/pa-tui/src/tree_display.rs; ?? skills/zsh/
+- `git -C /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh log -4 --format="%h %s"` → exit 0: 2da0c33ed feat(core): implement xonsh tool, kernel execution mode, and code preview; 33489b01b feat(runtime): port xonsh REPL execution mode to v0.10.0 runtime sidecar; 763094e1b fix stable release source packaging checks (#3446); 6808008ac ci: use pinned Ubuntu mirror for release builds (#3445)
+- `git -C /home/jeff/code/fork/prime-agent status --short -- pkgbuild/PKGBUILD` → exit 0: M pkgbuild/PKGBUILD
