@@ -624,9 +624,11 @@ impl ReplKernelManager {
         opts: ExecuteOptions,
         execution_timeout_ms: Option<u64>,
     ) -> anyhow::Result<InternalExecuteResult> {
+        let mode = opts.mode.clone();
         self.enqueue_request(
             Request::Execute {
                 code: code.to_string(),
+                mode,
             },
             code,
             opts,

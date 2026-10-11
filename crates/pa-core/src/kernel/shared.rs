@@ -221,6 +221,8 @@ pub struct ExecuteOptions {
     pub internal: bool,
     /// The protocol repair's own request; exempt from waiting on the repair it belongs to.
     pub protocol_repair: bool,
+    /// Execution mode: "python" (default) or "xonsh".
+    pub mode: Option<String>,
 }
 
 /// The error raised when a new cell cannot start because the previously

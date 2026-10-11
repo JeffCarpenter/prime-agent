@@ -160,6 +160,7 @@ pub struct KernelExecuteOptions<'a> {
     /// Streams cell output while the cell runs.
     pub on_stream: StreamFn<'a>,
     pub on_late_sent_agent_message: Option<crate::kernel::shared::LateSentAgentMessageCallback>,
+    pub mode: Option<&'static str>,
 }
 
 type ExecuteCellFuture =
@@ -288,6 +289,7 @@ async fn execute_with_busy_kernel_choice(
                     signal: execute.signal.clone(),
                     on_stream: execute.on_stream,
                     on_late_sent_agent_message: execute.on_late_sent_agent_message.clone(),
+                    mode: execute.mode,
                 },
             )
             .await;
@@ -407,6 +409,7 @@ pub async fn execute_ipython(
             signal,
             on_stream: Some(&stream_update),
             on_late_sent_agent_message,
+            mode: None,
         },
         &|message| {
             set_tool_working_message(message);

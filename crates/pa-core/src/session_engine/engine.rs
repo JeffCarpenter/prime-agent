@@ -428,6 +428,18 @@ pub async fn create_session(mut config: SessionEngineConfig) -> anyhow::Result<S
             crate::session_engine::tool_bridge::ToolDefinitionBridge::new(definition),
         ));
     }
+    if !tools.iter().any(|tool| tool.name() == "xonsh") {
+        let definition = crate::tools::xonsh::create_xonsh_tool_definition(
+            &cwd.to_string_lossy(),
+            super::runtime_wiring::xonsh_tool_options(
+                provisioner.clone(),
+                config.on_late_sent_agent_message.clone(),
+            ),
+        );
+        tools.push(Arc::new(
+            crate::session_engine::tool_bridge::ToolDefinitionBridge::new(definition),
+        ));
+    }
     let active_tool_names: Vec<String> = tools.iter().map(|tool| tool.name().to_string()).collect();
 
     // The snapshot arm is not depth-gated: a resumed session prewarms even

@@ -64,6 +64,7 @@ pub(crate) fn re(pattern: &str) -> Rx {
 pub enum CodePreviewLanguage {
     Bash,
     Python,
+    Xonsh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +84,13 @@ impl CodePreview {
     pub(crate) fn python(text: impl Into<String>) -> Self {
         CodePreview {
             language: CodePreviewLanguage::Python,
+            text: text.into(),
+        }
+    }
+
+    pub(crate) fn xonsh(text: impl Into<String>) -> Self {
+        CodePreview {
+            language: CodePreviewLanguage::Xonsh,
             text: text.into(),
         }
     }
@@ -531,5 +539,12 @@ mod tests {
         assert_eq!(lines[0], "x = \"\"\"");
         assert_eq!(lines[3].trim(), "");
         assert_eq!(lines[4], "run(1)");
+    }
+
+    #[test]
+    fn xonsh_preview_basic() {
+        use crate::tools::code_preview_python::preview_xonsh_code;
+        let p = preview_xonsh_code("$VAR = 'val'\necho $VAR");
+        assert_eq!(p.language, CodePreviewLanguage::Xonsh);
     }
 }

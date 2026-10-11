@@ -296,6 +296,7 @@ impl KernelExecutor for KernelManagerExecutor {
                     crate::kernel::shared::ExecuteOptions {
                         signal: signal.map(crate::kernel::cancellation::AbortSignal::from_token),
                         on_late_sent_agent_message,
+                        mode: options.mode.map(str::to_string),
                         ..Default::default()
                     },
                 )
@@ -354,6 +355,19 @@ pub fn ipython_tool_options(
     on_late_sent_agent_message: Option<crate::tools::ipython::LateSentAgentMessageHandler>,
 ) -> IpythonToolOptions {
     IpythonToolOptions {
+        provisioner,
+        ui: None,
+        on_late_sent_agent_message,
+    }
+}
+
+/// Build the xonsh tool options for a wired kernel provisioner.
+#[must_use]
+pub fn xonsh_tool_options(
+    provisioner: Arc<KernelProvisioner>,
+    on_late_sent_agent_message: Option<crate::tools::ipython::LateSentAgentMessageHandler>,
+) -> crate::tools::xonsh::XonshToolOptions {
+    crate::tools::xonsh::XonshToolOptions {
         provisioner,
         ui: None,
         on_late_sent_agent_message,

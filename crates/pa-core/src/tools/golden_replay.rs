@@ -345,6 +345,7 @@ fn golden_preview_group_matches_ts() {
                 "language": match l {
                     crate::tools::code_preview::CodePreviewLanguage::Bash => "bash",
                     crate::tools::code_preview::CodePreviewLanguage::Python => "python",
+                    crate::tools::code_preview::CodePreviewLanguage::Xonsh => "xonsh",
                 },
             })
         };

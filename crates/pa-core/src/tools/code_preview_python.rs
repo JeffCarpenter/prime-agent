@@ -467,3 +467,17 @@ pub(crate) fn preview_ipython_code(code: &str) -> CodePreview {
     }
     preview_python_code(trimmed)
 }
+
+/// Preview a xonsh cell: %%bash cells preview as bash, the rest as xonsh.
+#[allow(dead_code)]
+pub(crate) fn preview_xonsh_code(code: &str) -> CodePreview {
+    let trimmed = js_trim_end(code);
+    if let Some(cell) = parse_ipython_bash_cell(trimmed) {
+        return preview_bash_command(&cell.body);
+    }
+    let mut preview = preview_python_code(trimmed);
+    if preview.language == crate::tools::code_preview::CodePreviewLanguage::Python {
+        preview.language = crate::tools::code_preview::CodePreviewLanguage::Xonsh;
+    }
+    preview
+}

@@ -18,6 +18,7 @@ pub const REPL_PROTOCOL_VERSION: u64 = 3;
 pub enum Request {
     Execute {
         code: String,
+        mode: Option<String>,
     },
     Interrupt,
     HostReply {
@@ -63,7 +64,13 @@ impl Request {
     #[must_use]
     pub fn to_json(&self) -> Value {
         match self {
-            Request::Execute { code } => json!({ "type": "execute", "code": code }),
+            Request::Execute { code, mode } => {
+                let mut obj = json!({ "type": "execute", "code": code });
+                if let Some(mode) = mode {
+                    obj["mode"] = json!(mode);
+                }
+                obj
+            }
             Request::Interrupt => json!({ "type": "interrupt" }),
             Request::HostReply { data } => json!({ "type": "host_reply", "data": data }),
             Request::Snapshot {
