@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "task": {
+    "name": "native Rust upstream v0.10.0 transition",
+    "plan": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/task_plan.md",
+    "working_directory": "/home/jeff/code/fork/prime-agent",
+    "phase": "Phase 0: provenance inventory done; capability parity next",
+    "authority": {
+      "necessary_rebase_reconcile_source_and_test_repairs": "authorized within scope",
+      "system_installation": "not authorized",
+      "destructive_overwrite": "not authorized"
+    }
+  },
+  "completed": {
+    "history_inventory": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-lineage.json",
+    "findings": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/findings.md",
+    "graph": {
+      "last_upstream_ts_release": "v0.9.8@7d442aafa",
+      "rust_port": "39bc99a91 (parent v0.9.8)",
+      "pre_xonsh_fork_prefix": "v0.9.8..06bdcf1cb",
+      "native_reference": "feat/native-rust-xonsh@2da0c33ed"
+    },
+    "release_replays": "six pre-xonsh commits rebased on v0.9.5, v0.9.6, v0.9.8; range-diff four exact / two changed between adjacent replay bases",
+    "separate_history": "origin/main@af263b3f7 diverged at a9b5d88b, contains 322 commits (63 Jeff-authored), not ancestor of native; candidate pool, not required-port list"
+  },
+  "next": {
+    "step_2": "Build source-cited pre-port-capability-ledger.json from six release replay changes plus separate origin/main candidates; classify v0.10.0 and native behavior, do not assume commit identity means semantic parity",
+    "step_3": "Recheck 12 protected hashes and HEADs; capture isolated pa-tui test exit; compare pa-core/fmt failures against upstream controls",
+    "step_4": "In new isolated line from v0.10.0 repair needed pre-xonsh native behavior test-first, then replay/revalidate two xonsh commits and hash-checked TUI/skills; packaging after gates"
+  },
+  "protected": {
+    "main": "modified pkgbuild/PKGBUILD, untracked pkgbuild/.SRCINFO and old package artifacts",
+    "native": "five modified crates/pa-tui files and untracked skills/zsh; do not overwrite",
+    "known_tests": "pa-core 3 native fails versus 2 upstream shared; timing failure intermittent; cargo fmt fails in lib.rs and xonsh.rs; pa-tui exit unrecorded"
+  },
+  "limits": [
+    "The provenance map is ref-level; no behavior parity, build, or package was verified in this phase",
+    "No network fetch; origin/* and upstream/* are locally stored remote-tracking snapshots",
+    "Historical validation-run.json authorization field reflects earlier state; current user clarified rebase/reconcile includes necessary scoped repairs"
+  ],
+  "artifact_sha256": {
+    "pre-port-lineage.json": "bf7c5e82de4ad999beeffcb610d9dd27986b177375a7795b2924dc81b6d16478"
+  }
+}
