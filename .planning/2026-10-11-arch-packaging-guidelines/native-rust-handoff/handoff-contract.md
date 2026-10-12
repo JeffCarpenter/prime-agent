@@ -4,11 +4,11 @@ This contract is the **only** document a fresh recipient may read before it expl
 
 ## Data contract
 
-The eventual packet and compact YAML view have identical ordered top-level keys:
+The handoff data file `scratchpad.yaml` has these ordered top-level keys:
 
 `schema_version`, `kind`, `context`, `state`, `sources`, `facts`, `known-unknowns`, `decision`, `constraints`, `next`.
 
-`schema_version` is 1; `kind` and `context.tags` label variants, not extra top-level keys. Source entries use `{id,path,role}`. Fact entries use `{id,claim,evidence}` with evidence containing source IDs. Unknowns use `{id,question}`; actions use `{when,action,accept}`. Arrays have stable order; helper display numbers are 1-based, raw jq/yq indices are 0-based. Missing proof is unknown, not success. The exact machine-readable shape lives in `handoff.schema.json` and was derived from `queries.md`; both will be offered only after agreement.
+`schema_version` is 1; `kind` and `context.tags` label variants, not extra top-level keys. Source entries use `{id,path,role}`. Fact entries use `{id,claim,evidence}` with evidence containing source IDs. Unknowns use `{id,question}`; actions use `{when,action,accept}`. Arrays have stable order; helper display numbers are 1-based, raw yq indices are 0-based. Missing proof is unknown, not success. The machine-readable schema lives in `handoff.schema.json` and describes `scratchpad.yaml`; both will be offered only after agreement.
 
 ## Conduct contract
 
