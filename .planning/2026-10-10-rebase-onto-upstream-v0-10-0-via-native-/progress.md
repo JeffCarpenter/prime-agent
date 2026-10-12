@@ -73,3 +73,13 @@
 - Authored canonical `divergences.jsonld` capturing the formal `@context`, 53 overlapping files collision matrix across 5 functional domains, commit tier breakdown (28 TS / 4 Py / 3 Zsh / 2 Pkg), ADR trade-off analysis, and seed/scaffolding rebase milestones.
 - Updated `findings.md` with explicit ADR records, functional domain classifications, seed provenance, and `.gitignore` conflict resolutions.
 - Updated `pre-port-lineage.json` with commit tier taxonomy and re-root milestone references; updated `context-checkpoint.json` and `native-status.yaml` evidence manifests.
+
+## Session: 2026-10-11 (build engineering planning review & approvals recorded)
+
+- Performed inquisitive, strict, rigorous build engineering review evaluating toolchain duality, packaging contradictions, script duplication, version fragmentation, and worktree sprawl (documented in `build-engineering-planning-review.md`).
+- User explicitly confirmed and approved:
+  1. Axiom reaffirmation: upstream releases ALWAYS enter this fork at release boundaries; ghost TypeScript stack retirement approved upon parity verification.
+  2. PKGBUILD realignment to native Rust binary (`cargo build --release -p pa-cli`), Python runtime, and offline catalog fallback is explicitly approved (Phase 5 p5-t1).
+  3. Script deduplication: redundant `.planning/bin/*.xsh` scripts approved for pruning ("that's what git is for").
+  4. Authoritative versioning: upstream is authoritative (`0.10.0` per upstream `Cargo.toml`).
+- Synchronized approvals across `native-status.yaml`, `task_plan.md`, `findings.md`, and `native-rust-port-reconciliation-plan.yaml`. No system installation or untracked file destruction performed.
