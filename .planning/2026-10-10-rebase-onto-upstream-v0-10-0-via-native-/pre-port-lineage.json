@@ -1962,6 +1962,44 @@
     "pnpm-workspace.yaml:1-16": "fd74dfdd1 Jeff C",
     "package.json:47 dotenv": "f3e865f03 Jeff C"
   },
+  "fork_commit_tier_taxonomy": {
+    "total_commits_v0.9.8_to_xonsh_repl": 37,
+    "typescript_commits_count": 28,
+    "typescript_scope": "packages/coding-agent (REPL manager, session lifecycle, TUI cell components, xonsh tool, tests)",
+    "python_runtime_commits_count": 4,
+    "python_runtime_scope": "prime-agent-runtime/src/rlm/repl.py (execution dispatcher, syntax handling), repl.md, test_repl.py",
+    "skills_commits_count": 3,
+    "skills_scope": "skills/zsh (native zsh skill package and pyproject.toml)",
+    "packaging_commits_count": 2,
+    "packaging_scope": "scripts/install.xsh and pkgbuild/PKGBUILD"
+  },
+  "historical_reroot_milestones": {
+    "seed_commit": {
+      "ref": "5ac9d0650~1",
+      "hash": "dc63427ad625b148bed0c922822278477a12989e",
+      "author": "Kevin Thomas <kevin.jt2007@gmail.com>",
+      "parents_count": 0,
+      "files": ["MISSION.md", "README.md", "WATCHDOG.md"],
+      "rebased_seed_tip": "dcede5618 (branch xonsh-rust-seed-rebase)"
+    },
+    "scaffolding_commit": {
+      "ref": "5ac9d0650",
+      "hash": "5ac9d06508c3597e961a10569a563d2c0a2c5834",
+      "files_introduced": 19,
+      "conflict_resolutions": [
+        {"commit": "130b21d19", "file": ".gitignore", "resolution": "union /target with fork gitignore patterns"},
+        {"commit": "222db5ff9", "file": ".gitignore", "resolution": "preserve ./.planning/.active_plan and /target"}
+      ],
+      "rebased_tips": {
+        "pre_commit_tip": "a557dd678 (branch xonsh-rust-5ac-rebase)",
+        "final_tip": "e718d2faa (branch xonsh-rust)"
+      }
+    }
+  },
+  "overlapping_files_reference": {
+    "count": 53,
+    "canonical_divergence_graph": ".planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/divergences.jsonld"
+  },
   "unknowns": [
     "Whether upstream Rust v0.10.0 already supplies equivalent behavior for any commit",
     "Which separate origin/main changes are still intended product requirements",

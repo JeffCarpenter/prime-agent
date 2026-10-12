@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-10-11T21:21:35.535203+00:00",
+  "source": {
+    "native_worktree": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh",
+    "native_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "base_commit": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "main_checkout": "/home/jeff/code/fork/prime-agent",
+    "main_head": "bd31657d295a581eb2b685a4952bee0e2de0fcc0"
+  },
+  "inputs": {
+    "native": {
+      "crates/pa-tui/src/code_preview/bash.rs": {
+        "sha256": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d",
+        "size_bytes": 22588
+      },
+      "crates/pa-tui/src/tool_card/bash.rs": {
+        "sha256": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d",
+        "size_bytes": 14917
+      },
+      "crates/pa-tui/src/tool_card/ipython.rs": {
+        "sha256": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b",
+        "size_bytes": 18166
+      },
+      "crates/pa-tui/src/tool_card/mod.rs": {
+        "sha256": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638",
+        "size_bytes": 17111
+      },
+      "crates/pa-tui/src/tree_display.rs": {
+        "sha256": "01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5",
+        "size_bytes": 14997
+      },
+      "skills/zsh/SKILL.md": {
+        "sha256": "ba06a5b8ca01ba2a563de743863fdf04194afb3302237ee1cab8c09b8bc7b5d2",
+        "size_bytes": 1925
+      },
+      "skills/zsh/pyproject.toml": {
+        "sha256": "492dce7cc169755eb479237383ae07bfcbee60b7cb0cf188bfe766ff6eac88ff",
+        "size_bytes": 259
+      },
+      "skills/zsh/src/zsh/__init__.py": {
+        "sha256": "95d0a69b6390b4daddf27aa65e2dc0cf659272ded6a843587cabd695fa5cb329",
+        "size_bytes": 2815
+      },
+      "skills/zsh/tests/__init__.py": {
+        "sha256": "faecc9007b2439b27972a2f9ace51f6a37daa8908e4e5243f3ff26844993be81",
+        "size_bytes": 29
+      },
+      "skills/zsh/tests/test_zsh.py": {
+        "sha256": "c268b9e7634be6263312ca4b023f68765939ea8a131fa7e2289a55a841f4af26",
+        "size_bytes": 7348
+      }
+    },
+    "main": {
+      "pkgbuild/PKGBUILD": {
+        "sha256": "12b563a2db83e146173848428af4a8051f33f33eb2bbd202949a759cce933bb2",
+        "size_bytes": 4185
+      },
+      "pkgbuild/.SRCINFO": {
+        "sha256": "4b3c92f33c9c9122482eff28d402938255a9c107b1f434bd12382dcdadd728fb",
+        "size_bytes": 348
+      }
+    }
+  },
+  "limitations": {
+    "builds_run": false,
+    "tests_run": false,
+    "arch_package_verified": false,
+    "note": "A read-only source snapshot. Recheck input hashes immediately before any isolated build; this is not build authorization."
+  }
+}

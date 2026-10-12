@@ -1,0 +1,39 @@
+[
+  {
+    "tool": "get_diagnostics",
+    "args": {
+      "file_path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/crates/pa-tui/src/tool_card/ipython.rs"
+    }
+  },
+  {
+    "tool": "get_hover",
+    "args": {
+      "file_path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/crates/pa-tui/src/tool_card/ipython.rs",
+      "line": 193,
+      "character": 21
+    }
+  },
+  {
+    "tool": "get_definition",
+    "args": {
+      "file_path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/crates/pa-tui/src/tool_card/ipython.rs",
+      "line": 193,
+      "character": 21
+    }
+  },
+  {
+    "tool": "get_references",
+    "args": {
+      "file_path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/crates/pa-tui/src/code_preview/python.rs",
+      "line": 471,
+      "character": 9,
+      "include_declaration": false
+    }
+  },
+  {
+    "tool": "get_document_symbols",
+    "args": {
+      "file_path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/crates/pa-core/src/tools/xonsh.rs"
+    }
+  }
+]
