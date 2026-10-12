@@ -12,7 +12,7 @@ Use `pre-port-lineage.json` to build a source-cited capability ledger for the si
 Execute capability parity ledger first, then proceed with approved native packaging and cleanup.
 
 ### Housekeeping / Working Tree TODOs
-- [ ] **TODO (Handoff Reconcile):** Address/reconcile pending working tree state in `.planning/2026-10-11-arch-packaging-guidelines/native-rust-handoff/` (5 modified files: `README.md`, `SHA256SUMS`, `queries.md`, `scratchpad.yaml`, `successor-context.json` + untracked `open-handoff.xsh`).
+- [x] **Handoff Reconcile (documentation complete):** The current packet is `.planning/2026-10-11-native-rust-handoff/native-rust-handoff/`; its YAML-only data and `open-handoff.xsh` were committed in `aa5106784`. The five handoff reader tests passed; Git tracks the files. This closes handoff-file cleanup, not native release, Arch packaging, or CLI verification.
 - [ ] **TODO (Ghost Worktree Cleanup):** Prune or reconcile orphaned worktree `.worktrees/rebase-2a16de906` (detached HEAD at `2a16de906`: "restore continuous background trace uploads (#3415)"), unreferenced by current active plan.
 - [ ] **TODO (Script Pruning):** Prune redundant `.planning/bin/*.xsh` scripts (`show-*.xsh`) and `phase-status.awk` approved for retirement ("that's what git is for"), tracked at commit `36e03b519`.
 
@@ -69,4 +69,4 @@ Phase 0 in progress: recover the full pre-port scope and establish native parity
 - [ ] Standardize authoritative workspace version on `0.10.0` across Cargo, runtime metadata, and packaging recipes per upstream authority
 - [ ] Run native gates with captured exits/logs: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo build --release --workspace`, and sidecar `pytest`
 - [ ] Build/check the native Arch package and verify its files, dependencies, `prime-agent --version`, and CLI startup; record source revision, dirty-input hashes, package path, and exits
-- **Status:** approved_ready_for_execution (PKGBUILD realignment and native packaging authorized by user)
+- **Status:** approved_pending_prerequisites (PKGBUILD realignment and native packaging authorized; Phase 0 capability parity, baseline, and isolated integration must be evidenced before Phase 5 execution; release/package/CLI remain unverified)
