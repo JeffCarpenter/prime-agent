@@ -1,0 +1,36 @@
+scripts:
+  phase-status.awk:
+    description: Filters non-complete phase blocks
+    dependencies:
+      direct: []
+
+  show-active-outstanding.xsh:
+    description: Shows outstanding work from active plan
+    dependencies:
+      direct:
+        - type: subprocess
+          target: show-outstanding.xsh
+          condition: checkbox schema
+        - type: subprocess
+          tool: awk
+          target: phase-status.awk
+          condition: phase-status schema
+      pointer:
+        - .active_plan
+
+  show-outstanding.xsh:
+    description: Prints unchecked items from one phase
+    dependencies:
+      direct:
+        - type: subprocess
+          target: show-item.xsh
+
+  show-item.xsh:
+    description: Extracts one top-level numbered item
+    dependencies:
+      direct: []
+
+  show-section.xsh:
+    description: Prints heading outline or section
+    dependencies:
+      direct: []
