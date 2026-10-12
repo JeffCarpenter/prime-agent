@@ -13,6 +13,8 @@ Execute capability parity ledger first, then proceed with approved native packag
 
 ### Housekeeping / Working Tree TODOs
 - [ ] **TODO (Handoff Reconcile):** Address/reconcile pending working tree state in `.planning/2026-10-11-arch-packaging-guidelines/native-rust-handoff/` (5 modified files: `README.md`, `SHA256SUMS`, `queries.md`, `scratchpad.yaml`, `successor-context.json` + untracked `open-handoff.xsh`).
+- [ ] **TODO (Ghost Worktree Cleanup):** Prune or reconcile orphaned worktree `.worktrees/rebase-2a16de906` (detached HEAD at `2a16de906`: "restore continuous background trace uploads (#3415)"), unreferenced by current active plan.
+- [ ] **TODO (Script Pruning):** Prune redundant `.planning/bin/*.xsh` scripts (`show-*.xsh`) and `phase-status.awk` approved for retirement ("that's what git is for"), tracked at commit `36e03b519`.
 
 ## Current Phase
 Phase 0 in progress: recover the full pre-port scope and establish native parity/baseline before further integration. Phases 1–2 are historically completed on the existing native line; Phase 3 has landed code but open acceptance, Phase 4 is dirty/unverified, and Phase 5 packaging realignment is approved by user. Necessary scoped source, test, packaging, and tooling repairs are authorized by the user; no system installation or overwrite of protected work.
@@ -48,7 +50,8 @@ Phase 0 in progress: recover the full pre-port scope and establish native parity
 
 ### Phase 3: Rust Core Tool & Kernel Integration
 - [x] Land `crates/pa-core/src/tools/xonsh.rs` and module registration in commit `2da0c33ed` (implementation present; behavior not yet verified here)
-- [ ] Reconcile the planned "manage xonsh beside ipython" requirement with the committed execution-mode wiring in `kernel/manager/`, `kernel/protocol.rs`, and `session_engine/runtime_wiring.rs`; do not assume separate-kernel provisioning is complete
+- [ ] Reconcile upstream "dual-kernel" terminology with actual single-kernel architecture: upstream describes managing xonsh beside ipython, but execution-mode wiring in `kernel/manager/`, `kernel/protocol.rs`, and `session_engine/runtime_wiring.rs` operates as a single Python kernel daemon executing with `mode: Some("xonsh")`. Ensure manager and wiring reflect single-kernel mode-dispatching without dangling expectations of separate-kernel daemon provisioning.
+- [ ] **CRITICAL FIX (Bootstrap Venv Dependency):** Update kernel bootstrap in `crates/pa-core/src/kernel/bootstrap/venv.rs` to include `xonsh` in default packages, update readiness probe in `crates/pa-core/src/kernel/bootstrap/venv/probe.rs`, and verify runtime sidecar does not raise `RuntimeError` on clean installations.
 - [x] Land xonsh language tagging and code preview in commit `2da0c33ed` (implementation present; behavior not yet verified here)
 - [ ] Run verification: `cargo test -p pa-core` and record command, exit, and log
 - **Status:** in_progress
