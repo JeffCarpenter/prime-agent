@@ -1,27 +1,9 @@
 #!/usr/bin/env xonsh
-"""Read and query the adjacent, checksum-verified handoff packet."""
+"""Read and query the adjacent YAML handoff data."""
 
-import hashlib
 import yaml
 from pathlib import Path
 import sys
-
-
-def load_packet(directory):
-    manifest = directory / "SHA256SUMS"
-    listed = set()
-    for line in manifest.read_text(encoding="utf-8").splitlines():
-        digest, separator, name = line.partition("  ")
-        path = (directory / name).resolve()
-        if not separator or len(digest) != 64 or not path.is_relative_to(directory) or name in listed:
-            raise ValueError(f"invalid checksum entry: {line}")
-        listed.add(name)
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-            raise ValueError(f"checksum mismatch: {name}")
-    expected = {str(path.relative_to(directory)) for path in directory.rglob("*") if path.is_file() and path != manifest}
-    if listed != expected:
-        raise ValueError(f"checksum manifest incomplete: {sorted(expected ^ listed)}")
-    return yaml.safe_load((directory / "scratchpad.yaml").read_text(encoding="utf-8"))
 
 
 def kind(value):
@@ -63,7 +45,7 @@ def passage(document, dotted):
 def main(arguments):
     if len(arguments) > 1:
         raise ValueError("usage: xonsh open-handoff.xsh [dotted.path]")
-    document = load_packet(Path(__file__).resolve().parent)
+    document = yaml.safe_load((Path(__file__).resolve().parent / "scratchpad.yaml").read_text(encoding="utf-8"))
     if arguments:
         passage(document, arguments[0])
     else:
