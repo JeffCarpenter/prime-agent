@@ -1,0 +1,245 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "git": "urn:git:ontology#",
+    "hash": "git:commitHash",
+    "ref": "git:referenceName",
+    "parent": "git:parentCommit",
+    "mergeBase": "git:mergeBase",
+    "divergence": "git:divergence",
+    "aheadCount": "git:aheadCount",
+    "behindCount": "git:behindCount",
+    "overlappingFiles": "git:overlappingFiles",
+    "functionalDomains": "git:functionalDomains"
+  },
+  "@id": "urn:git:divergence:native-reconciliation-v0.10.0",
+  "@type": "git:BranchDivergenceGraph",
+  "name": "Assimilated Divergence, Scaffolding Lineage, and Reconciliation Graph for Upstream v0.10.0",
+  "dateCreated": "2026-10-11T17:43:00-07:00",
+  "git:target": {
+    "@type": "git:Commit",
+    "ref": "refs/tags/v0.10.0",
+    "hash": "8de18adda5d6fdea3dc31843d5955d311c92cb9e",
+    "targetReleaseHead": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "description": "Upstream release v0.10.0 (first stable release of the Rust rewrite monorepo)"
+  },
+  "git:base": {
+    "@type": "git:Commit",
+    "ref": "refs/tags/v0.9.8",
+    "hash": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+    "description": "Common ancestor and final TypeScript upstream release; sole parent of Rust port commit 39bc99a91"
+  },
+  "git:source": {
+    "@type": "git:Commit",
+    "ref": "refs/heads/xonsh-repl",
+    "hash": "e4ff354a184f22af3ba78ef0963018472f17af96",
+    "description": "Historical TypeScript fork tip containing 37 commits atop v0.9.8"
+  },
+  "git:architecturalDivergence": {
+    "upstreamTransition": "Upstream deleted all TypeScript packages (packages/*, package.json, 1,181 files) in commit 39bc99a91 (PR #2524) and replaced them with Cargo workspace crates/*.",
+    "upstreamCommitMetrics": {
+      "upstreamCommitsAheadOfBase": 161,
+      "upstreamMainCommitsAheadOfTarget": 23,
+      "filesDeletedInRewrite": 1181
+    },
+    "forkCommitTierTaxonomy": {
+      "totalCommitsOnSourceBase": 37,
+      "typeScriptCommits": {
+        "count": 28,
+        "scope": "packages/coding-agent (REPL manager, session lifecycle, TUI cell rendering, xonsh tool definition, unit/regression tests)"
+      },
+      "pythonRuntimeCommits": {
+        "count": 4,
+        "scope": "prime-agent-runtime/src/rlm/repl.py (xonsh execution dispatcher and syntax handling), repl.md, test_repl.py"
+      },
+      "skillsCommits": {
+        "count": 3,
+        "scope": "skills/zsh (native zsh skill package and pyproject.toml)"
+      },
+      "packagingCommits": {
+        "count": 2,
+        "scope": "scripts/install.xsh and pkgbuild/PKGBUILD"
+      }
+    },
+    "architecturalDecisionRecord": {
+      "evaluatedOptions": [
+        {
+          "option": 1,
+          "name": "Dual-stack coexistence",
+          "summary": "Retain packages/ alongside crates/ in fork tree, maintaining TypeScript alongside Rust.",
+          "verdict": "Rejected / Obsolete: carries dead TypeScript codebase and breaks release-by-release upstream merge-base."
+        },
+        {
+          "option": 2,
+          "name": "Native Rust port",
+          "summary": "Port xonsh REPL tool, dual-kernel manager, and card rendering into native crates (pa-core, pa-tui), retaining Python sidecar in prime-agent-runtime.",
+          "verdict": "Accepted: active plan in feat/native-rust-xonsh."
+        },
+        {
+          "option": 3,
+          "name": "Non-TypeScript replay only",
+          "summary": "Replay Python runtime, zsh skill, and scripts onto v0.10.0 without restoring xonsh tool in native core.",
+          "verdict": "Rejected: fails to provide xonsh tool to agent runtime."
+        }
+      ]
+    }
+  },
+  "git:historicalRerootMilestones": {
+    "seedCommit": {
+      "ref": "5ac9d0650~1",
+      "hash": "dc63427ad625b148bed0c922822278477a12989e",
+      "author": "Kevin Thomas <kevin.jt2007@gmail.com>",
+      "parentsCount": 0,
+      "roots": [
+        "upstream/kevin-migration-catchup",
+        "upstream/lane/catalog-build"
+      ],
+      "files": [
+        "MISSION.md (61 lines)",
+        "README.md (5 lines)",
+        "WATCHDOG.md (37 lines)"
+      ],
+      "seedRebaseTip": "dcede5618 (branch xonsh-rust-seed-rebase, 37 commits replayed onto dc63427ad)"
+    },
+    "cargoScaffoldCommit": {
+      "ref": "5ac9d0650",
+      "hash": "5ac9d06508c3597e961a10569a563d2c0a2c5834",
+      "subject": "chore: scaffold Cargo workspace, CI docs, Makefile, model-surface contract, lane prompts",
+      "filesIntroduced": 19,
+      "conflictResolutions": [
+        {
+          "file": ".gitignore",
+          "commit": "130b21d19",
+          "type": "add/add",
+          "resolution": "Union of /target with fork gitignore patterns"
+        },
+        {
+          "file": ".gitignore",
+          "commit": "222db5ff9",
+          "type": "content",
+          "resolution": "Preserved ./.planning/.active_plan and /target"
+        }
+      ],
+      "scaffoldRebaseTips": {
+        "preCommitTip": "a557dd678 (branch xonsh-rust-5ac-rebase)",
+        "finalCoexistenceTip": "e718d2faa (branch xonsh-rust with target/ and .active_plan ignored)"
+      }
+    }
+  },
+  "git:overlappingFiles": [
+    ".gitignore",
+    "install.ps1",
+    "package.json",
+    "package-lock.json",
+    "packages/agent/package.json",
+    "packages/ai/package.json",
+    "packages/coding-agent/examples/extensions/custom-provider-anthropic/package-lock.json",
+    "packages/coding-agent/examples/extensions/sandbox/package-lock.json",
+    "packages/coding-agent/examples/extensions/with-deps/package-lock.json",
+    "packages/coding-agent/package.json",
+    "packages/coding-agent/src/cli/args.ts",
+    "packages/coding-agent/src/core/agent-session-services.ts",
+    "packages/coding-agent/src/core/agent-session.ts",
+    "packages/coding-agent/src/core/extensions/index.ts",
+    "packages/coding-agent/src/core/extensions/types.ts",
+    "packages/coding-agent/src/core/goals.ts",
+    "packages/coding-agent/src/core/kernel/bootstrap.ts",
+    "packages/coding-agent/src/core/kernel/repl-manager.ts",
+    "packages/coding-agent/src/core/kernel/shared.ts",
+    "packages/coding-agent/src/core/messages.ts",
+    "packages/coding-agent/src/core/prompts/rlm.ts",
+    "packages/coding-agent/src/core/refinement/refinement.ts",
+    "packages/coding-agent/src/core/sdk.ts",
+    "packages/coding-agent/src/core/skills.ts",
+    "packages/coding-agent/src/core/system-prompt.ts",
+    "packages/coding-agent/src/core/tools/acp-mcp.ts",
+    "packages/coding-agent/src/core/tools/code-preview.ts",
+    "packages/coding-agent/src/core/tools/index.ts",
+    "packages/coding-agent/src/core/tools/ipython-cell-code.ts",
+    "packages/coding-agent/src/core/tools/ipython.ts",
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/main.ts",
+    "packages/coding-agent/src/modes/acp/acp-events.ts",
+    "packages/coding-agent/src/modes/acp/acp-meta.ts",
+    "packages/coding-agent/src/modes/agent-connection/types.ts",
+    "packages/coding-agent/src/modes/interactive/components/conversation-components.ts",
+    "packages/coding-agent/src/modes/interactive/components/edit-summary.ts",
+    "packages/coding-agent/src/modes/interactive/components/index.ts",
+    "packages/coding-agent/src/modes/interactive/components/injected-prompt-message.ts",
+    "packages/coding-agent/src/modes/interactive/components/ipython-cell.ts",
+    "packages/coding-agent/src/modes/interactive/components/tool-execution.ts",
+    "packages/coding-agent/src/modes/interactive/components/tool-panel.ts",
+    "packages/coding-agent/src/modes/interactive/components/tree-selector.ts",
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+    "packages/coding-agent/src/modes/interactive/theme/theme.ts",
+    "packages/coding-agent/test/agent-session-services.test.ts",
+    "packages/coding-agent/test/builtin-skills.test.ts",
+    "packages/coding-agent/test/kernel-bootstrap.test.ts",
+    "packages/coding-agent/test/suite/regressions/4428-remove-legacy-pi-mono-tools.test.ts",
+    "packages/coding-agent/test/suite/regressions/4603-worker-recovery.test.ts",
+    "packages/tui/package.json",
+    "prime-agent-runtime/src/rlm/repl.md",
+    "prime-agent-runtime/src/rlm/repl.py",
+    "prime-agent-runtime/test/test_repl.py",
+    "scripts/pack-prime-agent-release.mjs",
+    "scripts/profile-coding-agent-node.mjs",
+    "scripts/release.mjs",
+    "scripts/sync-versions.js"
+  ],
+  "git:functionalDomains": [
+    {
+      "domain": "Architecture / Monorepo Foundation",
+      "impact": "Critical",
+      "description": "Upstream v0.10.0 replaced TypeScript packages/ with Rust crates/. All TypeScript packages were removed in 39bc99a91.",
+      "resolution": "Native Rust implementation in crates/pa-* instead of dual-stack."
+    },
+    {
+      "domain": "Kernel & REPL Management",
+      "impact": "High",
+      "description": "Dual ipython/xonsh runtime against worker lifecycle, session lease teardown, and runtime writers.",
+      "files": [
+        "packages/coding-agent/src/core/kernel/repl-manager.ts",
+        "packages/coding-agent/src/core/kernel/bootstrap.ts",
+        "packages/coding-agent/src/core/kernel/shared.ts",
+        "packages/coding-agent/src/core/agent-session.ts",
+        "packages/coding-agent/src/core/agent-session-services.ts",
+        "packages/coding-agent/src/core/sdk.ts",
+        "prime-agent-runtime/src/rlm/repl.py"
+      ]
+    },
+    {
+      "domain": "Python Runtime (prime-agent-runtime)",
+      "impact": "High",
+      "description": "Fork xonsh execution dispatcher and syntax handlers reconciled with upstream factory state machine.",
+      "files": [
+        "prime-agent-runtime/src/rlm/repl.py",
+        "prime-agent-runtime/src/rlm/repl.md",
+        "prime-agent-runtime/test/test_repl.py"
+      ]
+    },
+    {
+      "domain": "Interactive TUI & Cell Components",
+      "impact": "Medium",
+      "description": "Xonsh cell display and execution rendering mapped into Ratatui pa-tui cards.",
+      "files": [
+        "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+        "packages/coding-agent/src/modes/interactive/components/ipython-cell.ts",
+        "packages/coding-agent/src/modes/interactive/components/conversation-components.ts",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.ts"
+      ]
+    },
+    {
+      "domain": "Packaging & Build Scripts",
+      "impact": "Medium",
+      "description": "Fork maintained pnpm workspace, Arch PKGBUILD, and install.xsh; native target uses cargo release binaries.",
+      "files": [
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "pkgbuild/PKGBUILD",
+        "scripts/install.xsh",
+        "install.ps1"
+      ]
+    }
+  ]
+}

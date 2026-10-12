@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "authorization": {
+    "isolated_tests": true,
+    "isolated_arch_packaging": true,
+    "system_installation": false,
+    "source_repairs": false
+  },
+  "source": {
+    "original_worktree": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh",
+    "validation_worktree": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+    "head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "protected_inputs_manifest": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-preflight-inputs.json",
+    "copied_native_inputs": 10,
+    "source_status_matches": true,
+    "preflight_hash_mismatches": [],
+    "baseline_worktree": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-20261011"
+  },
+  "steps": {
+    "pa_core_test": {
+      "command": "cargo test -p pa-core --locked",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/pa-core-test-20261011.log",
+      "started_at": "2026-10-11T21:29:33.426484+00:00",
+      "exit_code": 101,
+      "status": "failed",
+      "completed_at": "2026-10-11T21:37:50.418931+00:00",
+      "summary": {
+        "passed": 1159,
+        "failed": 3,
+        "ignored": 3,
+        "failed_tests": [
+          "session_engine::request_timing::payload::tests::concurrent_producers_drop_at_the_reserve_when_the_queue_is_full",
+          "session_engine::telemetry::status::tests::status_names_the_endpoint_and_the_installation_id",
+          "tools::golden_replay::golden_bash_group_matches_ts"
+        ],
+        "compiler_warnings": 2
+      }
+    },
+    "pa_core_timing_repro": {
+      "command": "cargo test -p pa-core --locked session_engine::request_timing::payload::tests::concurrent_producers_drop_at_the_reserve_when_the_queue_is_full -- --exact --nocapture --test-threads=1",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/pa-core-timing-isolated.log",
+      "exit_code": 101,
+      "status": "failed",
+      "summary": "same assertion in isolated rerun (not a concurrency-only full-suite collision)"
+    },
+    "upstream_pa_core_control": {
+      "command": "cargo test -p pa-core --locked",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-20261011",
+      "head": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/upstream-pa-core-test-20261011.log",
+      "started_at": "2026-10-11T21:39:35.508190+00:00",
+      "status": "failed",
+      "exit_code": 101,
+      "completed_at": "2026-10-11T21:50:09.840379+00:00",
+      "summary": {
+        "passed": 1158,
+        "failed": 2,
+        "ignored": 3,
+        "failed_tests": [
+          "session_engine::telemetry::status::tests::status_names_the_endpoint_and_the_installation_id",
+          "tools::golden_replay::golden_bash_group_matches_ts"
+        ]
+      }
+    },
+    "native_fmt_check": {
+      "command": "cargo fmt --all --check",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-cargo-fmt-check.log",
+      "started_at": "2026-10-11T21:39:35.508207+00:00",
+      "status": "failed",
+      "exit_code": 1,
+      "completed_at": "2026-10-11T21:50:09.840395+00:00",
+      "diff_files": [
+        "crates/pa-core/src/lib.rs",
+        "crates/pa-core/src/tools/xonsh.rs"
+      ]
+    },
+    "upstream_timing_isolated": {
+      "command": "cargo test -p pa-core --locked session_engine::request_timing::payload::tests::concurrent_producers_drop_at_the_reserve_when_the_queue_is_full -- --exact --nocapture --test-threads=1",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/upstream-pa-core-timing-isolated.log",
+      "status": "passed",
+      "exit_code": 0,
+      "summary": "1 passed"
+    },
+    "native_timing_retry": {
+      "command": "cargo test -p pa-core --locked session_engine::request_timing::payload::tests::concurrent_producers_drop_at_the_reserve_when_the_queue_is_full -- --exact --nocapture --test-threads=1",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-core-timing-retry.log",
+      "status": "passed",
+      "exit_code": 0,
+      "summary": "1 passed after preceding native failures; nondeterminism suspected, not yet root-caused"
+    },
+    "native_pa_tui_test": {
+      "command": "cargo test -p pa-tui --locked",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-test-20261011.log",
+      "started_at": "2026-10-11T21:50:48.194036+00:00",
+      "status": "running",
+      "exit_code": null
+    }
+  },
+  "limitations": {
+    "production_catalog_source": "unknown",
+    "fixture_is_production": false,
+    "arch_package_build": "not_started",
+    "system_installation": "not_authorized"
+  },
+  "audits": {
+    "phase4_read_only": {
+      "agent": "phase4-auditor",
+      "model": "openai-codex/gpt-6-sol",
+      "status": "reported",
+      "observations": [
+        "xonsh cell/card routing present in five dirty TUI files",
+        "ipython preview/highlight path remains used for xonsh; xonsh-specific TUI tests not found"
+      ],
+      "source_paths": [
+        "crates/pa-tui/src/tool_card/ipython.rs:193",
+        "crates/pa-tui/src/tool_card/ipython.rs:414-421",
+        "crates/pa-tui/src/tool_card/mod.rs:128,336"
+      ],
+      "limitation": "Review only; no pa-tui test yet."
+    },
+    "kernel_repl_mcpls": {
+      "agent": "kernel-mcpls",
+      "model": "openai-codex/gpt-6-luna",
+      "status": "running",
+      "artifact": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/kernel-mcpls-audit.json"
+    }
+  }
+}

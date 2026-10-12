@@ -1,0 +1,125 @@
+{
+  "核記": "唯讀；未建置、未測。",
+  "工作樹譜系": {
+    "題定工作根": "/home/jeff/code/fork/prime-agent/prime-agent-runtime",
+    "其 Git 根": "/home/jeff/code/fork/prime-agent",
+    "工作枝與 HEAD": {
+      "枝": "xonsh-rust",
+      "HEAD": "bd31657d295a581eb2b685a4952bee0e2de0fcc0"
+    },
+    "原生據根": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+    "原生 HEAD": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "原生父": "33489b01b9d7d3bdea8372fa47692068ea7e78ed",
+    "譜系": "原生承 v0.10.0；與工作 HEAD 無共同 merge-base。新碼唯據原生樹。",
+    "狀態": "兩樹各有既存他改；本核未觸。",
+    "原生枝況": "detached；feat/native-rust-xonsh 另樹同 HEAD",
+    "祖先鏈": "2da0c33 -> 33489b0 -> 763094e (v0.10.0)"
+  },
+  "工具與索引": {
+    "mcpls_SCHEMA": {
+      "檔徑": "絕對徑。",
+      "hover_definition_references_prepare_hierarchy": "file_path:string、line:integer、character:integer；均一基。",
+      "references": "include_declaration:boolean；預設 false。",
+      "incoming_outgoing": "item；須取自 prepare_call_hierarchy。",
+      "diagnostics": "file_path:string。",
+      "symbol_search": "query:string；limit 可選。"
+    },
+    "mcpls_基準": "workspace_symbol_search(Xonsh, limit=20) 失：no LSP server configured。",
+    "mcpls_直查": "原生 Rust 檔 get_diagnostics、hover、definition、references、prepare_call_hierarchy 均失：path outside workspace。",
+    "mcpls_根": "~/.config/mcpls/mcpls.toml 之 workspace.roots 為空；工具無設根接口。唯讀約束下不能改設定或重啟，故未能重根、預熱。空回不可作無引用證。",
+    "rust_analyzer": {
+      "工具": "rust_analyzer_set_workspace、symbols、definition、references。",
+      "根": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "座標": "零基。",
+      "交叉核": "Rust 參照數與原生 crates/pa-core/src 字面命中相符：execute_xonsh 2、xonsh_tool_options 2、execute_inner 2、parse_event 46。",
+      "限": "可解析原生 Rust 並得跨檔定義；不證全域索引完備，亦不代 Python LSP。"
+    },
+    "JMESPath": "題定 .venv 無 jmespath；未安裝。回應以 Python JSON 標準庫限欄、限筆。"
+  },
+  "證徑": [
+    {
+      "鏈": 1,
+      "名": "會話註冊",
+      "徑": [
+        "crates/pa-core/src/session_engine/engine.rs:431-440",
+        "crates/pa-core/src/session_engine/runtime_wiring.rs:366-375",
+        "crates/pa-core/src/tools/xonsh.rs:283-324"
+      ],
+      "證": "engine 缺 xonsh 工具時建工具；wiring 傳同一 KernelProvisioner；定義採 Sequential。工具：rust-analyzer symbols/definition；源讀。"
+    },
+    {
+      "鏈": 2,
+      "名": "Rust 工具入核",
+      "徑": [
+        "crates/pa-core/src/tools/xonsh.rs:158-209",
+        "crates/pa-core/src/tools/xonsh.rs:62-90",
+        "crates/pa-core/src/kernel/manager/mod.rs:591-635"
+      ],
+      "證": "取 code 後 execute_xonsh 經 ensure，manager.execute 帶 mode=Some(xonsh)；helper 再明置同 mode。工具：rust-analyzer references/definition；命中與字搜同。"
+    },
+    {
+      "鏈": 3,
+      "名": "Rust 請求序列化",
+      "徑": [
+        "crates/pa-core/src/kernel/manager/mod.rs:621-635",
+        "crates/pa-core/src/kernel/manager/requests.rs:58-64,145-152,239-265",
+        "crates/pa-core/src/kernel/protocol.rs:18-22,65-73"
+      ],
+      "證": "opts.mode 入 Request::Execute；to_json 僅於 Some 時置 mode；execute_inner 附 id，以 JSONL 寫 stdin。工具：rust-analyzer symbols/references；源讀。"
+    },
+    {
+      "鏈": 4,
+      "名": "Python 編譯、回文與 Rust 結果",
+      "徑": [
+        "prime-agent-runtime/src/rlm/repl.py:1563-1674",
+        "prime-agent-runtime/src/rlm/repl.py:1452-1489,726-766,614-683",
+        "crates/pa-core/src/kernel/manager/startup.rs:348-353",
+        "crates/pa-core/src/kernel/protocol.rs:177-220",
+        "crates/pa-core/src/kernel/manager/events.rs:65-139",
+        "crates/pa-core/src/kernel/manager/execution.rs:137-243",
+        "crates/pa-core/src/tools/xonsh.rs:211-249"
+      ],
+      "證": "Python 驗 mode 後入 _serve/_handle_execute；xonsh 分支以持久 Execer 編譯、執行，依序送 result/error/done。Rust parse_event、handle_event 暫存 result，done 結算 ExecuteResult，再組工具文。工具：原生 Rust RA definitions/references；Python 靜讀。"
+    }
+  ],
+  "自舉弱點": {
+    "證": [
+      "crates/pa-core/src/kernel/bootstrap/mod.rs:41-57,86-90",
+      "crates/pa-core/src/kernel/bootstrap/venv.rs:122-164",
+      "prime-agent-runtime/src/rlm/repl.py:42-51,614-619",
+      "prime-agent-runtime/pyproject.toml:[project]",
+      "crates/pa-core/src/kernel/bootstrap/venv/probe.rs:25-32"
+    ],
+    "判": "預設 extra 套件列十二項，無 xonsh；bootstrap 選項僅 skills/progress；ready probe 不驗 xonsh；repl 將 xonsh 作可選匯入，缺件則編譯即 RuntimeError。故預設自舉未證可用；除非 kernel Python 外部預裝 xonsh。"
+  },
+  "候選測試": [
+    {
+      "測": "xonsh_tool_definition_properties",
+      "位": "crates/pa-core/src/tools/xonsh.rs:353-365",
+      "覆": "工具名、描述、Sequential。",
+      "缺": "未驗 mode 傳遞或執行。"
+    },
+    {
+      "測": "parses_every_event_kind_verbatim",
+      "位": "crates/pa-core/src/kernel/protocol.rs:358-435",
+      "覆": "Result、Error、Done 等通用事件解析。",
+      "缺": "未驗實際 sidecar 回文及 manager 結算。"
+    },
+    {
+      "測": "ReplTest.test_xonsh_mode_executes_native_shell_syntax",
+      "位": "prime-agent-runtime/test/test_repl.py:241-255",
+      "覆": "直送 JSON xonsh 請求；驗 shell 語法輸出與 done。",
+      "缺": "繞過 Rust 工具、KernelManager；不驗 Rust mode 序列化。"
+    }
+  ],
+  "環境與執行": {
+    "題定 .venv": "jmespath、xonsh、pytest 均缺；dill 在。",
+    "實測": "無；未跑任何測試、建置或安裝。",
+    "建議": [
+      "原生樹根：cargo test -p pa-core --lib tools::xonsh::tests::xonsh_tool_definition_properties",
+      "原生樹根：cargo test -p pa-core --lib kernel::protocol::tests::parses_every_event_kind_verbatim",
+      "原生 prime-agent-runtime 根、且測試 Python 已有 xonsh：python -m unittest test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax"
+    ],
+    "先務": "補預設 kernel xonsh 依賴或明示可用條件；增 Rust Execute(mode) 序列化/轉送測與跨 Rust-Python 回應測。"
+  }
+}
