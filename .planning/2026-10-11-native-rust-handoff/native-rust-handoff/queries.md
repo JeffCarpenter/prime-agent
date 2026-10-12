@@ -14,7 +14,7 @@ xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.
 xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh decision.question
 ```
 
-首式自校封包 `SHA256SUMS` 而列大綱；次式按點徑讀一節。數組索引自零（例 `facts.0`）；錯徑或雜湊不符則非零退出。此處無 zsh 入口。
+首式直讀相鄰 YAML 而列大綱；次式按點徑讀一節。數組索引自零（例 `facts.0`）；錯徑或缺資料則非零退出。此處無 zsh 入口。
 
 ## YAML data queries
 

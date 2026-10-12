@@ -10,8 +10,9 @@ status:
   phase_2: Python sidecar 已移植；pytest 144 過。
   phase_3: 核心工具已入 HEAD；原生 core 1159 過、3 敗、3 略；上游對照同失二，計時敗而後過；未驗通。
   phase_4: 五 TUI 檔及 skills/zsh 未提交；xonsh 預覽仍循 Python；pa-tui 測試尚行。
-  phase_5: 原生配方未有；release、Arch 包及 CLI 皆未驗。
-  current: 先行第零期譜系與等能盤點；一二期為既有完成史，三期驗收未竟，四期污而待核，五期未始。
+  phase_5: 原生包裝已准，惟須先完 Phase 0 等能盤點、基線與隔離整合；原生配方未有，release、Arch 包及 CLI 皆未驗。
+  current: 先行第零期譜系與等能盤點；一二期為既有完成史，三期驗收未竟，四期污而待核，五期已准未始。
+  handoff: .planning/2026-10-11-native-rust-handoff/native-rust-handoff/ 的交接整理已提交；五項 open-handoff.xsh 讀取測試已過；交接檔由 Git 版控，並非 release／建包／CLI 驗收。
 authority:
   allowed: 用戶請 rebase／reconcile，必要且限於本案之原碼及測試修補可作；隔離測試、建包亦准。用戶已明准 PKGBUILD 原生改寫（Phase 5 p5-t1 原生 Rust 二進位與運行時建包）、過期 TypeScript 構建淘汰，以及 .planning/bin/ 重複 .xsh 腳本修剪。
   excluded: 系統安裝、破壞既有工作或實質擴界，仍須另請准。
@@ -23,12 +24,11 @@ open:
   installer: 原生樹無 scripts/install.xsh；替代之議未定。
   catalogs: 正式兩項 bundled JSON 須取可信真源；fixture 為合成，非生產證；PKGBUILD 須具離線回退。
   gates: pa-core 失三（上游同失二）；fmt 失於 lib.rs、xonsh.rs；pa-tui 尚行；餘門未驗。
-  handoff_state: 待核結 .planning/2026-10-11-arch-packaging-guidelines/native-rust-handoff/ 五修檔與 open-handoff.xsh 之未提交交接態。
   ghost_worktree: 待核結清理未登錄之第五工作樹 .worktrees/rebase-2a16de906。
 next:
   first: 據 pre-port-lineage.json 比六提交與 origin/main 另支候選之原作、上游 Rust 等能及 native 缺口；未經語義核對勿判皆須移植。
   then: 核 pa-tui 退出與十二件雜湊，於新隔離樹先修前 xonsh 缺口、再移植核驗 native xonsh；執行已准之 PKGBUILD 原生化改寫與品質驗證。
-  stop: 需安裝、破壞既物或實質擴界方止問；本案必要修碼及已核准之建包任務不再重請准；未驗不冒稱已建。
+  stop: 已准之 Rust 源系、必要修碼與 Phase 5 包裝毋重請准；可逆等能盤點與基線可先作。本案大修前若風險胃納未明，徵具體容險而非重請既准範圍；用戶明言毋問則僅續可逆已准工，遇高風險／未界定修補、系統安裝、破壞既物或擴界止問；未驗不冒稱已建。
 evidence:
   lineage: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-lineage.json
   divergences: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/divergences.jsonld
@@ -37,5 +37,5 @@ evidence:
   observations: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/findings.md
   chronology: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/progress.md
   consent: /home/jeff/code/skills/incubator/scratchpad.yaml
-  handoff: .planning/2026-10-11-arch-packaging-guidelines/native-rust-handoff/README.md
+  handoff: .planning/2026-10-11-native-rust-handoff/native-rust-handoff/README.md
   validation: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/validation-run.json

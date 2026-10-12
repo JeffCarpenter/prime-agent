@@ -2,7 +2,7 @@ schema_version: 1
 kind: native-rust-arch-pkgbuild-handoff
 context:
   root: /home/jeff/code/fork/prime-agent
-  scratchpad: ../../skills/incubator/scratchpad.yaml
+  scratchpad: .planning/2026-10-11-native-rust-handoff/native-rust-handoff/scratchpad.yaml
   session_id: 01a12c8b-285b-7303-960b-2dd5e97400e1
   readme: README.md
   mission: MISSION.md
@@ -91,7 +91,7 @@ sources:
   role: 唯一現行交接資料檔 scratchpad.yaml，受 SHA256 校驗
 - id: xonsh-entry
   path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh
-  role: 原生 xonsh 與 PyYAML 入口；默列大綱，點徑取節，自校雜湊
+  role: 原生 xonsh 與 PyYAML 入口；默列大綱，點徑取節，直讀相鄰 YAML
 facts:
 - id: root-first
   claim: 小問根自核；先定決策與缺證，再取最小切片。
@@ -196,7 +196,7 @@ facts:
   - native-trajectory
   - user-correction
 - id: native-handoff-verified
-  claim: 新 Rust 封包 36 檔雜湊皆合，舊十九檔史包亦核；JSON／文言 YAML 同值、同形、合 schema，源徑與證引皆通；交接非建成。
+  claim: 現行交接檔案由 Git 版控；open-handoff.xsh 直讀相鄰 YAML，五項 reader tests 已過。此為交接資料讀取驗證，非 Rust release、Arch 包或 CLI 驗收。
   evidence:
   - native-packet
   - native-trajectory
@@ -229,10 +229,10 @@ decision:
   owner: 根負讀圖與執行；用戶定本案容險
   question: 既定 Rust 後端：如何保全 dirty 工作，續 upstream v0.10.0 移植而實證 Arch 包與 CLI？
   options:
-  - 沿既有 feat/native-rust-xonsh 驗／補 Phase4、Phase5
-  - 於隔離副本重現同 commit 與必要 dirty 變更後驗包
+  - 既有 feat/native-rust-xonsh 僅作唯讀參照與基線；勿在其 dirty 原件上補 Phase4／Phase5
+  - 完成 Phase 0 等能盤點與基線後，於 v0.10.0 新隔離樹重驗 native commits 與必要 dirty 變更，再驗 release 與 Arch 包
   required:
-  - 用戶已定 Rust 後端；開工徵本案容險，不再索源系二擇
+  - 用戶已定 Rust 後端並准本案必要修碼與 Phase 5 原生包裝，毋重請源系或既准範圍；先作可逆 Phase 0 等能盤點與基線；大修前釐清尚未明之風險胃納，破壞、安裝或擴界另求准
   - 記 native commit 與 dirty 輸入，保全既物
   - 以實測 build/check/package、CLI 證成
 constraints:
@@ -243,13 +243,12 @@ constraints:
   - native worktree 五 TUI 改檔與 skills/zsh/ 未追蹤
   - 舊 TypeScript 證據依 sources 所列原址查核；此處不複製
 next:
-- when: 接續此案而將作大修／建包。
-  action: 先自專案根用 xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh 閱綱；續徵本案容險，辨我方原作、上游與規格未足；據
-    native 計畫及圖定路，毋再請用戶二擇 TS／Rust。
-  accept: 源系 native v0.10.0 已明；風險與 dirty 保全界線有錄。
-- when: 欲實建。
-  action: 先保全 native dirty，記 HEAD 及輸入雜湊；於隔離輸出試 Rust release、繼作 Phase5 Arch 配方，舊包與主樹勿覆。
-  accept: 命令、exit、日誌、源 rev、dirty 輸入、新包路徑俱記。
+- when: 接續本案。
+  action: 先自專案根用 xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh 閱綱；依譜系證據先作 Phase 0 等能盤點及基線，辨我方原作、上游與規格未足。Rust 源系與原生包裝已准毋重請；大修前方徵尚未明之本案容險。
+  accept: 等能盤點與保全基線有據；native v0.10.0 源系、已准範圍及風險邊界分明。
+- when: Phase 0 等能盤點與基線已立，欲續實建。
+  action: 先保全 native dirty，記 HEAD 及輸入雜湊；於 v0.10.0 新隔離樹補前置缺口、重驗 native commits 及必要 dirty 輸入，整合有證後始試 Rust release 與 Phase 5 Arch 配方；舊包與原工作樹勿覆。
+  accept: 等能帳、基線、隔離整合測試、命令、exit、日誌、源 rev、dirty 輸入及新包路徑俱記；未達不稱包成。
 - when: 新包確成。
   action: 驗 prime-agent --version、依賴、包清單與 CLI 啟動；辨失敗屬我方改動抑上游。
   accept: build/check/package 與實際執行皆有證；未達則明未達。

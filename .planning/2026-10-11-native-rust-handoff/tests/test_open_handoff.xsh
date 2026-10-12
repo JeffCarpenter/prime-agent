@@ -42,15 +42,14 @@ class OpenHandoffTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Rust", result.stdout)
 
-    def test_modified_packet_rejected_before_read(self):
+    def test_missing_handoff_data_fails_helpfully(self):
         with tempfile.TemporaryDirectory(prefix=".handoff-test-", dir=PLAN) as tmp:
             copied = Path(tmp) / "packet"
             shutil.copytree(PACKET, copied)
-            target = copied / "scratchpad.yaml"
-            target.write_text(target.read_text() + " ", encoding="utf-8")
+            (copied / "scratchpad.yaml").unlink()
             result = run_opener("decision.question", script=copied / "open-handoff.xsh")
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("checksum", result.stderr.lower())
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("scratchpad.yaml", result.stderr)
 
 
 import sys
