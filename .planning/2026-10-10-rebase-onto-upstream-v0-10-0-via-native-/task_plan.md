@@ -11,6 +11,9 @@ Use `pre-port-lineage.json` to build a source-cited capability ledger for the si
 4. Pinning authoritative workspace version to upstream `0.10.0`.
 Execute capability parity ledger first, then proceed with approved native packaging and cleanup.
 
+### Housekeeping / Working Tree TODOs
+- [ ] **TODO (Handoff Reconcile):** Address/reconcile pending working tree state in `.planning/2026-10-11-arch-packaging-guidelines/native-rust-handoff/` (5 modified files: `README.md`, `SHA256SUMS`, `queries.md`, `scratchpad.yaml`, `successor-context.json` + untracked `open-handoff.xsh`).
+
 ## Current Phase
 Phase 0 in progress: recover the full pre-port scope and establish native parity/baseline before further integration. Phases 1–2 are historically completed on the existing native line; Phase 3 has landed code but open acceptance, Phase 4 is dirty/unverified, and Phase 5 packaging realignment is approved by user. Necessary scoped source, test, packaging, and tooling repairs are authorized by the user; no system installation or overwrite of protected work.
 
