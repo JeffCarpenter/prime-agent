@@ -18,6 +18,7 @@ context:
   - 舊TS失敗僅歷證
   - 用戶糾正源系推斷
   - 用戶明定Rust後端
+  - 原生xonsh交接入口
 state:
   status: native-rust-port-package-unverified
   technical_build_complete: false
@@ -26,16 +27,16 @@ state:
   last_attempt: 舊 TS 隔離 makepkg exit 4；新 native Rust 分支未行 cargo release 或 Arch 建包，勿稱成功。
 sources:
 - id: consultant
-  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/consultant.json
+  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/evidence/consultant.json
   role: 源系裁斷及因果勘誤
 - id: build
-  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/build-attempt.json
+  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/evidence/build-attempt.json
   role: 首錯及保全
 - id: verification
-  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff-verification.json
+  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/evidence/handoff-verification.json
   role: 新員獨核
 - id: handoff
-  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-arch-packaging-guidelines/handoff.json
+  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/evidence/handoff.json
   role: 前期索引
 - id: queries
   path: /home/jeff/code/skills/incubator/queries.md
@@ -71,7 +72,7 @@ sources:
   path: /home/jeff/.prime/agent/sessions/01a12c8b-285b-7303-960b-2dd5e97400e1.jsonl
   role: 用戶原令：開案先問風險與需求技能待辦
 - id: native-trajectory
-  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-native-2026-10-11/evidence/native-trajectory.md
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/native-trajectory.md
   role: 工作樹、tag 解參、版本、dirty 與無新建之有界命令錄
 - id: native-plan
   path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/task_plan.md
@@ -86,8 +87,11 @@ sources:
   path: /home/jeff/.prime/agent/sessions/01a12c8b-285b-7303-960b-2dd5e97400e1.jsonl
   role: 用戶明撤根索源系前提並責失建
 - id: native-packet
-  path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-native-2026-10-11/successor-context.json
-  role: 現 Rust 版完整交接封包，35 檔 SHA256 自驗
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/scratchpad.yaml
+  role: 唯一現行交接資料檔 scratchpad.yaml，受 SHA256 校驗
+- id: xonsh-entry
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh
+  role: 原生 xonsh 與 PyYAML 入口；默列大綱，點徑取節，自校雜湊
 facts:
 - id: root-first
   claim: 小問根自核；先定決策與缺證，再取最小切片。
@@ -98,7 +102,7 @@ facts:
   evidence:
   - consultant
 - id: regularity
-  claim: 索引同形、條目有序；JSON 以 jq、YAML 以 yq，同路徑可查；異語後端須轉譯。
+  claim: 現行資料僅 scratchpad.yaml；條目有序，以 yq 查詢；舊證據據 sources 所列原址查核。
   evidence:
   - queries
 - id: lineage
@@ -192,7 +196,7 @@ facts:
   - native-trajectory
   - user-correction
 - id: native-handoff-verified
-  claim: 新 Rust 封包 35 檔雜湊皆合，舊十九檔史包亦核；JSON／文言 YAML 同值、同形、合 schema，源徑與證引皆通；交接非建成。
+  claim: 新 Rust 封包 36 檔雜湊皆合，舊十九檔史包亦核；JSON／文言 YAML 同值、同形、合 schema，源徑與證引皆通；交接非建成。
   evidence:
   - native-packet
   - native-trajectory
@@ -205,6 +209,11 @@ facts:
   - legacy-pkgbuild
   - user-correction
   - consultant
+- id: xonsh-entry-verified
+  claim: 專案根以 xonsh 直啟封包腳本，預設列大綱、點徑取節；壞徑與改件非零；與舊 outline.zsh 分明。
+  evidence:
+  - xonsh-entry
+  - native-packet
 known-unknowns:
 - id: unreached-phases
   question: 新源樹之 build/check/package、成品與執行契約未驗。
@@ -232,10 +241,11 @@ constraints:
   preservation:
   - 主樹 pkgbuild/PKGBUILD 既改、.SRCINFO 與舊 0.9.8 成品
   - native worktree 五 TUI 改檔與 skills/zsh/ 未追蹤
-  - 舊封包 19 檔與 SHA256SUMS 為歷史快照
+  - 舊 TypeScript 證據依 sources 所列原址查核；此處不複製
 next:
 - when: 接續此案而將作大修／建包。
-  action: 先徵本案容險，辨我方原作、上游與規格未足；據 native 計畫及圖定路，毋再請用戶二擇 TS／Rust。
+  action: 先自專案根用 xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh 閱綱；續徵本案容險，辨我方原作、上游與規格未足；據
+    native 計畫及圖定路，毋再請用戶二擇 TS／Rust。
   accept: 源系 native v0.10.0 已明；風險與 dirty 保全界線有錄。
 - when: 欲實建。
   action: 先保全 native dirty，記 HEAD 及輸入雜湊；於隔離輸出試 Rust release、繼作 Phase5 Arch 配方，舊包與主樹勿覆。
