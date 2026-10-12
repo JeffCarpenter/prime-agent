@@ -64,3 +64,10 @@ fmt-*.log
 tests-*.log
 test-compile-*.log
 
+# Arch Linux packaging artifacts
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+pkgbuild/.makepkg-*
+pkgbuild/src/
+pkgbuild/pkg/
