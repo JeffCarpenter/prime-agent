@@ -58,3 +58,24 @@ Current decisions, authority, unresolved gates and next actions: `native-status.
 
 - Canonical machine-readable map: `pre-port-lineage.json` (pinned release/tag/branch SHAs; six-commit lists for three replay bases; `range-diff` pairs; older `origin/main` 322-commit author/subject inventory; targeted blame; explicit unknowns). This **completes ref-level provenance inventory**, not behavioral equivalence or feature-scope approval for every historical commit.
 - Tag `v0.9.7` is on the upstream spine but no distinct six-commit replay ref was found for it in the named fork lineage. `origin/main` is a divergent older candidate line, not an ancestor of the v0.9.8 fork prefix or Rust target. Its 63 Jeff-authored commits are candidates only; authorship and 322 nonmatching patch IDs do not identify all required features. Steps 2–4 are laid out in `task_plan.md` and remain unexecuted.
+
+## Assimilated historical rebase knowledge & divergence taxonomy
+
+- **Architectural Decision Record (ADR):** Evaluated 3 paths following upstream commit `39bc99a91` (PR #2524, deleting 1,181 TypeScript files across `packages/*` and `package.json`):
+  1. *Dual-stack coexistence:* Retain `packages/` alongside `crates/`. Rejected / obsolete: creates dead TS maintenance burden and broke upstream release-by-release replay.
+  2. *Native Rust port:* Port xonsh REPL and dual-kernel manager directly into `crates/pa-core` and `crates/pa-tui`, retaining Python runtime in `prime-agent-runtime/`. Accepted as active plan.
+  3. *Non-TypeScript replay only:* Apply Python runtime, zsh skill, and scripts without native Rust tool. Rejected: fails to provide xonsh capability to native agent.
+- **Fork Commit Tier Taxonomy (37 commits on `v0.9.8..xonsh-repl`):**
+  - **28 TypeScript commits:** `packages/coding-agent` (REPL manager, session lifecycle, TUI cell display, xonsh tool definition, regression tests).
+  - **4 Python sidecar commits:** `prime-agent-runtime/src/rlm/repl.py` (execution dispatcher and syntax handling), `repl.md`, `test_repl.py`.
+  - **3 skill commits:** `skills/zsh` package and `pyproject.toml`.
+  - **2 packaging/installer commits:** `scripts/install.xsh` and Arch Linux `pkgbuild/PKGBUILD`.
+- **53 Overlapping Files Collision Surface:** Complete list mapped across 5 functional domains in canonical graph `divergences.jsonld`:
+  - *Architecture / Monorepo Foundation (Critical):* Root `package.json`, `package-lock.json`, `packages/*/package.json`.
+  - *Kernel & REPL Management (High):* `repl-manager.ts`, `bootstrap.ts`, `shared.ts`, `agent-session.ts`, `agent-session-services.ts`, `sdk.ts`, `prime-agent-runtime/src/rlm/repl.py`.
+  - *Python Runtime (High):* `repl.py`, `repl.md`, `test_repl.py`.
+  - *Interactive TUI & Cell Components (Medium):* `interactive-mode.ts`, `ipython-cell.ts`, `conversation-components.ts`, `tool-execution.ts`, `theme.ts`.
+  - *Packaging & Build Scripts (Medium):* `pnpm-lock.yaml`, `pkgbuild/PKGBUILD`, `scripts/install.xsh`, `install.ps1`.
+- **Seed Provenance & Conflict Resolutions on Scaffolding:**
+  - Upstream seed commit `5ac9d0650~1` (`dc63427ad625`, Kevin Thomas, 0 parents, roots `upstream/kevin-migration-catchup` and `upstream/lane/catalog-build`) contained only `MISSION.md`, `README.md`, and `WATCHDOG.md`. Seed rebase completed at commit `dcede5618` (`xonsh-rust-seed-rebase`).
+  - Cargo scaffolding commit `5ac9d0650` (19 workspace files). Rebase resolved `.gitignore` add/add conflict at `130b21d19` and content conflict at `222db5ff9`, completing at pre-commit tip `a557dd678` and final coexistence tip `e718d2faa`.

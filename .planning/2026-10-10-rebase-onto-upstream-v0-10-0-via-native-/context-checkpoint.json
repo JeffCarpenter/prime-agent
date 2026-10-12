@@ -13,6 +13,7 @@
   },
   "completed": {
     "history_inventory": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-lineage.json",
+    "divergences_graph": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/divergences.jsonld",
     "findings": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/findings.md",
     "graph": {
       "last_upstream_ts_release": "v0.9.8@7d442aafa",
@@ -39,6 +40,7 @@
     "Historical validation-run.json authorization field reflects earlier state; current user clarified rebase/reconcile includes necessary scoped repairs"
   ],
   "artifact_sha256": {
-    "pre-port-lineage.json": "bf7c5e82de4ad999beeffcb610d9dd27986b177375a7795b2924dc81b6d16478"
+    "pre-port-lineage.json": "e3205e1018b08956104e57ec01f796c9f22a416d01c6fca072887dcd87fdd551",
+    "divergences.jsonld": "f12fee230556534d8e6c11e326c712d103b42a5c4b93cb24f6d9b80d89d6a7c3"
   }
 }
