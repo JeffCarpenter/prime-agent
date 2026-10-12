@@ -4,10 +4,15 @@
 First reconcile the fork's pre-xonsh behavior across upstream releases with the Rust v0.10.0 product; then complete the native xonsh port in isolation. Criteria: `.planning/native-rust-port-reconciliation-plan.yaml`; current authority and evidence: `native-status.yaml`, `findings.md`. Existing `feat/native-rust-xonsh` and dirty inputs remain protected references until the earlier fork work is accounted for.
 
 ## Next Step
-Use `pre-port-lineage.json` to build a source-cited capability ledger for the six release-replay changes and the separate `origin/main` candidate pool; compare each proposed carry-forward behavior with upstream Rust v0.10.0 and native `2da0c33ed` before choosing repairs. Do not start packaging yet.
+Use `pre-port-lineage.json` to build a source-cited capability ledger for the six release-replay changes and the separate `origin/main` candidate pool; compare each proposed carry-forward behavior with upstream Rust v0.10.0 and native `2da0c33ed` before choosing repairs. User has explicitly approved:
+1. Retiring the ghost TypeScript stack (upstream releases always enter fork).
+2. PKGBUILD realignment to native Rust binary via `cargo build --release -p pa-cli` and offline catalog handling (Phase 5 p5-t1).
+3. Pruning redundant `.planning/bin/*.xsh` scripts ("that's what git is for").
+4. Pinning authoritative workspace version to upstream `0.10.0`.
+Execute capability parity ledger first, then proceed with approved native packaging and cleanup.
 
 ## Current Phase
-Phase 0 in progress: recover the full pre-port scope and establish native parity/baseline before further integration. Phases 1–2 are historically completed on the existing native line; Phase 3 has landed code but open acceptance, Phase 4 is dirty/unverified, and Phase 5 is pending. Necessary scoped source and test repairs are part of the requested rebase/reconciliation; no system installation or overwrite of protected work.
+Phase 0 in progress: recover the full pre-port scope and establish native parity/baseline before further integration. Phases 1–2 are historically completed on the existing native line; Phase 3 has landed code but open acceptance, Phase 4 is dirty/unverified, and Phase 5 packaging realignment is approved by user. Necessary scoped source, test, packaging, and tooling repairs are authorized by the user; no system installation or overwrite of protected work.
 
 ## Phases
 
@@ -51,10 +56,11 @@ Phase 0 in progress: recover the full pre-port scope and establish native parity
 - [ ] Run verification: `cargo test -p pa-tui` and record command, exit, and log
 - **Status:** pending (work in progress exists, uncommitted and unverified)
 
-### Phase 5: Packaging & Quality Gate Verification
-- [ ] Design a native Rust Arch recipe in an isolated workspace; never replace the main checkout's modified TS `pkgbuild/PKGBUILD`, `.SRCINFO`, or old packages
+### Phase 5: Packaging & Quality Gate Verification (Approved by User)
+- [ ] Reconfigure `pkgbuild/PKGBUILD` for native Rust: package release binary (`cargo build --release -p pa-cli`) alongside Python sidecar runtime and skills, replacing obsolete pnpm/Node packaging flow (approved by user)
 - [ ] Reconcile the installer task with the native tree: `scripts/install.xsh` is absent; decide from the pre-port capability ledger whether a native installer is still required, and test any scoped replacement rather than copying the Node-era script
-- [ ] Generate and validate production catalog assets (`models.bundled.json`, `mcp-services.bundled.json`) from a real catalog source; the offline `--fixture` is synthetic and cannot prove a production package
-- [ ] Run native gates with captured exits/logs: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo build --release --workspace`
-- [ ] Build/check the isolated Arch package and verify its files, dependencies, `prime-agent --version`, and CLI startup; record source revision, dirty-input hashes, package path, and exits
-- **Status:** pending (no native PKGBUILD, release build, or package verified)
+- [ ] Provide static offline fallback/generator for catalog assets (`models.bundled.json`, `mcp-services.bundled.json`) so clean chroot/makepkg builds succeed offline
+- [ ] Standardize authoritative workspace version on `0.10.0` across Cargo, runtime metadata, and packaging recipes per upstream authority
+- [ ] Run native gates with captured exits/logs: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo build --release --workspace`, and sidecar `pytest`
+- [ ] Build/check the native Arch package and verify its files, dependencies, `prime-agent --version`, and CLI startup; record source revision, dirty-input hashes, package path, and exits
+- **Status:** approved_ready_for_execution (PKGBUILD realignment and native packaging authorized by user)
