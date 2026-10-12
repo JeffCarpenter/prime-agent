@@ -29,6 +29,7 @@ next:
   stop: 需安裝、破壞既物或實質擴界方止問；本案必要修碼不再重請准；未驗不冒稱已建。
 evidence:
   lineage: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-lineage.json
+  divergences: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/divergences.jsonld
   plan: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/task_plan.md
   inputs: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-preflight-inputs.json
   observations: .planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/findings.md

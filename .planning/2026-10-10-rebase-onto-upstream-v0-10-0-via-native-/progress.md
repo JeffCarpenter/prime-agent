@@ -66,3 +66,10 @@
 - Marked Phase 0 provenance item complete and planned steps 2–4 (parity ledger; baseline/hash validation; isolated native integration) without executing them. Updated `task_plan.md`, `native-status.yaml`, `findings.md`, and this log. No source edit, build, package, or installation.
 - Validation harness error: a deliberately written plan section names “steps 2–4”, but the first assertion incorrectly required the phrase “steps 2” to be absent. Diagnosed as an inverted assertion, not a plan/data failure; replaced with checks for the planned-section heading and retained statuses.
 - Commit preflight: `git diff --cached --check` found one extra blank line at the end of `task_plan.md`; removed the trailing blank line and restaged the scoped files. No source changes.
+
+## Session: 2026-10-11 (historical rebase knowledge assimilation)
+
+- Extracted and assimilated crucial divergence and rebase lore from historical planning records (`2026-10-10-rebase-xonsh-repl-v0.10.0`, `2026-10-10-rebase-xonsh-rust-seed`, `2026-10-10-rebase-xonsh-rust-5ac9d0650`) into active plan paths.
+- Authored canonical `divergences.jsonld` capturing the formal `@context`, 53 overlapping files collision matrix across 5 functional domains, commit tier breakdown (28 TS / 4 Py / 3 Zsh / 2 Pkg), ADR trade-off analysis, and seed/scaffolding rebase milestones.
+- Updated `findings.md` with explicit ADR records, functional domain classifications, seed provenance, and `.gitignore` conflict resolutions.
+- Updated `pre-port-lineage.json` with commit tier taxonomy and re-root milestone references; updated `context-checkpoint.json` and `native-status.yaml` evidence manifests.
