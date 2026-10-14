@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-tui --locked",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-full-repeat-20261012.log",
+  "source_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+  "protected_original_hashes_match": true,
+  "protected_validation_hashes_match": true,
+  "started_at_utc": "2026-10-14T02:02:12.116746+00:00",
+  "status": "stopped_by_user_scope_correction",
+  "exit_code": null,
+  "retry_of": "launch_failed_before_cargo",
+  "completed_at_utc": "2026-10-14T02:04:04.514814+00:00",
+  "reason": "Prioritize changed-path xonsh integration and targeted gates; not evidence of test pass/fail."
+}

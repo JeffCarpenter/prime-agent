@@ -1,0 +1,11 @@
+{
+  "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --project . --with pytest --with xonsh pytest -q test/test_repl.py -k xonsh",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/prime-agent-runtime",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-sidecar-no-pytest-autoplugin-20261012.log",
+  "status": "passed",
+  "started_at_utc": "2026-10-14T02:07:03.603248+00:00",
+  "reason": "Avoid unrelated xonsh pytest plugin requiring prompt_toolkit; test subprocess still imports installed xonsh",
+  "exit_code": 0,
+  "completed_at_utc": "2026-10-14T02:07:17.518259+00:00",
+  "summary": "1 passed, 143 deselected"
+}

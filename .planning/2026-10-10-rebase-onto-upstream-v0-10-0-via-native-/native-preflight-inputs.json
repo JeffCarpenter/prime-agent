@@ -64,8 +64,8 @@
   },
   "limitations": {
     "builds_run": false,
-    "tests_run": false,
+    "isolated_rebase_tests_run": true,
     "arch_package_verified": false,
-    "note": "A read-only source snapshot. Recheck input hashes immediately before any isolated build; this is not build authorization."
+    "note": "Initial read-only source snapshot. Isolated tests subsequent to snapshot recorded in validation-run.json (cargo test -p pa-core exit 101, cargo fmt exit 1, pytest 144 passed)."
   }
 }

@@ -1,0 +1,10 @@
+{
+  "command": "uv run --project . --with pytest pytest -q test/test_repl.py -k xonsh",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/prime-agent-runtime",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-sidecar-targeted-20261012.log",
+  "status": "failed_missing_xonsh_dependency_hypothesis",
+  "exit_code": 1,
+  "started_at_utc": "2026-10-14T02:05:31.087747+00:00",
+  "completed_at_utc": "2026-10-14T02:06:38.183517+00:00",
+  "next": "repeat targeted test in same isolated environment with --with xonsh to isolate missing-dependency hypothesis"
+}

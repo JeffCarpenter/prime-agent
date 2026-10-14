@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-10-12T03:08:52.377168+00:00",
+  "authority": {
+    "upstream_tag": "v0.10.0",
+    "upstream_peeled": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "native_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "historical_boundary": "v0.9.8..06bdcf1cb16",
+    "supporting_provenance": "pre-port-lineage.json",
+    "baseline": "phase0-baseline-20261011.json"
+  },
+  "method": "Inspect six v0.9.8 release-replay commits and native v0.10.0 files; status expresses bounded source evidence, not release/runtime pass. No cherry-pick or edits to protected source.",
+  "six_release_replay_capabilities": [
+    {
+      "status": "intentionally_retired_as_ts_build_mechanism",
+      "behavior": "Run and package the TypeScript workspace with pnpm instead of npm; adjust installer and release scripts",
+      "evidence": [
+        "git show --name-status eb8c041889f",
+        "upstream/v0.10.0:Cargo.toml:1-20 (Cargo workspace)",
+        "upstream/v0.10.0:install-rust.sh:4-20"
+      ],
+      "open": "Do not transplant TS package-manager edits; any independent installer features need separate behavior review.",
+      "origin_commit": "eb8c041889f1e8b6b130ef18ba42f1defc6fb9a4",
+      "origin_subject": "use pnpm",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    },
+    {
+      "status": "intentionally_retired_as_ts_build_mechanism",
+      "behavior": "Pin pnpm workspace and Biome Linux CLI; fix TS check/install dependency flow",
+      "evidence": [
+        "git show --name-status fd74dfdd17c",
+        "upstream/v0.10.0:Cargo.toml:1-20"
+      ],
+      "open": "Native lint/build gate still needs tested Cargo-based replacement; no pnpm patch replay.",
+      "origin_commit": "fd74dfdd17c8293c224ff67e50b94241cd3a2395",
+      "origin_subject": "chore: add @biomejs/cli-linux-x64, configure pnpm workspace, and fix check dependencies",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    },
+    {
+      "status": "intentionally_retired_as_ts_build_mechanism",
+      "behavior": "Refresh pnpm lock for workspace dependencies",
+      "evidence": [
+        "git show --name-status 3e0fd245ee5",
+        "upstream/v0.10.0:Cargo.toml:1-20"
+      ],
+      "open": "Keep Rust Cargo.lock and sidecar dependency provenance independent; no TS lock transplant.",
+      "origin_commit": "3e0fd245ee575475ef50eef20deb5acdb00404fa",
+      "origin_subject": "chore: update pnpm-lock.yaml for v0.9.5 workspace dependencies",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    },
+    {
+      "status": "native_implementation_present_not_runtime_verified",
+      "behavior": "Build and publish Windows release artifact; PowerShell installer and checksum-verified Windows installation",
+      "evidence": [
+        "git show --name-status 2f8c890b6b0",
+        "upstream/v0.10.0:install.ps1:1-47",
+        "upstream/v0.10.0:.github/workflows/release.yml:1-23",
+        "upstream/v0.10.0:scripts/release/test_windows_install.ps1:1-16"
+      ],
+      "open": "Native Windows e2e/release artifacts not run on this host; version/install parity needs actual Windows CI or Windows host evidence; do not replay Node pack scripts.",
+      "origin_commit": "2f8c890b6b07444f670043476c94dfbef3889bcb",
+      "origin_subject": "windows: focused build orchestrator + PowerShell installer; both artifact sets; pnpm 12 pack fix",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    },
+    {
+      "status": "unknown_functional_requirement_ts_dependency_retired",
+      "behavior": "Add dotenv dependency to old TypeScript root; commit does not add an application-level call site",
+      "evidence": [
+        "git show --name-status f3e865f0302",
+        "upstream/v0.10.0:crates/pa-core/src/kernel/bootstrap/mod.rs:49 (Python dotenv installed, not proof of Rust .env loading)"
+      ],
+      "open": "Decide whether loading .env files is a current product requirement; no Rust dotenv loader found in bounded crate/sidecar scan, but static absence alone cannot prove every runtime path.",
+      "origin_commit": "f3e865f0302b2026fba0d24e50e2dbc61bff7718",
+      "origin_subject": "feat: add dotenv for environment variable management",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    },
+    {
+      "status": "native_install_path_present_xonsh_entry_unknown",
+      "behavior": "Offer a xonsh-native TS release installer script with interactive UX and Node/npm bootstrap",
+      "evidence": [
+        "git show 06bdcf1cb16:scripts/install.xsh:1-65",
+        "upstream/v0.10.0:install-rust.sh:1-25",
+        "upstream/v0.10.0:install.ps1:1-25"
+      ],
+      "open": "Native install-rust.sh and install.ps1 cover published install path; scripts/install.xsh absent in upstream/native. Need requirement decision whether Xonsh-specific UX still required, rather than importing Node-era installer.",
+      "origin_commit": "06bdcf1cb16d6f1d5ca403e00db7817b289b94c4",
+      "origin_subject": "scripts: move install.xsh to scripts/ directory",
+      "reference_base": "v0.9.8@7d442aafa",
+      "upstream_native_comparison": "Upstream and native checked files byte-identical; native has only two xonsh commits above v0.10.0; behavioral runtime verification still pending."
+    }
+  ],
+  "shared_upstream_native_file_evidence": [
+    {
+      "path": "install.ps1",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "2b29c4cc8069ba4f0b8850328962847f05bf79ff83560c2a87144cca594a4417"
+    },
+    {
+      "path": "install-rust.sh",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "82afa854760ad8a088372b94307e59d1e32dadf5e1838c5fc1dcf53eea4fca29"
+    },
+    {
+      "path": "scripts/release/assemble_artifacts.py",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "d7740aed94cdff8e9da8e290bb8eb396c509cced1f5f4a78e3be0565e5cc5b88"
+    },
+    {
+      "path": "scripts/release/test_windows_install.ps1",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "cb462c6ea63688f8652850067e6892169e5df68afb56ab81a91509a53730faed"
+    },
+    {
+      "path": "crates/pa-core/src/kernel/bootstrap/mod.rs",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "b5e769e5f86062477715876533cfe72ba4d483f1dbf83ee05c79a49abbd57684"
+    },
+    {
+      "path": "Cargo.toml",
+      "claim": "byte_identical_upstream_and_native",
+      "sha256": "d1e455a4cc666b13d05c89051875c7fd11e2637707cef281f110bf76f5eeda55"
+    }
+  ],
+  "older_origin_main_pool": {
+    "ref": "origin/main",
+    "tip": "af263b3f735142e26e629cb829afb3761bf83309",
+    "commit_count": 322,
+    "jeff_authored_count": 63,
+    "scope": "Separate older line; not ancestor of verified release-replay; neither authorship nor subject implies ownership or mandatory port",
+    "candidate_index": "pre-port-lineage.json:legacy_parallel_line.commits_after_merge_base",
+    "remaining": "Seven high-priority subjects now source-level reviewed; 315 other candidates unreviewed. Neither list implies all are owned requirements or automatically required carry-forward.",
+    "priority_examples_reviewed": [
+      {
+        "hash": "547b3f94491833d0bed4abbe8a85cf4ae4cf08a0",
+        "subject": "fix(installer): harden owned-prefix migration (fixes #1042)",
+        "status": "native_replacement_partial_equivalence_unverified",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "Old npm prefix mechanism retired; preserve foreign-owned launcher and rollback behavior.",
+          "native_evidence": "install-rust.sh:1252-1262,2780-2857; crates/pa-cli/tests/installer_update_e2e.rs:160,231",
+          "acceptance": "Isolated test for path alias, foreign/broken symlink, failed removal, reinstall and rollback.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "99faace18b13b3cda134eeeaf8bed46165cc593a",
+        "subject": "fix(installer): harden interrupted process cleanup (fixes #1008)",
+        "status": "native_renderer_cleanup_partial_equivalence_unverified",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "Native renderer waits and restores on INT/TERM; old descendant TERM→KILL is not proved.",
+          "native_evidence": "install-rust.sh:548-565,693-725,2557-2621",
+          "acceptance": "Interrupt during install and repeat interruption; inspect process tree, leftover files and restart.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "b5614c38422ead1d114180068192d77d0a50ce31",
+        "subject": "fix(coding-agent): harden kernel host request lifecycle (fixes #848)",
+        "status": "host_request_timeout_requirement_unknown",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "Original request/reply time bounds are not demonstrated; upstream/native host_request block matches but xonsh port changes elsewhere in this file.",
+          "native_evidence": "prime-agent-runtime/src/rlm/repl.py:190-214; crates/pa-core/src/kernel/manager/host_requests.rs:45-67,107-125",
+          "acceptance": "Deterministic missing/late reply, EOF, slow write, cancellation and worker-shutdown tests.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "50cfcf6c9400c0117d74a16fe69521c7909bc773",
+        "subject": "fix(release): harden verified publication (fixes #926, fixes #927, fixes #934, fixes #949)",
+        "status": "release_publication_partial_equivalence_unverified",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "Hash and forward-only checks exist; run-attempt pin and archive size limits not proved.",
+          "native_evidence": ".github/workflows/release.yml:602-693,759-767,1001-1074,1106-1136; scripts/release/verify_release.py:124-145",
+          "acceptance": "Retry source attribution, concurrent pointer monotonicity and malicious ZIP/TAR CI checks.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "33279976c0e9bad23a1648aa76f1705ecec484c1",
+        "subject": "fix(coding-agent): fence session teardown",
+        "status": "worker_teardown_partial_equivalence_unverified",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "Shutdown flag/drain exist; entry race before shutdown_requested unresolved.",
+          "native_evidence": "crates/pa-daemon/src/worker/lifecycle.rs:64-107,142-160",
+          "acceptance": "Test prompt/refine/compact/spawn at drain pause and concurrent shutdown failure propagation.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "1898e4e76e284a38dabf4c02ae0010b965366f30",
+        "subject": "fix(coding-agent): harden supervisor owner restoration",
+        "status": "supervisor_exclusivity_replaced_runtime_parity_unknown",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "TS owner/scope records retired; native socket and lost-supervisor checks exist; singleton safety remains unverified.",
+          "native_evidence": "crates/pa-daemon/src/supervisor_lost.rs:1-4,40-85; crates/pa-daemon/tests/socket_identity_guard_e2e.rs:296-393",
+          "acceptance": "Race two supervisors, late old-owner exit, successor service availability.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      },
+      {
+        "hash": "7b1f7e3ae7754d4076b06688b0d633b94504988c",
+        "subject": "fix(coding-agent): reconcile daemon startup after rebase",
+        "status": "session_start_persistence_requirement_unknown",
+        "review": {
+          "method": "source-level only, no tests run",
+          "decision": "TS Vitest isolation retired; native creates session path at worker creation; early durable materialization unverified.",
+          "native_evidence": "crates/pa-cli/src/interactive_mode.rs:522-533; crates/pa-daemon/src/worker/create.rs:347-374; .github/workflows/ci.yml:254-335",
+          "acceptance": "First entry and interrupted startup/recovery e2e with no partial stub.",
+          "upstream_comparison": "v0.10.0 and native lines inspected; Rust/script paths cited unchanged; Python host_request block unchanged, although Python file differs elsewhere"
+        }
+      }
+    ],
+    "triage_note": "Behavioral safety guarantees should be validated; obsolete npm prefix and TS owner-record implementations need not be ported. No runtime equivalence claimed."
+  },
+  "known_gates": [
+    "pa-tui exit 101: 1391 library tests pass, four agents_view_catalog_settle_carry integration tests fail; clean upstream catalog-only control exit 0 (4/4 pass); native catalog-only control exit 0 (4/4 pass); native full-suite failure cause pending",
+    "pa-core shared and unstable failures; see validation-run.json",
+    "native packaging absent",
+    "risk tolerance unresolved for major repairs",
+    "direct xonsh sidecar: fresh env without xonsh exit 1; same targeted test with xonsh installed and unrelated pytest plugin autoload disabled exit 0 (1/1); bootstrap default extras omit xonsh"
+  ],
+  "phase0_completion": "partial: six release-replay statuses plus seven origin/main examples source-level reviewed; 315 other older candidates unreviewed; bootstrap and release/runtime gates unresolved"
+}
