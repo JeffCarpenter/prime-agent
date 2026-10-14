@@ -17,20 +17,19 @@ optdepends=()
 source=("$pkgname::git+file://$_repo_root#branch=stable")
 sha256sums=('SKIP')
 
+pkgver() {
+    cd "$srcdir/$pkgname" || return
+    sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1
+}
+
 prepare() {
-    local source_version source_commit
+    local source_commit
     cd "$srcdir/$pkgname" || return
 
     source_commit=$(git rev-parse HEAD) || return
     if [[ "$source_commit" != "$_source_commit" ]]; then
         printf '==> ERROR: source commit mismatch: expected %s, got %s\n' \
             "$_source_commit" "$source_commit" >&2
-        return 1
-    fi
-    source_version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
-    if [[ "$source_version" != "$pkgver" ]]; then
-        printf '==> ERROR: PKGBUILD pkgver (%s) does not match Cargo workspace version (%s).\n' \
-            "$pkgver" "$source_version" >&2
         return 1
     fi
 }
