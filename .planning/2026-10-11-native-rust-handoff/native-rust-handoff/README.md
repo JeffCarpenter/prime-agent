@@ -8,7 +8,7 @@ Other files have separate jobs. `README.md` explains how to use the data. `queri
 
 ## Authority and order
 
-`context.scratchpad` resolves from `context.root` to the live `scratchpad.yaml` beside this README. This file records the current handoff decisions and next actions. The separate native-port `task_plan.md` and `native-status.yaml` hold the live implementation sequence and status. Files in `sources/` are frozen evidence snapshots; they are not current plans and must not be synchronized with later working copies.
+`context.scratchpad` resolves from `context.root` to the live `scratchpad.yaml` beside this README. The schema defines the record. `scratchpad.yaml` is the only owner of current state, decisions, and next actions. The native-port `task_plan.md` is a derived planning-with-files view; it is not edited as a separate plan. `findings.md` stores evidence and `progress.md` stores history. Old JSON checkpoints and status YAML files are not authorities. Files in `sources/` are frozen evidence snapshots; they are not current plans and must not be synchronized with later working copies.
 
 Native Rust packaging is approved, not built or verified. First complete the capability ledger and baseline, then test the isolated integration; only then build the release and Arch package. Asking about a still-unknown risk boundary is not asking again for approval of the Rust backend or the approved packaging scope. System installation, destruction of protected work, and scope expansion need separate approval.
 

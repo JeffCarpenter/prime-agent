@@ -13,6 +13,7 @@
 | Native `scripts/release/bundle_catalog.py`, as inspected in 2026-10-11 preflight | Both catalog JSONs are generated, not present in source; `--fixture` is synthetic. No catalog checkout found in bounded candidate paths; another trusted local or network source remains possible. |
 | `progress.md` (2026-10-11 preflight); `native-preflight-inputs.json` | At preflight, no native test/build/package had run. Later isolated test results appear below. Historical TS makepkg failure cannot establish native status. |
 | `/home/jeff/code/skills/incubator/scratchpad.yaml` | User approved isolated tests/package build, not system installation or source repair; historical checksum-verified handoff remains a snapshot. |
+| `.worktrees/rebase-2a16de906` (discovered 2026-10-11) | Orphaned fifth worktree detached at `2a16de906` ("restore continuous background trace uploads (#3415)"); unreferenced in active plan; slated for pruning. |
 
 ## Isolated rebase validation (2026-10-11)
 
@@ -78,3 +79,74 @@ Current decisions, authority, unresolved gates and next actions: `native-status.
 - **Seed Provenance & Conflict Resolutions on Scaffolding:**
   - Upstream seed commit `5ac9d0650~1` (`dc63427ad625`, Kevin Thomas, 0 parents, roots `upstream/kevin-migration-catchup` and `upstream/lane/catalog-build`) contained only `MISSION.md`, `README.md`, and `WATCHDOG.md`. Seed rebase completed at commit `dcede5618` (`xonsh-rust-seed-rebase`).
   - Cargo scaffolding commit `5ac9d0650` (19 workspace files). Rebase resolved `.gitignore` add/add conflict at `130b21d19` and content conflict at `222db5ff9`, completing at pre-commit tip `a557dd678` and final coexistence tip `e718d2faa`.
+
+## Kernel Architecture: Single-Kernel Execution-Mode Switching vs Upstream Phrasing
+
+- **Terminology Reconciliation:** Upstream's planning and module nomenclature frequently refer to "dual-kernel management" or "managing xonsh beside ipython". This terminology contributes to confusion.
+- **Architectural Reality:** As verified in `crates/pa-core/src/tools/xonsh.rs` and `prime-agent-runtime/src/rlm/repl.py`, the system operates a **single persistent Python kernel sidecar**. Execution modes are dispatched through the protocol via `mode: Some("xonsh")`, which routes to an internal `xonsh.execer.Execer` in the Python sidecar, rather than spawning or managing separate daemon processes. Planning and verification must treat this as mode dispatching, not separate-kernel provisioning.
+
+## Kernel Bootstrap Vulnerability (Identified in MCP-LS Audit)
+
+- **The Gap:** Compiler-grade inspection recorded in `kernel-mcpls-audit.json:85-94` revealed that `crates/pa-core/src/kernel/bootstrap/venv.rs` installs twelve default packages into the agent's runtime virtual environment, but **`xonsh` is completely omitted**.
+- **Silent Runtime Failure:** `crates/pa-core/src/kernel/bootstrap/venv/probe.rs` does not check for `xonsh`, and `prime-agent-runtime/src/rlm/repl.py:42-51` imports `xonsh` as an optional dependency. In a clean environment where Python does not have system-wide xonsh, any xonsh tool execution immediately fails with `RuntimeError`.
+- **Required Action:** Add `xonsh` to `crates/pa-core/src/kernel/bootstrap/venv.rs` default package list, verify probe inclusion, and add a clean-room bootstrap regression test.
+
+## Phase 0 source-level parity and preservation recheck (2026-10-11; current session)
+
+- Evidence: `pre-port-capability-ledger.json` (six release-replay commits and separate `origin/main` candidate queue), `phase0-baseline-20261011.json` (current refs, complete protected-hash check, native status), and `pre-port-lineage.json` (provenance and complete older pool). Local `git merge-base v0.10.0 2da0c33ed` resolved to `763094e1b`; precisely two native commits are above upstream (`33489b01b`, `2da0c33ed`). The main checkout is at `b2c25d98`; original native remains at `2da0c33ed`. All twelve protected file SHA-256 values still match the previous snapshot; no protected source or existing package changed.
+- The three pnpm/lockfile commits are TS-build mechanisms approved for retirement; do not replay them onto Cargo. The old Windows installer/build commit has analogous Rust release workflow, `install.ps1`, `install-rust.sh`, and `scripts/release/test_windows_install.ps1` present in upstream; these checked files are byte-identical on native, but no Windows release artifact or e2e was run here. The old dotenv commit adds a TS dependency only; native Python bootstrap installs `python-dotenv`, which does **not** prove a Rust `.env` loading requirement or parity. The 949-line `scripts/install.xsh` is Node/npm-oriented; native published installer routes exist, but whether xonsh-specific installer UX remains required needs a product decision. None of these source-level classifications proves a working Arch package.
+- The distinct older `origin/main` history has 322 candidates; 63 are Jeff-authored, not necessarily 63 owned requirements. Seven high-impact subjects are indexed for later behavior and test review; all remain **unassessed**, not selected for port. The other 315 are likewise not silently assumed absent or equivalent. Source map is incomplete until relevant candidates and requirement decisions are resolved.
+- The prior `logs/native-pa-tui-test-resume-20261011.log` contains compiler warnings but no `test result:` marker and no captured exit. `validation-run.json` documents shared upstream pa-core failures and a native timing failure that later passed; do not classify the timing issue as a proven port regression. Next gate: obtain pa-tui exit from the isolated copy, not from the original native worktree.
+
+## Captured isolated TUI run (2026-10-12)
+
+- `native-pa-tui-phase0-20261012-attempt2.json` records `cargo test -p pa-tui --locked`, source `2da0c33ed` plus byte-checked 10 dirty inputs in the validation copy, **exit 101**. The 1,391 library tests passed. Four tests in `tests/agents_view_catalog_settle_carry.rs` failed: two expectation mismatches (saved catalog fetch and resumed row) and two daemon connection refusals. Full stack snippets: `logs/native-pa-tui-phase0-20261012-attempt2.log`. No xonsh-specific TUI test success is established by this result.
+- The failing test file is identical upstream/native; only `pa-core` and five dirty TUI files differ in the validated tree. Test-file identity does **not** establish shared root cause. A clean upstream run of that integration target was launched under `run-upstream-pa-tui-control-20261012.xsh`; status `upstream-pa-tui-control-20261012.json`, log `logs/upstream-pa-tui-control-20261012.log`. Its exit is pending. Do not repair, skip, or classify the failures until the control and test assumptions are examined.
+
+## Upstream catalog-only control completed (2026-10-12)
+
+- `upstream-pa-tui-control-20261012.json` records clean upstream `v0.10.0@763094e1b`, `cargo test -p pa-tui --locked --test agents_view_catalog_settle_carry`, **exit 0**: all four tests pass. Full log `logs/upstream-pa-tui-control-20261012.log`. The runner PID was 49998 and its observed Cargo child PID was 50000; both have exited.
+- The native failures occurred under `cargo test -p pa-tui --locked` (full crate run), whereas upstream ran only that integration target. The different invocation prevents a clean shared-vs-port conclusion. Next minimum comparison: run that exact catalog-only command on the existing isolated native dirty-input copy; do not alter or skip the test. Then investigate full-suite interaction if native-only target passes.
+
+## Native catalog-only reproduction completed (2026-10-12)
+
+- The isolated native copy at `2da0c33ed` with ten protected dirty inputs ran the **same** catalog-only invocation as upstream: `cargo test -p pa-tui --locked --test agents_view_catalog_settle_carry`. `native-pa-tui-catalog-control-20261012.json` records exit **0**, all four pass; log `logs/native-pa-tui-catalog-control-20261012.log`. Runner PID 54575 has exited.
+- Thus the four failures in the earlier native **full crate suite** are not reproduced by either catalog-only target. This does **not** prove they were upstream, a port regression, or a specific race. Full-suite scheduling, shared state, test-order effects, environment, and nondeterminism remain hypotheses requiring targeted evidence. The TUI full-suite gate remains failed.
+
+## Full-suite catalog failure investigation (2026-10-12, pending repeat)
+
+- Existing full-run log `logs/native-pa-tui-phase0-20261012-attempt2.log`: all 1,391 library tests passed in 3.32s; the four tests in the immediately following `agents_view_catalog_settle_carry` integration binary all failed after 55.79s. Two failed at assertion (`saved_requests` zero; selected live row instead of saved row); two second-run attempts could not reconnect to a mock Unix socket. The separately invoked *same native binary* passed all four in 62.70s (`logs/native-pa-tui-catalog-control-20261012.log`). These differing outcomes do not prove cross-binary interference; repeat identical full command before classifying. No test or implementation was changed.
+
+## Direct changed-path xonsh sidecar probe (2026-10-12)
+
+- Fresh isolated Python project env (`.worktrees/native-rust-validation-20261011/prime-agent-runtime`), test `ReplTest.test_xonsh_mode_executes_native_shell_syntax`: without xonsh dependency, exit 1 (expected `value`, stdout empty) at `test/test_repl.py:252`. Source `src/rlm/repl.py:617-618` raises `RuntimeError("xonsh is not installed in this kernel")` if absent. With `--with xonsh`, the xonsh pytest plugin itself fails at startup on absent optional `prompt_toolkit` (exit 3), unrelated to sidecar behavior; with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, same targeted test passes 1/1 (exit 0). Logs and statuses: `native-xonsh-sidecar-targeted-20261012`, `native-xonsh-sidecar-with-dependency-20261012`, `native-xonsh-sidecar-no-pytest-autoplugin-20261012`. The isolated env proves required dependency for xonsh mode; source `crates/pa-core/src/kernel/bootstrap/mod.rs` default extras and `venv/probe.rs` should be tested/fixed on a separate authorized integration line, not by editing protected native worktree.
+
+## Separate `origin/main` seven-example source triage (2026-10-12)
+
+- `pre-port-capability-ledger.json:older_origin_main_pool.priority_examples_reviewed` now gives per-SHA status, source pointers and a behavior-level acceptance check for seven selected commits. **Source-only, no tests:** native installer ownership and process cleanup, release publication, worker teardown are partial/unverified; kernel host request timeout, singleton exclusivity and early session persistence have unresolved requirements/equivalence. TS/npm prefix and owner-file mechanisms can be retired without declaring the underlying safety guarantees satisfied. Remaining 315 candidates remain unassessed, not implied requirements.
+- Corrected delegated generalization: `prime-agent-runtime/src/rlm/repl.py` differs between upstream and native from xonsh port, though the extracted `host_request` block is byte-identical. Rust/script paths checked `git diff v0.10.0 2da0c33ed -- ...` were unchanged; avoid claiming all relevant files identical.
+
+## Actual kernel/REPL venv cold bootstrap RED (2026-10-14)
+
+- In clean isolated worktree `.worktrees/native-rust-xonsh-bootstrap` at native HEAD `2da0c33ed`, the ignored explicit-run Rust test `crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs` invoked `pa_core::kernel::ensure_kernel_python` with a fresh temporary `PRIME_AGENT_KERNEL_VENV` and `PI_PACKAGE_DIR` set to this checkout. It used uv and Python 3.11 to build the actual venv and installed 50 packages. The resulting interpreter failed `import xonsh` with `ModuleNotFoundError`; test exit **101** (status `native-xonsh-bootstrap-live-red-20261014.json`, full log in `logs/`). Unlike the earlier unit check, this directly exercised the Rust bootstrap path. The test also runs existing sidecar xonsh protocol unittest using that exact interpreter after the import succeeds; it did not reach that step in RED.
+- Focused unit RED also exit **101** because `default_rlm_extra_uv_args()` did not include xonsh. Small isolated production patch adds one `("xonsh", "xonsh", "xonsh")` tuple to `bootstrap/mod.rs`, changes tuple length 12→13; shared table already feeds uv install args and readiness import probe. Both GREEN runs pending; original native worktree and main protected inputs untouched.
+
+## Resume verification (20261014T025608Z)
+
+- Twelve protected hashes still match. Bootstrap isolation still contains only the one-entry production package change, its unit test, and the explicit live test. Original worktrees remain protected.
+- Prior unit GREEN status was stale: runner PID 31365 is absent, no Cargo/rustc process survives, and the log has no test result. Reclassified as interrupted, not failed or passed. Restarted only the named `--lib` test; status `native-xonsh-bootstrap-unit-green-20261014T025608Z.json`.
+
+## Live bootstrap GREEN and toolchain boundary
+
+- Sol-run live test completed exit 0: actual `ensure_kernel_python` created a fresh temporary venv, installed 51 packages including xonsh 0.24.2, and the integration test passed (1/1). Evidence: `bootstrap-sol-live-green-20261014T025754Z.json` and its log. This precedes the user notification of a background stable toolchain update.
+- Focused unit restart failed before tests at rust-lld linking; do not call it a failing xonsh assertion. Sol started a non-incremental diagnostic build. The concurrent `rustup +stable update` means any overlapping compile needs a version-pinned rerun before acceptance. No root source edit or adoption.
+- Luna produced `resume-product-decisions.json`: native xonsh installer UX, native `.env` loading, Windows acceptance remain product questions. No decision inferred from the user having unread planning docs.
+
+## Bounded bootstrap acceptance and next TUI tests
+
+- `bootstrap-post-update-result.json`: both focused unit and real clean-venv integration exit 0, each exactly one Rust test passed; stable rustc/cargo 1.99.0 unchanged before/after. Root checked structured evidence, relevant unit log, scoped diff, and rehashed 12/12 protected inputs. Decision: `bootstrap-root-acceptance.json`, bounded acceptance only; no adoption or commit.
+- Live fixture uses the bootstrapped interpreter but prepends checkout sidecar source through its existing helper. This does not verify an installed wheel or package layout. The initial incremental linker failure was avoided with `CARGO_INCREMENTAL=0`; exact cause remains unproven.
+- Read-only TUI review found xonsh render/count routing present, but no direct xonsh card/error/tree tests. Current preview still routes through Python. Sol now owns only three characterization tests in the existing isolated validation copy; no preview/lexer semantic change is authorized by that brief. Evidence/design: `tui-xonsh-acceptance-review.json`.
+- Post-update verifier follow-up confirms a live-test evidence gap: the Rust test checks inner unittest exit status, but successful child output is hidden and no inner test count is recorded. The named ReplTest method exists, but present logs cannot rule out zero-match success. Before merging, strengthen the live test to require a nonzero/expected inner count and rerun it. No current worker is authorized to make that bootstrap-test change.
+
+- TUI characterization is now tested, not merged: public card render/count routing, error output without duplicate traceback, and Unicode-aware tree summary. Counts overlap: 3 new + 17 related results = 18 distinct tests, not 20. No mutation proof or mixed-language preview proof claimed.

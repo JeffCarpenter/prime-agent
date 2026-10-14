@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "source_head": "2da0c33ed",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-live-red-20261014.log",
+  "phase": "red",
+  "status": "failed_as_expected",
+  "exit_code": 101,
+  "started_at_utc": "2026-10-14T02:37:54.943989+00:00",
+  "scope": "Rust ensure_kernel_python with temporary PRIME_AGENT_KERNEL_VENV, then bootstrapped Python xonsh sidecar test",
+  "completed_at_utc": "2026-10-14T02:39:39.206497+00:00",
+  "duration_s": 87.88518679800018,
+  "assertion": "bootstrapped Python cannot import xonsh and rlm.repl",
+  "observed_error": "ModuleNotFoundError: No module named xonsh"
+}

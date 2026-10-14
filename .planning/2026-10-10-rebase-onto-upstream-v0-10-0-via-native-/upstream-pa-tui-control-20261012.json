@@ -1,0 +1,11 @@
+{
+  "command": "cargo test -p pa-tui --locked --test agents_view_catalog_settle_carry",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-20261011",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/upstream-pa-tui-control-20261012.log",
+  "started_at_utc": "2026-10-12T21:36:17.736467+00:00",
+  "status": "finished",
+  "exit_code": 0,
+  "runner_pid": 49998,
+  "completed_at_utc": "2026-10-12T21:44:47.209771+00:00"
+}
