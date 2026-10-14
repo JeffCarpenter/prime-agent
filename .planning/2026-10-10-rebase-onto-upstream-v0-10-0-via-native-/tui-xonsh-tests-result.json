@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "agent": "tui-test-lead",
+  "state": "done",
+  "worktree": {
+    "path": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+    "head": "2da0c33ed",
+    "preexisting_dirty": [
+      "crates/pa-tui/src/code_preview/bash.rs",
+      "crates/pa-tui/src/tool_card/bash.rs",
+      "crates/pa-tui/src/tool_card/ipython.rs",
+      "crates/pa-tui/src/tool_card/mod.rs",
+      "crates/pa-tui/src/tree_display.rs"
+    ],
+    "before_sha256": {
+      "crates/pa-tui/src/code_preview/bash.rs": {
+        "expected": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d",
+        "actual": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d"
+      },
+      "crates/pa-tui/src/tool_card/bash.rs": {
+        "expected": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d",
+        "actual": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d"
+      },
+      "crates/pa-tui/src/tool_card/ipython.rs": {
+        "expected": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b",
+        "actual": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b"
+      },
+      "crates/pa-tui/src/tool_card/mod.rs": {
+        "expected": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638",
+        "actual": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638"
+      },
+      "crates/pa-tui/src/tree_display.rs": {
+        "expected": "01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5",
+        "actual": "01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5"
+      }
+    },
+    "after_sha256": {
+      "crates/pa-tui/src/code_preview/bash.rs": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d",
+      "crates/pa-tui/src/tool_card/bash.rs": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d",
+      "crates/pa-tui/src/tool_card/ipython.rs": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b",
+      "crates/pa-tui/src/tool_card/mod.rs": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638",
+      "crates/pa-tui/src/tree_display.rs": "e128c52f8eca8dd72e90c3f7c2b36c59b48282bde6d9230ad86ed65f9dd29aa5"
+    },
+    "tree_display_preexisting_prefix_unchanged": true
+  },
+  "change": {
+    "files": [
+      "crates/pa-tui/src/tool_card/ipython/tests.rs",
+      "crates/pa-tui/src/tree_display.rs"
+    ],
+    "boundaries": "Only ipython/tests.rs and tree_display.rs #[cfg(test)] module were edited; existing dirty production files kept intact. No commit, install, original worktree edits or production changes.",
+    "test_names": [
+      "tool_card::ipython::tests::xonsh_card_routes_summary_expansion_and_count",
+      "tool_card::ipython::tests::xonsh_error_shows_name_and_traceback_once",
+      "tree_display::tests::xonsh_call_shortens_code"
+    ],
+    "coverage": [
+      "public render_tool_card/count_tool_card dispatch; Overview xonsh not python and All original code/stdout; both modes row-count parity",
+      "core-shaped status:error/errorEname/error {ename,evalue,traceback}/stdout/stderr; error name, distinct output styles, traceback once and row-count parity",
+      "format_tool_call xonsh preview normalizes newline/tab, counts Unicode characters and truncates after 50 characters, not JSON fallback"
+    ]
+  },
+  "verification": {
+    "toolchain": {
+      "rustc": "1.99.0",
+      "cargo": "1.99.0"
+    },
+    "environment": {
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_TARGET_DIR": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target"
+    },
+    "checks": [
+      {
+        "command": "cargo test -p pa-tui --locked --lib xonsh",
+        "exit_code": 0,
+        "observed": "3 passed; 0 failed; 1391 filtered out",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-primary-final.log",
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-primary-final.status"
+      },
+      {
+        "command": "cargo test -p pa-tui --locked --lib tool_card::ipython::tests",
+        "exit_code": 0,
+        "observed": "17 passed; 0 failed; 1377 filtered out (includes two new tests and 15 existing)",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-ipython-related-final.log",
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-ipython-related-final.status"
+      },
+      {
+        "command": "rustfmt --check --edition 2021 crates/pa-tui/src/tool_card/ipython/tests.rs crates/pa-tui/src/tree_display.rs",
+        "exit_code": 0,
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-rustfmt-final.log",
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-rustfmt-final.status"
+      },
+      {
+        "command": "git diff --check -- crates/pa-tui/src/tool_card/ipython/tests.rs crates/pa-tui/src/tree_display.rs",
+        "exit_code": 0,
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-diffcheck-final.log",
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-diffcheck-final.status"
+      }
+    ]
+  },
+  "counterfactual": {
+    "proposed_not_executed": "Temporarily remove xonsh from both public render_tool_card and count_tool_card match arms in a disposable worktree, run --lib xonsh and require the first and second tests to fail on marker or expansion before restoring; no production mutation allowed here. Removing only the render route also fails marker assertions. Removing only count route fails row parity in All.",
+    "limit": "Mutation proof not run because production edits prohibited. No broad pa-tui/full-workspace suite. Current tests characterize existing behavior, not correctness of mixed-language lexer or core runtime execution."
+  },
+  "warnings": "Existing vendor crossterm cfg/dead-code warnings and existing unused CodePreview::xonsh warning; no test failures."
+}

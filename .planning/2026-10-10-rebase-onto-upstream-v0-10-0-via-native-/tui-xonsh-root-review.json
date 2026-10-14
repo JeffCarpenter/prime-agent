@@ -1,0 +1,36 @@
+{
+  "status": "tested_not_merged",
+  "evidence": "tui-xonsh-tests-result.json",
+  "root_checks": {
+    "new_tests_passed": 3,
+    "related_suite_passed": 17,
+    "related_suite_overlap_with_new": 2,
+    "distinct_existing_tests_passed": 15,
+    "distinct_tests_total": 18,
+    "protected_hashes_matching": 12,
+    "protected_hashes_total": 12,
+    "other_tui_production_copies_unchanged": {
+      "crates/pa-tui/src/code_preview/bash.rs": true,
+      "crates/pa-tui/src/tool_card/bash.rs": true,
+      "crates/pa-tui/src/tool_card/ipython.rs": true,
+      "crates/pa-tui/src/tool_card/mod.rs": true
+    },
+    "tree_production_prefix_unchanged": true,
+    "untracked_zsh_matches_original": {
+      "skills/zsh/SKILL.md": true,
+      "skills/zsh/pyproject.toml": true,
+      "skills/zsh/src/zsh/__init__.py": true,
+      "skills/zsh/tests/__init__.py": true,
+      "skills/zsh/tests/test_zsh.py": true
+    },
+    "diff_check_exit": 0
+  },
+  "limits": [
+    "Tests characterize existing UI behavior only.",
+    "Preview selection and highlighting unchanged.",
+    "No counterfactual production mutation run.",
+    "Original full-suite failure remains unresolved; no broad repeat.",
+    "Nothing committed or merged."
+  ],
+  "next": "Harden bootstrap live test to require and report the expected inner unittest count; rerun before merging."
+}

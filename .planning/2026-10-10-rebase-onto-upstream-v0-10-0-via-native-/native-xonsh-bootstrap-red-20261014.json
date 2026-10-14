@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-core --locked xonsh_kernel_mode_installs_and_probes_its_dependency -- --nocapture",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "source_head": "2da0c33ed",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-red-20261014.log",
+  "phase": "red",
+  "status": "failed_as_expected",
+  "exit_code": 101,
+  "started_at_utc": "2026-10-14T02:18:52.663994+00:00",
+  "assertion": "a new kernel venv must install xonsh for xonsh execution mode",
+  "completed_at_utc": "2026-10-14T02:36:11.664792+00:00",
+  "duration_s": 1024.1628871989997
+}

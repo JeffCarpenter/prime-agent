@@ -1,0 +1,78 @@
+{
+  "agent": "post-update-verifier",
+  "recorded_at": "2026-10-14T03:08:50.384319+00:00",
+  "repository": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "toolchain": {
+    "start": {
+      "rustc_vv": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "cargo_v": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "rustc_exit_code": 0,
+      "cargo_exit_code": 0,
+      "rustc_log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-rustc-start.log",
+      "rustc_status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-rustc-start.status",
+      "cargo_log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-cargo-start.log",
+      "cargo_status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-cargo-start.status"
+    },
+    "end": {
+      "rustc_vv": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1\n",
+      "cargo_v": "cargo 1.99.0 (5f94df478 2026-08-27)\n",
+      "rustc_exit_code": 0,
+      "cargo_exit_code": 0,
+      "rustc_log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-rustc-end.log",
+      "rustc_status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-rustc-end.status",
+      "cargo_log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-cargo-end.log",
+      "cargo_status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-cargo-end.status"
+    }
+  },
+  "tests": [
+    {
+      "name": "xonsh_kernel_mode_installs_and_probes_its_dependency",
+      "command": "CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target rustup run stable cargo test -p pa-core --locked --lib xonsh_kernel_mode_installs_and_probes_its_dependency -- --nocapture",
+      "environment": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TARGET_DIR": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target"
+      },
+      "result": {
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-unit.log",
+        "status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-unit.status",
+        "exit_code": 0
+      },
+      "counts": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 1165,
+        "duration": "0.01s"
+      }
+    },
+    {
+      "name": "kernel_bootstrap_xonsh_live",
+      "command": "CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target rustup run stable cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+      "environment": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TARGET_DIR": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target"
+      },
+      "result": {
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-live.log",
+        "status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-live.status",
+        "exit_code": 0
+      },
+      "counts": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered_out": 0,
+        "duration": "16.52s"
+      }
+    }
+  ],
+  "notes": [
+    "Both requested tests passed.",
+    "Compilation emitted two non-fatal deprecated Atomic::fetch_update warnings.",
+    "The live test reported a non-fatal uv hardlink fallback to copy.",
+    "No source, test, shared-plan, or existing evidence files were edited."
+  ]
+}

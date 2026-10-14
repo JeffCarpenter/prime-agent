@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-10-12T03:08:52.377168+00:00",
+  "scope": "Read-only Phase 0 snapshot; no build or source repair by this session",
+  "refs": {
+    "main_head": "b2c25d98eb9737daf287a4f337ee5e08b0976154",
+    "native_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "clean_upstream_head": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "validation_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "upstream_v0.10.0_peeled": "763094e1b6a7c17450ee8399b06cda1853847ca5",
+    "native_commits_above_base": [
+      "33489b01b9d7d3bdea8372fa47692068ea7e78ed",
+      "2da0c33edc52db1d767b08537f6db8b75778f1c6"
+    ]
+  },
+  "protected_inputs": [
+    {
+      "group": "native",
+      "path": "crates/pa-tui/src/code_preview/bash.rs",
+      "expected_sha256": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d",
+      "observed_sha256": "f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d",
+      "match": true,
+      "size_bytes": 22588
+    },
+    {
+      "group": "native",
+      "path": "crates/pa-tui/src/tool_card/bash.rs",
+      "expected_sha256": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d",
+      "observed_sha256": "1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d",
+      "match": true,
+      "size_bytes": 14917
+    },
+    {
+      "group": "native",
+      "path": "crates/pa-tui/src/tool_card/ipython.rs",
+      "expected_sha256": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b",
+      "observed_sha256": "c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b",
+      "match": true,
+      "size_bytes": 18166
+    },
+    {
+      "group": "native",
+      "path": "crates/pa-tui/src/tool_card/mod.rs",
+      "expected_sha256": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638",
+      "observed_sha256": "0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638",
+      "match": true,
+      "size_bytes": 17111
+    },
+    {
+      "group": "native",
+      "path": "crates/pa-tui/src/tree_display.rs",
+      "expected_sha256": "01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5",
+      "observed_sha256": "01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5",
+      "match": true,
+      "size_bytes": 14997
+    },
+    {
+      "group": "native",
+      "path": "skills/zsh/SKILL.md",
+      "expected_sha256": "ba06a5b8ca01ba2a563de743863fdf04194afb3302237ee1cab8c09b8bc7b5d2",
+      "observed_sha256": "ba06a5b8ca01ba2a563de743863fdf04194afb3302237ee1cab8c09b8bc7b5d2",
+      "match": true,
+      "size_bytes": 1925
+    },
+    {
+      "group": "native",
+      "path": "skills/zsh/pyproject.toml",
+      "expected_sha256": "492dce7cc169755eb479237383ae07bfcbee60b7cb0cf188bfe766ff6eac88ff",
+      "observed_sha256": "492dce7cc169755eb479237383ae07bfcbee60b7cb0cf188bfe766ff6eac88ff",
+      "match": true,
+      "size_bytes": 259
+    },
+    {
+      "group": "native",
+      "path": "skills/zsh/src/zsh/__init__.py",
+      "expected_sha256": "95d0a69b6390b4daddf27aa65e2dc0cf659272ded6a843587cabd695fa5cb329",
+      "observed_sha256": "95d0a69b6390b4daddf27aa65e2dc0cf659272ded6a843587cabd695fa5cb329",
+      "match": true,
+      "size_bytes": 2815
+    },
+    {
+      "group": "native",
+      "path": "skills/zsh/tests/__init__.py",
+      "expected_sha256": "faecc9007b2439b27972a2f9ace51f6a37daa8908e4e5243f3ff26844993be81",
+      "observed_sha256": "faecc9007b2439b27972a2f9ace51f6a37daa8908e4e5243f3ff26844993be81",
+      "match": true,
+      "size_bytes": 29
+    },
+    {
+      "group": "native",
+      "path": "skills/zsh/tests/test_zsh.py",
+      "expected_sha256": "c268b9e7634be6263312ca4b023f68765939ea8a131fa7e2289a55a841f4af26",
+      "observed_sha256": "c268b9e7634be6263312ca4b023f68765939ea8a131fa7e2289a55a841f4af26",
+      "match": true,
+      "size_bytes": 7348
+    },
+    {
+      "group": "main",
+      "path": "pkgbuild/PKGBUILD",
+      "expected_sha256": "12b563a2db83e146173848428af4a8051f33f33eb2bbd202949a759cce933bb2",
+      "observed_sha256": "12b563a2db83e146173848428af4a8051f33f33eb2bbd202949a759cce933bb2",
+      "match": true,
+      "size_bytes": 4185
+    },
+    {
+      "group": "main",
+      "path": "pkgbuild/.SRCINFO",
+      "expected_sha256": "4b3c92f33c9c9122482eff28d402938255a9c107b1f434bd12382dcdadd728fb",
+      "observed_sha256": "4b3c92f33c9c9122482eff28d402938255a9c107b1f434bd12382dcdadd728fb",
+      "match": true,
+      "size_bytes": 348
+    }
+  ],
+  "all_protected_hashes_match": true,
+  "native_status_porcelain": [
+    " M crates/pa-tui/src/code_preview/bash.rs",
+    " M crates/pa-tui/src/tool_card/bash.rs",
+    " M crates/pa-tui/src/tool_card/ipython.rs",
+    " M crates/pa-tui/src/tool_card/mod.rs",
+    " M crates/pa-tui/src/tree_display.rs",
+    "?? skills/zsh/SKILL.md",
+    "?? skills/zsh/pyproject.toml",
+    "?? skills/zsh/src/zsh/__init__.py",
+    "?? skills/zsh/tests/__init__.py",
+    "?? skills/zsh/tests/test_zsh.py"
+  ],
+  "main_status_note": "Main has pre-existing modified/untracked files; complete status deliberately not replicated; main source left unchanged",
+  "main_status_count": 71,
+  "native_pa_tui_prior_log": {
+    "path": ".planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-test-resume-20261011.log",
+    "exists": true,
+    "bytes": 4313,
+    "has_test_result_marker": false,
+    "exit_captured": false,
+    "claim": "No reliable exit; do not claim test pass or fail"
+  },
+  "previous_tests": "See validation-run.json; not rerun in this snapshot",
+  "system_installation": false
+}
