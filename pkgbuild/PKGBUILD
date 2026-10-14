@@ -1,107 +1,69 @@
 # Maintainer: Prime Agent contributors
-# Maintainer-facing local PKGBUILD. Run from the repository root with:
-#   cd pkgbuild && makepkg --syncdeps --cleanbuild
-# This deliberately packages the parent checkout, not an unrelated upstream tag.
+# Maintainer-facing local PKGBUILD. Build the parent repository's stable ref,
+# verify the selected revision; do not package the parent working tree.
 _repo_root=$(realpath -e ..)
+_source_commit=$(git -C "$_repo_root" rev-parse refs/heads/stable)
+_shared_target="$_repo_root/.worktrees/native-rust-validation-target"
 pkgname=prime-agent
-pkgver=0.9.6
+pkgver=0.10.0
 pkgrel=1
 pkgdesc='Self-improving coding and research agent with a persistent Python kernel'
 arch=('x86_64')
 url='https://github.com/PrimeIntellect-ai/prime-agent'
 license=('MIT')
-depends=('nodejs>=22.8.0' 'python>=3.11' 'uv')
-makedepends=('pnpm' 'rsync')
+depends=('python>=3.11' 'uv')
+makedepends=('cargo' 'git' 'rsync')
 optdepends=()
-source=()
-sha256sums=()
+source=("$pkgname::git+file://$_repo_root#branch=stable")
+sha256sums=('SKIP')
 
 prepare() {
-    local source_version
+    local source_version source_commit
+    cd "$srcdir/$pkgname" || return
 
-    if [[ ! -f "$_repo_root/pnpm-workspace.yaml" || \
-          ! -f "$_repo_root/package.json" || \
-          ! -f "$_repo_root/packages/coding-agent/package.json" ]]; then
-        printf '==> ERROR: Could not find the Prime Agent checkout at %s.\n' "$_repo_root" >&2
+    source_commit=$(git rev-parse HEAD) || return
+    if [[ "$source_commit" != "$_source_commit" ]]; then
+        printf '==> ERROR: source commit mismatch: expected %s, got %s\n' \
+            "$_source_commit" "$source_commit" >&2
         return 1
     fi
-
-    source_version=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).version' \
-        "$_repo_root/packages/coding-agent/package.json")
+    source_version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
     if [[ "$source_version" != "$pkgver" ]]; then
-        printf '==> ERROR: PKGBUILD pkgver (%s) does not match checkout version (%s); update pkgver.\n' \
+        printf '==> ERROR: PKGBUILD pkgver (%s) does not match Cargo workspace version (%s).\n' \
             "$pkgver" "$source_version" >&2
         return 1
     fi
-
-    mkdir -p "$srcdir/$pkgname"
-    rsync -a --delete \
-        --exclude='/.git/' \
-        --exclude='/node_modules/' \
-        --exclude='/**/node_modules/' \
-        --exclude='/.planning/' \
-        --exclude='/.remember/' \
-        --exclude='/report/' \
-        --exclude='/.prime/' \
-        --exclude='/.env' \
-        --exclude='/.env.*' \
-        --exclude='/pkgbuild/' \
-        --exclude='/packages/*/dist/' \
-        --exclude='/packages/*/node_modules/' \
-        --exclude='/**/.venv/' \
-        --exclude='/**/__pycache__/' \
-        "$_repo_root/" "$srcdir/$pkgname/"
 }
 
 build() {
-    cd "$srcdir/$pkgname" || return
-    pnpm install --frozen-lockfile
-    pnpm run build
+    cargo build --manifest-path "$srcdir/$pkgname/Cargo.toml" \
+        --target-dir "$_shared_target" --release -p pa-cli --locked
 }
 
 check() {
-    cd "$srcdir/$pkgname" || return
-    node packages/coding-agent/dist/bundle/cli.js --version
+    "$_shared_target/release/prime-agent" --version
 }
 
 package() {
-    local install_dir="$pkgdir/usr/lib/$pkgname" file temporary_file
+    local install_dir="$pkgdir/usr/lib/$pkgname"
 
-    cd "$srcdir/$pkgname" || return
-    pnpm --config.inject-workspace-packages=true --filter @earendil-works/pi-coding-agent \
-        deploy --prod --frozen-lockfile --ignore-scripts "$install_dir"
-
-    find "$install_dir" -name .bin -prune -exec rm -rf {} +
-    if [[ -d "$install_dir/examples" ]]; then
-        find "$install_dir/examples" -name node_modules -prune -exec rm -rf {} +
-    fi
-    for koffi_dir in "$install_dir"/node_modules/.pnpm/koffi@*/node_modules/koffi/build/koffi; do
-        [[ -d "$koffi_dir" ]] || continue
-        find "$koffi_dir" -mindepth 1 -maxdepth 1 -type d ! -name linux_x64 -prune -exec rm -rf {} +
-    done
-    for source_tree in "$install_dir/skills" "$install_dir/dist/skills" "$install_dir/dist/prime-agent-runtime"; do
-        [[ -d "$source_tree" ]] || continue
-        find "$source_tree" -type d \
-            \( -name .venv -o -name __pycache__ -o -name test -o -name tests \) \
-            -prune -exec rm -rf {} +
-    done
-    install -m644 "$srcdir/$pkgname/packages/coding-agent/package.json" "$install_dir/package.json"
-    rm -f "$install_dir/pnpm-lock.yaml" "$install_dir/pnpm-workspace.yaml" \
-        "$install_dir/node_modules/.modules.yaml" \
-        "$install_dir/node_modules/.package-map.json" \
-        "$install_dir/node_modules/.pnpm/lock.yaml" \
-        "$install_dir/node_modules/.pnpm-workspace-state-v1.json"
-    while IFS= read -r -d '' file; do
-        temporary_file=$(mktemp "${file}.XXXXXX") || return
-        if ! cp --reflink=auto -p -- "$file" "$temporary_file"; then
-            rm -f -- "$temporary_file"
-            return 1
-        fi
-        mv -f -- "$temporary_file" "$file" || return
-    done < <(find "$install_dir" -type f -links +1 -print0)
-
-    install -Dm644 "$srcdir/$pkgname/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -d "$install_dir"
+    install -Dm755 "$_shared_target/release/prime-agent" "$install_dir/prime-agent"
+    install -Dm644 "$srcdir/$pkgname/README.md" "$install_dir/README.md"
+    install -Dm644 "$srcdir/$pkgname/LICENSE" "$install_dir/LICENSE"
+    printf '{\n  "name": "prime-agent",\n  "version": "%s",\n  "description": "Prime Agent: the RLM coding agent (Rust build)",\n  "bin": {"prime-agent": "prime-agent"},\n  "piConfig": {"name": "prime-agent", "configDir": ".prime/agent"}\n}\n' \
+        "$pkgver" > "$install_dir/package.json"
+    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+        --exclude='/**/.venv/' --exclude='/**/__pycache__/' \
+        --exclude='/**/.pytest_cache/' --exclude='/**/.ruff_cache/' \
+        --exclude='/**/.mypy_cache/' --exclude='/**/*.pyc' \
+        "$srcdir/$pkgname/prime-agent-runtime" "$install_dir/"
+    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+        "$srcdir/$pkgname/skills" "$install_dir/"
+    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+        "$srcdir/$pkgname/docs" "$install_dir/"
+    install -Dm644 "$srcdir/$pkgname/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -d "$pkgdir/usr/bin"
-    chmod 755 "$install_dir/dist/bundle/cli.js"
-    ln -s "/usr/lib/$pkgname/dist/bundle/cli.js" "$pkgdir/usr/bin/$pkgname"
+    ln -s "/usr/lib/$pkgname/prime-agent" "$pkgdir/usr/bin/$pkgname"
 }
