@@ -1,0 +1,14 @@
+pkgbase = prime-agent
+	pkgdesc = Self-improving coding and research agent with a persistent Python kernel
+	pkgver = 0.10.0
+	pkgrel = 1
+	url = https://github.com/PrimeIntellect-ai/prime-agent
+	arch = x86_64
+	license = MIT
+	makedepends = pnpm
+	makedepends = rsync
+	depends = nodejs>=22.8.0
+	depends = python>=3.11
+	depends = uv
+
+pkgname = prime-agent
