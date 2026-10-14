@@ -11,9 +11,9 @@ pkgdesc='Self-improving coding and research agent with a persistent Python kerne
 arch=('x86_64')
 url='https://github.com/PrimeIntellect-ai/prime-agent'
 license=('MIT')
-depends=('python>=3.11' 'uv')
+depends=('python>=3.11' 'uv' 'xonsh' 'python-dill' 'python-httpx2' 'python-mcp' 'python-tyro')
 makedepends=('cargo' 'git' 'rsync')
-optdepends=()
+optdepends=('python-httpx: websearch skill' 'python-pillow: attach-image skill')
 source=("$pkgname::git+file://$_repo_root#branch=stable")
 sha256sums=('SKIP')
 
@@ -56,7 +56,9 @@ package() {
         --exclude='/**/.venv/' --exclude='/**/__pycache__/' \
         --exclude='/**/.pytest_cache/' --exclude='/**/.ruff_cache/' \
         --exclude='/**/.mypy_cache/' --exclude='/**/*.pyc' \
+        --exclude='prime-agent-runtime/test/' --exclude='prime-agent-runtime/src/rlm/_winjob.py' \
         "$srcdir/$pkgname/prime-agent-runtime" "$install_dir/"
+    ln -s prime-agent-runtime/src/rlm "$install_dir/rlm"
     rsync -a --exclude='/.git/' --exclude='/**/.git/' \
         "$srcdir/$pkgname/skills" "$install_dir/"
     rsync -a --exclude='/.git/' --exclude='/**/.git/' \
