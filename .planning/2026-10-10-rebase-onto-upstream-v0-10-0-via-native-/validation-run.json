@@ -4,7 +4,8 @@
     "isolated_tests": true,
     "isolated_arch_packaging": true,
     "system_installation": false,
-    "source_repairs": false
+    "source_repairs": true,
+    "source_repairs_scope": "scoped_rebase_reconcile_repairs_authorized_by_user"
   },
   "source": {
     "original_worktree": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh",
@@ -99,8 +100,50 @@
       "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
       "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-test-20261011.log",
       "started_at": "2026-10-11T21:50:48.194036+00:00",
-      "status": "running",
-      "exit_code": null
+      "status": "interrupted_or_exited_without_capture",
+      "exit_code": null,
+      "summary": "Process terminated; log ends at compilation warnings without capturing final test runner exit"
+    },
+    "native_pa_tui_phase0_captured": {
+      "command": "cargo test -p pa-tui --locked",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-phase0-20261012-attempt2.log",
+      "status": "failed",
+      "exit_code": 101,
+      "started_at_utc": "2026-10-12T21:08:17.146102+00:00",
+      "completed_at_utc": "2026-10-12T21:22:15.725549+00:00",
+      "summary": {
+        "lib_unit_tests": "1391 passed; 0 failed",
+        "failed_integration_target": "agents_view_catalog_settle_carry",
+        "failed_integration_tests": 4,
+        "cause": "unclassified pending clean upstream control"
+      }
+    },
+    "upstream_pa_tui_catalog_control": {
+      "command": "cargo test -p pa-tui --locked --test agents_view_catalog_settle_carry",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-upstream-baseline-20261011",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/upstream-pa-tui-control-20261012.log",
+      "status": "passed",
+      "exit_code": 0,
+      "started_at_utc": "2026-10-12T21:36:17.736467+00:00",
+      "runner_pid": 49998,
+      "completed_at_utc": "2026-10-12T21:44:47.209771+00:00",
+      "summary": "4 passed; 0 failed in clean upstream v0.10.0; native failure occurred in full pa-tui suite, not the same isolated invocation; source of difference unresolved"
+    },
+    "native_pa_tui_catalog_control": {
+      "command": "cargo test -p pa-tui --locked --test agents_view_catalog_settle_carry",
+      "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+      "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+      "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-catalog-control-20261012.log",
+      "status": "passed",
+      "exit_code": 0,
+      "runner_pid": 54575,
+      "purpose": "Match the clean-upstream catalog-only invocation after native full-suite catalog failures; no result inferred until exit captured",
+      "started_at_utc": "2026-10-12T21:48:11.079332+00:00",
+      "startup_attempt1_error_log": ".planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-catalog-control-20261012-launch-attempt1.log",
+      "startup_attempt1_error": "Runner status/log paths accidentally had duplicated absolute prefix; failed before Cargo; corrected and launched once",
+      "completed_at_utc": "2026-10-12T21:49:14.727639+00:00",
+      "summary": "4 passed; 0 failed on isolated native catalog-only target; native full-suite four failures are not reproduced by the targeted invocation"
     }
   },
   "limitations": {
@@ -128,7 +171,7 @@
     "kernel_repl_mcpls": {
       "agent": "kernel-mcpls",
       "model": "openai-codex/gpt-6-luna",
-      "status": "running",
+      "status": "completed",
       "artifact": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/kernel-mcpls-audit.json"
     }
   }

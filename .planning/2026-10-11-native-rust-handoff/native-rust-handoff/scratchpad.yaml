@@ -3,10 +3,11 @@ kind: native-rust-arch-pkgbuild-handoff
 context:
   root: /home/jeff/code/fork/prime-agent
   scratchpad: .planning/2026-10-11-native-rust-handoff/native-rust-handoff/scratchpad.yaml
-  session_id: 01a12c8b-285b-7303-960b-2dd5e97400e1
+  session_id: 01a13852-1ef6-7311-9269-2e692b20e19c
   readme: README.md
   mission: MISSION.md
-  scope: 本案立案交接：既有 TS 配方失敗乃歷證；今之產品脈絡為 upstream v0.10.0 上原生 Rust xonsh 移植，工作樹見 native-trajectory。
+  scope: Reconcile the fork with native Rust v0.10.0, preserve required features, and build and verify
+    the native Arch package. This YAML owns current state and next actions; the schema defines its structure.
   tags:
   - 通則
   - 建包
@@ -20,11 +21,12 @@ context:
   - 用戶明定Rust後端
   - 原生xonsh交接入口
 state:
-  status: native-rust-port-package-unverified
+  status: focused-tests-pass-integration-and-packaging-pending
   technical_build_complete: false
   active_build_worker: false
   previous_goal_status: complete 非建成
-  last_attempt: 舊 TS 隔離 makepkg exit 4；新 native Rust 分支未行 cargo release 或 Arch 建包，勿稱成功。
+  last_attempt: Bootstrap unit and outer Rust live test each passed on stable 1.99.0. Three new TUI tests
+    and 15 existing tests passed. No merge, release build, or native Arch package verification.
 sources:
 - id: consultant
   path: /home/jeff/code/skills/incubator/packets/prime-agent-pkgbuild-2026-10-11/evidence/consultant.json
@@ -76,7 +78,7 @@ sources:
   role: 工作樹、tag 解參、版本、dirty 與無新建之有界命令錄
 - id: native-plan
   path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/task_plan.md
-  role: v0.10.0 Rust 移植路線與 Phase5 包裝
+  role: Planning-with-files view of this YAML; not independently maintained state.
 - id: native-manifest
   path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-cli/Cargo.toml
   role: 原生 prime-agent 二進位宣告
@@ -92,6 +94,75 @@ sources:
 - id: xonsh-entry
   path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh
   role: 原生 xonsh 與 PyYAML 入口；默列大綱，點徑取節，直讀相鄰 YAML
+- id: bootstrap-tests
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/bootstrap-post-update-result.json
+  role: Evidence or history; not a second copy of current state.
+- id: bootstrap-review
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/bootstrap-root-acceptance.json
+  role: Evidence or history; not a second copy of current state.
+- id: tui-tests
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-tests-result.json
+  role: Evidence or history; not a second copy of current state.
+- id: tui-review
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/tui-xonsh-root-review.json
+  role: Evidence or history; not a second copy of current state.
+- id: protected-inputs
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/phase0-baseline-20261011.json
+  role: Evidence or history; not a second copy of current state.
+- id: capability-ledger
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-capability-ledger.json
+  role: Evidence or history; not a second copy of current state.
+- id: lineage-record
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/pre-port-lineage.json
+  role: Evidence or history; not a second copy of current state.
+- id: native-full-test-record
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/validation-run.json
+  role: Evidence or history; not a second copy of current state.
+- id: native-catalog-control
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-pa-tui-catalog-control-20261012.json
+  role: Evidence or history; not a second copy of current state.
+- id: upstream-catalog-control
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/upstream-pa-tui-control-20261012.json
+  role: Evidence or history; not a second copy of current state.
+- id: working-findings
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/findings.md
+  role: Evidence or history; not a second copy of current state.
+- id: working-history
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/progress.md
+  role: Evidence or history; not a second copy of current state.
+- id: current-session
+  path: /home/jeff/.prime/agent/sessions/01a13852-1ef6-7311-9269-2e692b20e19c.jsonl
+  role: Evidence or history; not a second copy of current state.
+- id: native-evidence-divergences
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/divergences.jsonld
+  role: Saved evidence; not current state.
+- id: native-evidence-inputs
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-preflight-inputs.json
+  role: Saved evidence; not current state.
+- id: native-evidence-consent
+  path: /home/jeff/code/skills/incubator/scratchpad.yaml
+  role: Saved evidence; not current state.
+- id: native-evidence-handoff
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/README.md
+  role: Saved evidence; not current state.
+- id: native-evidence-stopped-full-repeat
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-pa-tui-full-repeat-20261012.json
+  role: Saved evidence; not current state.
+- id: native-evidence-xonsh-missing-dependency
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-sidecar-targeted-20261012.json
+  role: Saved evidence; not current state.
+- id: native-evidence-xonsh-dependency-control
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-sidecar-no-pytest-autoplugin-20261012.json
+  role: Saved evidence; not current state.
+- id: native-evidence-xonsh-bootstrap-unit-red
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-red-20261014.json
+  role: Saved evidence; not current state.
+- id: native-evidence-xonsh-bootstrap-live-red
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-live-red-20261014.json
+  role: Saved evidence; not current state.
+- id: native-evidence-xonsh-bootstrap-unit-green
+  path: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-unit-green-20261014.json
+  role: Saved evidence; not current state.
 facts:
 - id: root-first
   claim: 小問根自核；先定決策與缺證，再取最小切片。
@@ -177,8 +248,8 @@ facts:
   evidence:
   - user-risk-request
 - id: native-product-line
-  claim: 用戶明定 Rust 後端；計畫與圖指 upstream v0.10.0 原生 Rust xonsh 移植，branch feat/native-rust-xonsh@2da0c33ed，tag v0.10.0 解參為 763094e1b。舊 TS
-    非待選。
+  claim: 用戶明定 Rust 後端；計畫與圖指 upstream v0.10.0 原生 Rust xonsh 移植，branch feat/native-rust-xonsh@2da0c33ed，tag
+    v0.10.0 解參為 763094e1b。舊 TS 非待選。
   evidence:
   - native-trajectory
   - native-plan
@@ -196,7 +267,8 @@ facts:
   - native-trajectory
   - user-correction
 - id: native-handoff-verified
-  claim: 現行交接檔案由 Git 版控；open-handoff.xsh 直讀相鄰 YAML，五項 reader tests 已過。此為交接資料讀取驗證，非 Rust release、Arch 包或 CLI 驗收。
+  claim: 現行交接檔案由 Git 版控；open-handoff.xsh 直讀相鄰 YAML，五項 reader tests 已過。此為交接資料讀取驗證，非 Rust release、Arch 包或
+    CLI 驗收。
   evidence:
   - native-packet
   - native-trajectory
@@ -214,6 +286,100 @@ facts:
   evidence:
   - xonsh-entry
   - native-packet
+- id: target-revisions
+  claim: v0.10.0 tag object is 8de18adda5d6fdea3dc31843d5955d311c92cb9e; its commit is 763094e1b6a7c17450ee8399b06cda1853847ca5.
+    Native reference HEAD is 2da0c33edc52db1d767b08537f6db8b75778f1c6.
+  evidence:
+  - native-trajectory
+  - lineage-record
+- id: phase-0
+  claim: In progress. The six release-replay changes have source-level coverage records. The separate
+    origin/main history contains 322 candidates, with seven examples reviewed; these are not 322 required
+    ports. Feature decisions and runtime checks remain.
+  evidence:
+  - capability-ledger
+  - lineage-record
+- id: phase-1
+  claim: Complete. The native worktree exists and the upstream workspace compilation check passed. This
+    was not a full test-suite pass.
+  evidence:
+  - working-history
+  - working-findings
+- id: phase-2
+  claim: Complete. The Python sidecar port is present and its 144 tests passed.
+  evidence:
+  - working-history
+  - working-findings
+- id: phase-3
+  claim: In progress. The xonsh dependency was added to the shared bootstrap package table in .worktrees/native-rust-xonsh-bootstrap.
+    The unit and outer Rust live tests each passed once on unchanged stable Rust/Cargo 1.99.0. The live
+    fixture uses a fresh bootstrap venv but prepends checkout source. Its successful log does not establish
+    which inner Python test ran. Nothing has been merged.
+  evidence:
+  - bootstrap-tests
+  - bootstrap-review
+- id: phase-4
+  claim: 'In progress. In .worktrees/native-rust-validation-20261011, three new TUI tests passed. The
+    related suite passed 17 tests, including two new tests: 18 distinct tests in total, 15 of them existing.
+    Only test additions were made. Skill review and integration remain. Preview selection and highlighting
+    changes are deferred.'
+  evidence:
+  - tui-tests
+  - tui-review
+- id: phase-5
+  claim: Approved, not started. Native Arch packaging must replace Node packaging, include the Rust binary,
+    Python runtime and skills, provide trusted offline catalog data, and use version 0.10.0. Release,
+    package contents, dependencies, version output and CLI startup remain unverified.
+  evidence:
+  - current-session
+  - working-findings
+- id: protected-inputs-verified
+  claim: All 12 protected input hashes matched at the last root check. The validation copy of skills/zsh
+    also matched the original. Original inputs are in the main tree and .worktrees/feat-native-rust-xonsh;
+    verification must not overwrite them.
+  evidence:
+  - protected-inputs
+  - tui-review
+- id: unresolved-test-failures
+  claim: The original full native TUI run passed 1391 library tests and failed four catalog tests. Separate
+    native and upstream catalog controls each passed 4/4. The cause is unresolved. Core failures and formatting
+    also remain open; two core failures were shared with upstream and a timing failure later passed. Do
+    not repeat the unchanged full TUI suite.
+  evidence:
+  - native-full-test-record
+  - native-catalog-control
+  - upstream-catalog-control
+  - working-findings
+- id: bootstrap-build-limit
+  claim: A linker failure occurred with incremental compilation. A nonincremental build passed, but the
+    cause was not proved. Focused checks use CARGO_INCREMENTAL=0 and CARGO_TARGET_DIR=.worktrees/native-rust-validation-target.
+    The bootstrap change is in mod.rs, not venv.rs.
+  evidence:
+  - bootstrap-review
+  - bootstrap-tests
+  - working-findings
+- id: single-source-contract
+  claim: scratchpad.schema.yaml defines this record. This YAML owns current state and next actions. Planning
+    Markdown is a view; findings and progress hold evidence and history. Old checkpoints are migration
+    inputs, not authorities.
+  evidence:
+  - current-session
+- id: direct-sidecar-probe
+  claim: The direct xonsh sidecar test failed without xonsh installed and passed with xonsh installed
+    (one passed, 143 deselected). With pytest plugin autoload enabled, missing optional prompt_toolkit
+    stopped startup; that was not a sidecar assertion failure.
+  evidence:
+  - native-evidence-xonsh-missing-dependency
+  - native-evidence-xonsh-dependency-control
+- id: planning-cleanup-pending
+  claim: native-status.yaml, native-rust-port-reconciliation-plan.yaml, and compaction-handoff.json are
+    retired; current state is here. context-checkpoint.json is not authoritative and remains only until
+    the possible Gemini wording edit is accounted for. The unused worktree .worktrees/rebase-2a16de906
+    at detached HEAD 2a16de906 and redundant .planning/bin scripts are separate cleanup tasks; neither
+    has been removed.
+  evidence:
+  - current-session
+  - working-history
 known-unknowns:
 - id: unreached-phases
   question: 新源樹之 build/check/package、成品與執行契約未驗。
@@ -225,6 +391,22 @@ known-unknowns:
   question: native@2da0c33ed 加現存 dirty TUI、skills/zsh 之完整度、release build、Arch 包清單與 CLI 起動尚未實驗。
 - id: trajectory-preflight-skill
   question: 日後需求徵詢技宜含廉價譜系預檢：active plan、git worktrees/ancestry、manifest/配方同源，辨歷史失敗與今目標；具體壓測尚未設，未造技。
+- id: bootstrap-selection
+  question: Which full Python test IDs does the Rust live-test command select, and what proves those tests
+    ran and passed? Inspect source through mcpls or a source-backed subagent report before changing assertions.
+    Count alone does not establish identity.
+- id: installer-ux
+  question: Does the user still require scripts/install.xsh? Replacing it with upstream native installers
+    plus Arch packaging was proposed, not approved.
+- id: dotenv-behavior
+  question: Which .env loading behavior must survive the Rust transition? The old TypeScript dependency
+    alone does not establish a requirement.
+- id: windows-verification
+  question: What runtime checks are needed for Windows? Native source exists; runtime parity has not been
+    demonstrated.
+- id: gemini-wording
+  question: Has Gemini finished editing the old checkpoint next.immediate? Account for that edit before
+    removing context-checkpoint.json; the schema represents the action as next[0].action.
 decision:
   owner: 根負讀圖與執行；用戶定本案容險
   question: 既定 Rust 後端：如何保全 dirty 工作，續 upstream v0.10.0 移植而實證 Arch 包與 CLI？
@@ -236,25 +418,41 @@ decision:
   - 記 native commit 與 dirty 輸入，保全既物
   - 以實測 build/check/package、CLI 證成
 constraints:
-  writes: 主樹 PKGBUILD、.SRCINFO、舊包，及 native 五 TUI dirty 檔、skills/zsh 未追蹤樹，俱先保全；勿擅覆。必要修補另置隔離工作。
-  builds: 本輪僅讀圖、備交；未起 Rust cargo release 或 Arch makepkg。後續宜循 native v0.10.0 路線驗，不再以舊 TS 首錯代言。
+  writes: The root owns this YAML. Workers write only assigned code or evidence. Work in separate copies.
+    Planning-only commits are allowed. No source commit, source merge, protected-file overwrite, or system
+    installation in the current scope.
+  builds: Scoped source repairs, tests and native packaging are approved. Do not rerun the unchanged full
+    TUI suite. Packaging follows feature decisions and tested integration; no native release or Arch package
+    has been verified.
   preservation:
   - 主樹 pkgbuild/PKGBUILD 既改、.SRCINFO 與舊 0.9.8 成品
   - native worktree 五 TUI 改檔與 skills/zsh/ 未追蹤
   - 舊 TypeScript 證據依 sources 所列原址查核；此處不複製
+  - Use one persistent Python daemon with mode=xonsh, not a second daemon. Preserve the sidecar factory
+    state machine and kernel session lease lifecycle.
+  - Keep saved test evidence and unique facts when removing duplicate planning files. Do not expand the
+    schema without a separate decision.
 next:
-- when: 接續本案。
-  action: 先自專案根用 xonsh .planning/2026-10-11-native-rust-handoff/native-rust-handoff/open-handoff.xsh 閱綱；依譜系證據先作 Phase 0 等能盤點及基線，辨我方原作、上游與規格未足。Rust 源系與原生包裝已准毋重請；大修前方徵尚未明之本案容險。
-  accept: 等能盤點與保全基線有據；native v0.10.0 源系、已准範圍及風險邊界分明。
-- when: Phase 0 等能盤點與基線已立，欲續實建。
-  action: 先保全 native dirty，記 HEAD 及輸入雜湊；於 v0.10.0 新隔離樹補前置缺口、重驗 native commits 及必要 dirty 輸入，整合有證後始試 Rust release 與 Phase 5 Arch 配方；舊包與原工作樹勿覆。
-  accept: 等能帳、基線、隔離整合測試、命令、exit、日誌、源 rev、dirty 輸入及新包路徑俱記；未達不稱包成。
-- when: 新包確成。
-  action: 驗 prime-agent --version、依賴、包清單與 CLI 啟動；辨失敗屬我方改動抑上游。
-  accept: build/check/package 與實際執行皆有證；未達則明未達。
-- when: 父欲安裝任一孵育技能。
-  action: 按各 pressure.md 作受控有／無技行測，核遵行、來源與增量 I/O；不得以靜核代行測。
-  accept: 實測可覆、父核可，方安裝。
-- when: 日後擬新功能、重構、大修或造需求徵詢技能時。
-  action: 先問用戶逐案風險胃納，分我方原作、上游、規格未足諸險；後設簡問與停問壓測，另行造技能。
-  accept: 用戶明示本案容險與來源辨析；技能未得另令不作不安裝。
+- when: Before changing the bootstrap live test.
+  action: Inspect the bootstrap live test selection through mcpls or a source-backed subagent report before
+    proposing changes. Record the selector, selected full test IDs, runner behavior, and available results.
+    A count alone cannot prove test identity. Choose any assertion change from that evidence, then rerun
+    the focused test.
+  accept: Record the command, selector, selected full test IDs, and how the result reaches the Rust assertion.
+    Any proposed change follows those findings, not a test-count assumption.
+- when: Before combining the source changes.
+  action: Settle required fork features, installer behavior, dotenv behavior and Windows checks. Review
+    the zsh skill and single-kernel wiring. Combine reviewed changes in a separate worktree.
+  accept: Required features have tests or explicit decisions. Protected inputs are unchanged. The tool-to-kernel-to-sidecar
+    path and TUI changes have test evidence.
+- when: Before claiming the integration passes.
+  action: Explain the saved catalog failures and classify core failures against upstream. Fix formatting
+    and run the checks justified by the findings.
+  accept: Failures are fixed or explicitly documented with supporting evidence. Do not repeat the unchanged
+    full TUI suite.
+- when: Feature scope and integration are verified.
+  action: Update the Arch recipe for the native Rust binary, Python runtime and skills. Provide trusted
+    offline catalogs. Run formatting, clippy, workspace tests, sidecar tests, release build and package
+    checks; then verify package contents, dependencies, version output and CLI startup.
+  accept: Save commands, exit codes, logs, source revision, protected input hashes and package path. No
+    system installation.
