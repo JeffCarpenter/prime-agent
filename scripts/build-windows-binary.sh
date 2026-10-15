@@ -3,11 +3,12 @@
 # Build the standalone Prime Agent distribution for Windows x64.
 #
 # Usage:
-#   ./scripts/build-windows-binary.sh [--skip-deps]
+#   ./scripts/build-windows-binary.sh [options]
 #
 # Options:
-#   --skip-deps  Reuse the installed dependencies
-#   --help       Show this help
+#   --skip-deps        Reuse existing build / skip cargo build if binary exists
+#   --target <triple>  Cargo target triple (default: x86_64-pc-windows-gnu)
+#   --help, -h         Show this help
 #
 # Output:
 #   packages/coding-agent/binaries/pi-windows-x64.zip
@@ -15,41 +16,58 @@
 set -euo pipefail
 
 skip_deps=false
-case "${1:-}" in
-	"") ;;
-	--skip-deps) skip_deps=true ;;
-	--help|-h)
-		sed -n '3,14s/^# \{0,1\}//p' "$0"
-		exit 0
-		;;
-	*)
-		printf 'Unknown option: %s\n' "$1" >&2
-		exit 1
-		;;
-esac
+target="${TARGET:-x86_64-pc-windows-gnu}"
 
-if [[ $# -gt 1 ]]; then
-	printf '%s\n' 'Only --skip-deps is supported' >&2
-	exit 1
-fi
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--skip-deps)
+			skip_deps=true
+			shift
+			;;
+		--target)
+			if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
+				printf '%s requires a value\n' "$1" >&2
+				exit 1
+			fi
+			target="$2"
+			shift 2
+			;;
+		--help|-h)
+			sed -n '3,15s/^# \{0,1\}//p' "$0"
+			exit 0
+			;;
+		*)
+			printf 'Unknown option: %s\n' "$1" >&2
+			exit 1
+			;;
+	esac
+done
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-if [[ "$skip_deps" == "false" ]]; then
-	host_os="$(node -p 'process.platform')"
-	host_cpu="$(node -p 'process.arch')"
-	install_args=(--frozen-lockfile --os "$host_os" --cpu "$host_cpu")
-	if [[ "$host_os" != "win32" ]]; then
-		install_args+=(--os win32)
-	fi
-	if [[ "$host_cpu" != "x64" ]]; then
-		install_args+=(--cpu x64)
-	fi
-	pnpm install "${install_args[@]}"
+pkgver=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)
+if [[ -z "$pkgver" ]]; then
+	printf 'Error: unable to determine package version from Cargo.toml\n' >&2
+	exit 1
 fi
 
-pnpm run build
+target_exe="$root/target/$target/release/prime-agent.exe"
+fallback_exe="$root/target/release/prime-agent.exe"
+
+if [[ "$skip_deps" == "false" || (! -f "$target_exe" && ! -f "$fallback_exe") ]]; then
+	cargo build --manifest-path "$root/Cargo.toml" --release -p pa-cli --locked --target "$target"
+fi
+
+binary=""
+if [[ -f "$target_exe" ]]; then
+	binary="$target_exe"
+elif [[ -f "$fallback_exe" ]]; then
+	binary="$fallback_exe"
+else
+	printf 'Error: could not find compiled prime-agent.exe at %s or %s\n' "$target_exe" "$fallback_exe" >&2
+	exit 1
+fi
 
 binary_root="$root/packages/coding-agent/binaries"
 platform_dir="$binary_root/windows-x64"
@@ -59,38 +77,42 @@ rm -rf "$platform_dir"
 rm -f "$archive"
 mkdir -p "$platform_dir"
 
-bun build --compile --external koffi --target=bun-windows-x64 "$root/packages/coding-agent/dist/bun/cli.js" \
-	--outfile "$platform_dir/pi.exe"
-chmod +x "$platform_dir/pi.exe"
+cp "$binary" "$platform_dir/prime-agent.exe"
+cp "$binary" "$platform_dir/pi.exe"
+chmod +x "$platform_dir/prime-agent.exe" "$platform_dir/pi.exe"
 
-copy_contents() {
-	local source="$1"
-	local destination="$2"
-	mkdir -p "$destination"
-	cp -r "$source"/* "$destination/"
-}
+cp "$root/README.md" "$platform_dir/"
+cp "$root/LICENSE" "$platform_dir/"
 
-cp "$root/packages/coding-agent/package.json" "$platform_dir/"
-cp "$root/packages/coding-agent/README.md" "$platform_dir/"
-cp "$root/packages/coding-agent/CHANGELOG.md" "$platform_dir/"
-cp "$root/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm" "$platform_dir/"
-copy_contents "$root/packages/coding-agent/dist/modes/interactive/theme" "$platform_dir/theme"
-copy_contents "$root/packages/coding-agent/dist/modes/interactive/assets" "$platform_dir/assets"
-cp -r "$root/packages/coding-agent/dist/core/export-html" "$platform_dir/"
-copy_contents "$root/packages/coding-agent/docs" "$platform_dir/docs"
-copy_contents "$root/packages/coding-agent/examples" "$platform_dir/examples"
-copy_contents "$root/packages/coding-agent/skills" "$platform_dir/skills"
+printf '{\n  "name": "prime-agent",\n  "version": "%s",\n  "description": "Prime Agent: the RLM coding agent (Rust build)",\n  "bin": {\n    "prime-agent": "prime-agent.exe"\n  },\n  "piConfig": {\n    "name": "prime-agent",\n    "configDir": ".prime/agent"\n  }\n}\n' \
+	"$pkgver" > "$platform_dir/package.json"
 
-koffi_source="$root/node_modules/koffi/build/koffi/win32_x64/koffi.node"
-koffi_dir="$platform_dir/node_modules/koffi/build/koffi/win32_x64"
-mkdir -p "$koffi_dir"
-cp "$root/node_modules/koffi/index.js" "$platform_dir/node_modules/koffi/"
-cp "$root/node_modules/koffi/package.json" "$platform_dir/node_modules/koffi/"
-cp "$koffi_source" "$koffi_dir/koffi.node"
+rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+	--exclude='/**/.venv/' --exclude='/**/__pycache__/' \
+	--exclude='/**/.pytest_cache/' --exclude='/**/.ruff_cache/' \
+	--exclude='/**/.mypy_cache/' --exclude='/**/*.pyc' \
+	--exclude='prime-agent-runtime/test/' \
+	"$root/prime-agent-runtime" "$platform_dir/"
+
+rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+	--exclude='/**/.venv/' --exclude='/**/__pycache__/' \
+	"$root/skills" "$platform_dir/"
+
+rsync -a --exclude='/.git/' --exclude='/**/.git/' \
+	"$root/docs" "$platform_dir/"
+
+if [[ -f "$root/models.bundled.json" ]]; then
+	cp "$root/models.bundled.json" "$platform_dir/"
+fi
+if [[ -f "$root/mcp-services.bundled.json" ]]; then
+	cp "$root/mcp-services.bundled.json" "$platform_dir/"
+fi
 
 (
 	cd "$platform_dir"
 	zip -rq "$archive" .
 )
+
+cp "$archive" "$binary_root/prime-agent-windows-x64.zip"
 
 printf 'Created %s\n' "$archive"
