@@ -5,7 +5,7 @@ _repo_root=$(realpath -e ..)
 _source_commit=$(git -C "$_repo_root" rev-parse refs/heads/stable)
 _shared_target="$_repo_root/.worktrees/native-rust-validation-target"
 pkgname=prime-agent
-pkgver=0.10.0
+pkgver=0.10.0.r2.g2da0c33
 pkgrel=1
 pkgdesc='Self-improving coding and research agent with a persistent Python kernel'
 arch=('x86_64')
@@ -19,7 +19,10 @@ sha256sums=('SKIP')
 
 pkgver() {
     cd "$srcdir/$pkgname" || return
-    sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1
+    ( set -o pipefail
+      git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+      printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+    )
 }
 
 prepare() {
