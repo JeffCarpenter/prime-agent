@@ -220,9 +220,14 @@ jobs:
             target/${{ matrix.target }}/dist/manifest.json
           if-no-files-found: error
 
+  # Opt-out: set the repository variable CONTINUOUS_SKIP_DARWIN=true to skip
+  # the (slow, billed) macOS legs. A run with skipped darwin legs is not a
+  # complete 4-target set, so nightly.yml's "every build-* job green" parent
+  # selection passes over it and no beta is cut from it (the beta channel
+  # ships all four targets).
   build-darwin:
     needs: [deny, staleness]
-    if: needs.staleness.outputs.superseded != 'true'
+    if: needs.staleness.outputs.superseded != 'true' && vars.CONTINUOUS_SKIP_DARWIN != 'true'
     name: build-${{ matrix.target }}
     runs-on: ${{ matrix.runs-on }}
     permissions:
