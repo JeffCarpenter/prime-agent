@@ -114,8 +114,8 @@ jobs:
       # drop the aarch64-unknown-linux-gnu leg (the arm runner pool). A job-level
       # `if` cannot see `matrix`, so the leg list is filtered here. The
       # aarch64-apple-darwin leg is governed by CONTINUOUS_SKIP_DARWIN only.
-      # Unlike a skipped job, an omitted leg leaves no `build-*` row behind, so
-      # the remaining legs alone decide whether nightly.yml sees a green run.
+      # An omitted leg leaves no `build-*` row behind, so build-aarch64-gate
+      # below supplies the skipped row nightly.yml needs to reject the run.
       matrix:
         include: ${{ fromJSON(vars.CONTINUOUS_SKIP_AARCH64 == 'true' && '[{"target":"x86_64-unknown-linux-gnu","runs-on":"ubuntu-24.04"}]' || '[{"target":"x86_64-unknown-linux-gnu","runs-on":"ubuntu-24.04"},{"target":"aarch64-unknown-linux-gnu","runs-on":"ubuntu-24.04-arm"}]') }}
     env:
@@ -221,6 +221,18 @@ jobs:
             target/${{ matrix.target }}/dist/SHA256SUMS
             target/${{ matrix.target }}/dist/manifest.json
           if-no-files-found: error
+
+  # Marker row for CONTINUOUS_SKIP_AARCH64: green in a full run, skipped when
+  # the aarch64 leg is dropped. nightly.yml requires every `build-*` job to be
+  # green, so the skipped row keeps a partial run from being picked as a beta
+  # parent (an omitted matrix leg would leave no row to fail that check).
+  build-aarch64-gate:
+    needs: [deny, staleness]
+    if: needs.staleness.outputs.superseded != 'true' && vars.CONTINUOUS_SKIP_AARCH64 != 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "aarch64 leg enabled"
 
   # Opt-out: set the repository variable CONTINUOUS_SKIP_DARWIN=true to skip
   # the (slow, billed) macOS legs. A run with skipped darwin legs is not a
