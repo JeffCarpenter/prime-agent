@@ -110,12 +110,14 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
+      # Opt-out: set the repository variable CONTINUOUS_SKIP_AARCH64=true to
+      # drop the aarch64-unknown-linux-gnu leg (the arm runner pool). A job-level
+      # `if` cannot see `matrix`, so the leg list is filtered here. The
+      # aarch64-apple-darwin leg is governed by CONTINUOUS_SKIP_DARWIN only.
+      # Unlike a skipped job, an omitted leg leaves no `build-*` row behind, so
+      # the remaining legs alone decide whether nightly.yml sees a green run.
       matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            runs-on: ubuntu-24.04
-          - target: aarch64-unknown-linux-gnu
-            runs-on: ubuntu-24.04-arm
+        include: ${{ fromJSON(vars.CONTINUOUS_SKIP_AARCH64 == 'true' && '[{"target":"x86_64-unknown-linux-gnu","runs-on":"ubuntu-24.04"}]' || '[{"target":"x86_64-unknown-linux-gnu","runs-on":"ubuntu-24.04"},{"target":"aarch64-unknown-linux-gnu","runs-on":"ubuntu-24.04-arm"}]') }}
     env:
       # AppleDouble resource forks must not leak into the archive; the
       # assembler additionally enforces plain-file payloads.
