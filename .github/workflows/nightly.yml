@@ -88,6 +88,11 @@ env:
   # green no-op with a notice (the flow is opt-in by wiring the App), while a
   # configured-but-broken App fails the run loudly below.
   HAS_RELEASE_BOT: ${{ secrets.RELEASE_BOT_CLIENT_ID != '' && secrets.RELEASE_BOT_PRIVATE_KEY != '' }}
+  # The `build-*` job count of a complete continuous run (build-gnu x2,
+  # build-darwin x2). A run built with CONTINUOUS_SKIP_AARCH64 / _DARWIN is
+  # partial and must never be picked as a beta parent: the beta channel ships
+  # all four targets. Keep in step with the artifact set in release.yml.
+  EXPECTED_BUILD_JOBS: "4"
 
 jobs:
   cut:
@@ -167,8 +172,8 @@ jobs:
             read -r built total < <(printf '%s\n' "${jobs_json}" | jq -r \
               '[.jobs[] | select(.name | startswith("build-"))]
                | [(map(select(.conclusion == "success")) | length), length] | @tsv')
-            if [ "${total}" -lt 1 ] || [ "${built}" != "${total}" ]; then
-              echo "::notice::the continuous run for ${target_sha} did not run its builds to green (${built}/${total}: a superseded push); the newer push's cut takes the channel"
+            if [ "${total}" != "${EXPECTED_BUILD_JOBS}" ] || [ "${built}" != "${total}" ]; then
+              echo "::notice::the continuous run for ${target_sha} did not run a complete green build set (${built}/${total}, expected ${EXPECTED_BUILD_JOBS}: a superseded push or a CONTINUOUS_SKIP_* variable); the newer push's cut takes the channel"
               # THE GREEN NO-OP: mark the run skipped for every LATER
               # step (a step-level exit 0 lets the job continue, and the
               # compute/tag steps would fail reading the missing state
@@ -199,12 +204,12 @@ jobs:
               read -r built total < <(printf '%s\n' "${jobs_json}" | jq -r \
                 '[.jobs[] | select(.name | startswith("build-"))]
                  | [(map(select(.conclusion == "success")) | length), length] | @tsv')
-              if [ "${total}" -ge 1 ] && [ "${built}" = "${total}" ]; then
+              if [ "${total}" = "${EXPECTED_BUILD_JOBS}" ] && [ "${built}" = "${total}" ]; then
                 target_sha="${candidate_sha}"
                 echo "rolling beta parent (the dispatch walk): ${target_sha} (continuous run ${run_id}: all ${total} build jobs green)"
                 break
               fi
-              echo "continuous run ${run_id} (${candidate_sha}) concluded success but its builds did not run to green (${built}/${total}); looking further back"
+              echo "continuous run ${run_id} (${candidate_sha}) concluded success but did not run a complete green build set (${built}/${total}, expected ${EXPECTED_BUILD_JOBS}); looking further back"
             done < "${out}/candidate-runs"
             if [ -z "${target_sha}" ]; then
               echo "::error::no continuous run on main with a green 4-target build in the last 100 runs; refusing to cut a beta off an unbuilt tip"
