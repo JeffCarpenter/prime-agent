@@ -1,0 +1,73 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "git": "urn:git:ontology#",
+    "hash": "git:commitHash",
+    "ref": "git:referenceName",
+    "parent": "git:parentCommit",
+    "mergeBase": "git:mergeBase",
+    "divergence": "git:divergence",
+    "aheadCount": "git:aheadCount",
+    "behindCount": "git:behindCount",
+    "overlappingFiles": "git:overlappingFiles",
+    "functionalDomains": "git:functionalDomains"
+  },
+  "@id": "urn:git:divergence:xonsh-rust-seed",
+  "@type": "git:BranchDivergenceGraph",
+  "name": "Divergence between xonsh-rust and target 5ac9d0650~1 (Rust seed)",
+  "dateCreated": "2026-10-10T16:24:30-07:00",
+  "git:target": {
+    "@type": "git:Commit",
+    "ref": "5ac9d0650~1",
+    "hash": "dc63427ad625b148bed0c922822278477a12989e",
+    "description": "Initial root seed commit of Rust rewrite repository (MISSION.md, README.md, WATCHDOG.md)"
+  },
+  "git:targetScaffold": {
+    "@type": "git:Commit",
+    "ref": "5ac9d0650",
+    "hash": "5ac9d06508c3597e961a10569a563d2c0a2c5834",
+    "description": "Cargo workspace scaffolding commit (Cargo.toml, Makefile, crates/pa-* skeleton)"
+  },
+  "git:source": {
+    "@type": "git:Commit",
+    "ref": "refs/heads/xonsh-rust",
+    "hash": "e4ff354a184f22af3ba78ef0963018472f17af96",
+    "description": "Fork branch tip containing xonsh REPL integration, zsh skill, and packaging scripts"
+  },
+  "git:sourceBase": {
+    "@type": "git:Commit",
+    "ref": "refs/tags/v0.9.8",
+    "hash": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+    "description": "Original upstream TypeScript release base of xonsh fork"
+  },
+  "git:mergeBase": null,
+  "git:metrics": {
+    "localCommitsOnSourceBase": 37,
+    "hasCommonAncestor": false,
+    "targetFileCount": 3,
+    "sourceFileCount": 1302,
+    "overlappingFilesCount": 1,
+    "overlappingFilePaths": [
+      "README.md"
+    ]
+  },
+  "git:architecturalDivergence": {
+    "topology": "Target 5ac9d0650~1 is a root commit (0 parents) created to start the Rust rewrite from scratch. Source xonsh-rust is based on v0.9.8 of the TypeScript repository. They share no common git ancestor.",
+    "targetFiles": [
+      "MISSION.md",
+      "README.md",
+      "WATCHDOG.md"
+    ],
+    "targetMission": "Recreate prime-agent in Rust from scratch, preserving user-visible behavior contracts while replacing internal TypeScript architecture with modular crates.",
+    "sourceFeatures": [
+      "packages/coding-agent: TypeScript xonsh REPL integration, kernel manager, session lifecycle, and TUI components",
+      "prime-agent-runtime: Python sidecar xonsh execution and syntax handling in repl.py",
+      "skills/zsh: Native zsh skill package",
+      "scripts/install.xsh and pkgbuild/PKGBUILD: Packaging and installer automation"
+    ],
+    "rebaseCollisionProfile": {
+      "README.md": "Direct content divergence: target has 5-line Rust rewrite mission notice, source has full Prime Agent product README.",
+      "missingFilesOnTarget": "Target does not have package.json or packages/ directory; patches assuming prior TypeScript base will require reconciling with root files."
+    }
+  }
+}

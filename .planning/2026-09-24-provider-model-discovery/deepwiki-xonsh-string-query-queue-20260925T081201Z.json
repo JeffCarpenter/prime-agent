@@ -1,0 +1,20 @@
+[
+  "What does Xonsh @(...) do in subprocess mode?",
+  "What does Xonsh $(...) return?",
+  "What object does Xonsh !() return?",
+  "What object does Xonsh ![...] return?",
+  "How are single-quoted strings handled in Xonsh subprocess mode?",
+  "How are double-quoted strings handled in Xonsh subprocess mode?",
+  "What does the raw-string prefix r do in Xonsh?",
+  "How does Xonsh expand $NAME in a subprocess argument?",
+  "How can Xonsh pass a literal dollar sign to a subprocess?",
+  "How does Xonsh interpret backslashes in subprocess mode?",
+  "How does Xonsh pass a Python string as one command argument?",
+  "How does Xonsh expand a list returned from @(...)?",
+  "What does Xonsh $[...] do?",
+  "What does Xonsh @$(...) do?",
+  "How does Xonsh handle triple-quoted Python strings?",
+  "How does Xonsh pass an f-string as a subprocess argument?",
+  "How are environment variables handled inside single quotes in Xonsh?",
+  "How are environment variables handled inside double quotes in Xonsh?"
+]

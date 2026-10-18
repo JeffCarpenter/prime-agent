@@ -1,0 +1,327 @@
+observed_at_utc: '2026-10-14T05:48:46.737400+00:00'
+purpose: Operational checkpoint only. Current task authority remains scratchpad.yaml;
+  re-query it on resume.
+canonical: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/scratchpad.yaml
+root: /home/jeff/code/fork/prime-agent
+session_id: 01a138aa-67e5-70f5-a2b8-fd07bbaaf035
+cargo_target:
+  path: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target
+  owner: failure-audit
+  rule: One shared target. Catalog waits for explicit transfer; integration audit
+    runs no Cargo.
+workers:
+- name: failure-audit
+  status: retired
+  outcome: accepted two-file core test repairs
+- name: catalog-closure
+  status: retired
+  outcome: evidence retained; failures now explicitly non-blocking
+work_items:
+  bootstrap:
+    owner: null
+    evidence: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/bootstrap-exact-id-root-acceptance.yaml
+    checkpoint: Accepted scoped exact-ID live-test harness; worker retired; no active
+      Cargo from it.
+  core_failures:
+    owner: null
+    evidence: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/core-shared-cause-audit.md
+    checkpoint: Root reviewed two-file minimal test diff; correct-tree UTC/LA golden
+      and cfg-sensitive endpoint GREEN accepted. Worker retired and target released.
+    next_hypothesis: Stale-worktree corpus path is verified, no longer a hypothesis.
+      Verify rebuilt binary embeds validation corpus path before accepting new golden
+      results.
+    status: accepted
+  zsh_wiring:
+    owner: null
+    evidence: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/xonsh-integration-audit.md
+    log: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/zsh-focused-validation.log
+    checkpoint: Root reviewed 10 selected IDs, 10 pass, zero skip and source trace.
+      Worker retired. Full live Rust roundtrip and package imports remain open.
+  catalog:
+    owner: null
+    status: PASS in scoped upstream and fork runs; work CLOSED by user
+    results:
+      native_catalog_only:
+        passed: 4
+        failed: 0
+        log: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-catalog-control-20261012.log
+      upstream_catalog_only:
+        passed: 4
+        failed: 0
+        log: /home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/upstream-pa-tui-control-20261012.log
+    user_directive: Stop wasting time on catalog tests. Finish the rebase. Do not
+      investigate, change, or rerun catalog tests.
+    rebase_gate: false
+    historical_note: An earlier full TUI invocation had four catalog failures. Retained
+      as historical evidence, not an active task or a claim that the scoped tests
+      are failing.
+    source_changes: None; root verified catalog test and direct implementation match
+      upstream.
+    evidence: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/catalog-closure.md
+acceptance_evidence:
+  protected_inputs: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/resume-preservation-01a138aa.yaml
+  bootstrap: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/bootstrap-exact-id-root-acceptance.yaml
+  user_scope: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/local-fork-scope.md
+working_rules:
+- Local fork; not a release. Follow upstream dotenv; Windows is not a gate.
+- KISS; preserve fork behavior, no installer false dichotomy or speculative rewrite.
+- Native xonsh commands. Set native child environment with __xonsh__.env.swap or env
+  prefix, not only os.environ.
+- Use yq for YAML and jq/jmespath for JSON.
+- No protected source overwrite, source commit/merge, system installation or active-cache
+  deletion.
+resume:
+- Re-query canonical YAML with yq.
+- Inspect worker replies/evidence; do not repeat completed jobs from stale status.
+- Accept scoped fixes before isolated integration and local Arch package checks.
+completion_caveat: Native xonsh background command completion did not automatically
+  resume one worker. Preserve handles/status/log paths and ensure completion notification,
+  without sleep polling. Worker session completed is not equivalent to external job
+  completion.
+kernel_kept_names:
+- Path
+- acceptance_path
+- agent_message
+- agent_observe
+- asyncio
+- attach_image
+- bash
+- canonical_snapshot
+- catalog_worker
+- checkpoint_content
+- checkpoint_path
+- compact
+- correction_path
+- datetime
+- edit
+- failure_worker
+- goal
+- handoff
+- hashlib
+- inspect
+- json
+- mcp
+- native_plan
+- os
+- preserve_path
+- prime_self_intellect
+- protected_check
+- protected_recheck
+- re
+- refine
+- rlm
+- rlm_heartbeat
+- root
+- shutil
+- timezone
+- validate_code
+- websearch
+- work_state
+- yaml
+- zsh
+kernel_removed_snapshot_names:
+- files
+- skill_paths
+- skill_texts
+- p
+- t
+- resolve_h
+- git_h
+- scratch
+- key
+- readme
+- hstate
+- plan_dir
+- plan_texts
+- policy_entries
+- native_texts
+- models
+- msg_skill
+- roster
+- entry_text
+- bootstrap_worker
+- scope_worker
+- xonsh_skill_text
+- baseline_h
+- mission_text
+- consultant_mem
+- schema_text
+- query_text
+- baseline_slice
+- row
+- base
+- file
+- digest
+- reader_h
+- bad_reader_h
+- progress_path
+- stream
+- reader_result
+- bad_reader_result
+- xonsh_preference
+- worker
+- receipt
+- bootstrap_audit_text
+- failure_audit_text
+- edit_skill_text
+- scratch_text
+- source_additions
+- source_insert
+- new_fact
+- schema_validation
+- probe_meta_path
+- probe_meta_candidates
+- scope_audit_text
+- probe_meta_view
+- probe_meta_text
+- core_audit_text
+- debug_skill_text
+- decision_delta
+- scratch_current
+- local_checkpoint
+- new_scope_source
+- new_scope_fact
+- scratch_now_text
+- old_questions
+- new_questions
+- yaml_query_memory
+- yaml_decisions
+- integration_worker
+- new_evidence_sources
+- fixture_diff
+- space
+- workers_snapshot
+- observe_skill_text
+- bootstrap_live_meta
+- bootstrap_test_path
+- bootstrap_test_text
+- live_log_text
+- probe311_view
+- bootstrap_fmt
+- item
+- rel
+- canonical_view
+- canonical_edit_text
+- old_phase3
+- new_phase3
+- old_unknown
+- old_first_next
+- acceptance_source
+- old_attempt
+- new_attempt
+- target_paths
+- artifact_policy
+- integration_audit_text
+- repl_names
+- checkpoint_time
+- canonical_query
+- latest_evidence
+- name
+- text
+- status_paths
+- zsh_log_text
+- core_process
+- core_log_path
+- core_log_tail
+- compact_skill_text
+- new_zsh_sources
+- new_zsh_fact
+- kept_names
+worker_guidance: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/worker-guidance-01a138aa.md
+guidance_delivery:
+  failure-audit:
+    id: agentmsg_2d4a7ec6-269f-4787-8830-1ed61e27d1ee
+    deliveryStatus: delivered
+    deliveredAt: '2026-10-14T04:54:08.055Z'
+  catalog-closure:
+    id: agentmsg_51e62885-d13e-4798-b9b5-9b1ef736bb54
+    deliveryStatus: delivered
+    deliveredAt: '2026-10-14T04:54:08.117Z'
+mentor_guidance_delivery:
+  failure-audit:
+    id: agentmsg_3f172737-b28a-4512-912b-d10d7d949e1d
+    deliveryStatus: delivered
+    deliveredAt: '2026-10-14T04:55:08.544Z'
+  catalog-closure:
+    id: agentmsg_2c269183-0037-456f-9978-b2665dab2780
+    deliveryStatus: delivered
+    deliveredAt: '2026-10-14T04:55:08.716Z'
+lookup_rule: For known filename + literal substring (e.g. assert), use rg -n directly.
+  Symbol dumps are unnecessary; use semantic tools for semantic questions.
+artifact_cleanup: /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/evidence/artifact-cleanup-01a138aa.yaml
+artifact_cleanup_note: cargo clean removed unused feat-native-rust-xonsh/target and
+  bootstrap/target, freeing7.92GiB. Validation per-worktree target (~1.7GiB) refused
+  clean because CACHEDIR.TAG missing; left untouched. Active shared target retained.
+  No further worktree creation; reuse validation for integration/package.
+current_objective: stable fast-forward to feat/native-rust-xonsh completed; preserve
+  pending uncommitted validation integration and unchanged xonsh-rust.
+latest_user_direction: Merge feat/native-rust-xonsh into ancestor stable (completed),
+  then ensure kernel/REPL state dictionaries are current.
+active_workers: []
+cargo_target_owner: root; no Cargo job running
+rebase:
+  worktree: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011
+  base: v0.10.0 / 763094e1b6a7c17450ee8399b06cda1853847ca5
+  head: 2da0c33edc52db1d767b08537f6db8b75778f1c6
+  local_commits:
+  - 33489b01b
+  - 2da0c33ed
+  upstream_is_ancestor: true
+  remaining: Validate and commit accepted integration changes only when authorized;
+    stable currently contains committed feature history, not dirty validation changes.
+  bootstrap_integrated: true
+  bootstrap_files:
+  - crates/pa-core/src/kernel/bootstrap/mod.rs
+  - crates/pa-core/src/kernel/bootstrap/venv/tests.rs
+  - crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs
+  xonsh_rust_backup:
+    branch: backup/xonsh-rust-before-native-20261014T054256Z
+    commit: 60ef9f0031b778466342b4d7a1ef8f9082d20dac
+    scope: committed history only; working edits untouched
+  stable_merge:
+    method: fast-forward
+    from: e260085dd8f742e0def3d871860c9a888b114851
+    to: 2da0c33edc52db1d767b08537f6db8b75778f1c6
+    source: feat/native-rust-xonsh
+    working_files_touched: false
+    uncommitted_validation_included: false
+  stable_head: 2da0c33edc52db1d767b08537f6db8b75778f1c6
+  feature_head: 2da0c33edc52db1d767b08537f6db8b75778f1c6
+  xonsh_rust_head: 60ef9f0031b778466342b4d7a1ef8f9082d20dac
+  stable_matches_feature: true
+  integration_worktree: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011
+  integration_worktree_detached: true
+  integration_changes_committed: false
+  integration_changes_in_stable: false
+  xonsh_rust_history_strategy: Unresolved; branch unchanged. Backup exists. Latest
+    authorized history operation was stable fast-forward, completed.
+next_actions:
+- 'Pending: combined fork-specific validation of integrated bootstrap changes.'
+- 'Pending: authorization/disposition for committing and incorporating dirty validation
+  changes; do not claim stable includes them.'
+- xonsh-rust remains unchanged with backup; no replacement/rebase strategy selected.
+packaging_status: Not built or verified; do not substitute packaging work for finishing
+  the requested rebase.
+constraints_current:
+- User authorized stable fast-forward; completed without checking out branches or
+  altering working files. No blanket authorization for further source commits or history
+  replacement inferred.
+- Preserve protected dirty files; no system installation or new worktree.
+- Catalog-only tests passed4/4 upstream and4/4 fork; user ordered stop wasting time
+  on them. No further catalog work.
+- Use one shared Cargo target; native Xonsh commands, explicit target/manifest, targeted
+  Rust MCP navigation and selective structured queries.
+kernel_current_dicts:
+- work_state
+- rebase_state
+- catalog_state
+- build_state
+- canonical_snapshot
+build:
+  owner: root
+  running: false
+  shared_target: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target
+  last_verified_shared_bytes: 3771658833
+  no_new_worktrees: true
+  validation_after_bootstrap_copy: pending
+  packaging: not built or verified

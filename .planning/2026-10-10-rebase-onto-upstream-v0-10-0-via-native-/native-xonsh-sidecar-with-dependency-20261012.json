@@ -1,0 +1,7 @@
+{
+  "command": "uv run --project . --with pytest --with xonsh pytest -q test/test_repl.py -k xonsh",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/prime-agent-runtime",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-sidecar-with-dependency-20261012.log",
+  "status": "running",
+  "started_at_utc": "2026-10-14T02:06:43.021209+00:00"
+}

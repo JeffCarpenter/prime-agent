@@ -1,0 +1,63 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "git": "urn:git:ontology#",
+    "hash": "git:commitHash",
+    "ref": "git:referenceName",
+    "parent": "git:parentCommit",
+    "mergeBase": "git:mergeBase",
+    "divergence": "git:divergence",
+    "aheadCount": "git:aheadCount",
+    "behindCount": "git:behindCount",
+    "overlappingFiles": "git:overlappingFiles",
+    "functionalDomains": "git:functionalDomains"
+  },
+  "@id": "urn:git:divergence:xonsh-rust-5ac9d0650",
+  "@type": "git:BranchDivergenceGraph",
+  "name": "Divergence and Reconciliation between xonsh-rust and 5ac9d0650",
+  "dateCreated": "2026-10-10T16:48:30-07:00",
+  "git:target": {
+    "@type": "git:Commit",
+    "ref": "5ac9d0650",
+    "hash": "5ac9d06508c3597e961a10569a563d2c0a2c5834",
+    "description": "Cargo workspace scaffolding commit (Cargo.toml, Makefile, crates/pa-* skeleton, MODEL-SURFACE contract, lane prompts)"
+  },
+  "git:targetParent": {
+    "@type": "git:Commit",
+    "ref": "5ac9d0650~1",
+    "hash": "dc63427ad625b148bed0c922822278477a12989e",
+    "description": "Initial root seed commit of Rust rewrite repository (MISSION.md, README.md, WATCHDOG.md)"
+  },
+  "git:rebasedTip": {
+    "@type": "git:Commit",
+    "ref": "refs/heads/xonsh-rust-5ac-rebase",
+    "hash": "a557dd678e078ea0ba6734ef53fc3a3bb0742d4a",
+    "description": "Fork branch tip rebased on 5ac9d0650 containing xonsh REPL integration, packaging, and coexisting Rust workspace"
+  },
+  "git:rebaseMetrics": {
+    "commitsReplayed": 37,
+    "baseHash": "5ac9d06508c3597e961a10569a563d2c0a2c5834",
+    "conflictsEncountered": [
+      {
+        "file": ".gitignore",
+        "commit": "130b21d19",
+        "type": "add/add",
+        "resolution": "Union of /target with fork gitignore patterns"
+      },
+      {
+        "file": ".gitignore",
+        "commit": "222db5ff9",
+        "type": "content",
+        "resolution": "Preserved ./.planning/.active_plan and /target"
+      }
+    ],
+    "workspaceFilesPreserved": 19,
+    "forkFeaturesPreserved": [
+      "prime-agent-runtime/src/rlm/repl.py",
+      "packages/coding-agent/src/core/tools/xonsh.ts",
+      "packages/coding-agent/skills/zsh",
+      "pkgbuild/PKGBUILD",
+      "scripts/install.xsh"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "basis": [
+    "task_plan.md",
+    "native-status.yaml",
+    "pre-port-capability-ledger.json"
+  ],
+  "first": "Q1",
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "原生版尚需 Xonsh 專用安裝 UX 乎？",
+      "evidence": {
+        "ledger": "pre-port-capability-ledger.json#six_release_replay_capabilities[5]",
+        "paths": [
+          "scripts/install.xsh（原生樹缺）",
+          "install-rust.sh",
+          "install.ps1"
+        ],
+        "state": "原生通道已有；Xonsh 專用需求未決。"
+      },
+      "authority": {
+        "approved": "原生 Rust 包裝（Phase 5 p5-t1）。",
+        "not_approved": "新造 Xonsh 專用安裝器之產品行為。"
+      },
+      "options": [
+        {
+          "choice": "A",
+          "decision": "止於既有原生安裝通道，退 Node 時代 Xonsh 安裝器。"
+        },
+        {
+          "choice": "B",
+          "decision": "另定需求，造原生 Xonsh UX 安裝器。"
+        }
+      ],
+      "recommendation": "薦 A；若欲 B，先定 UX 與範圍。此問先裁，免誤移植舊機制。"
+    },
+    {
+      "id": "Q2",
+      "question": "原生產品須載入 .env 乎？",
+      "evidence": {
+        "ledger": "pre-port-capability-ledger.json#six_release_replay_capabilities[4]",
+        "paths": [
+          "crates/pa-core/src/kernel/bootstrap/mod.rs:49"
+        ],
+        "state": "舊 TS 依賴無應用呼叫點；Python dotenv 安裝不證 Rust 載入。"
+      },
+      "authority": {
+        "approved": "本案必要且限界之修補。",
+        "not_approved": "特定 .env 載入、優先序及覆寫語義未定。"
+      },
+      "options": [
+        {
+          "choice": "A",
+          "decision": "定義並測試原生 .env 載入語義。"
+        },
+        {
+          "choice": "B",
+          "decision": "僅取程序環境，退舊 TS dotenv 依賴。"
+        }
+      ],
+      "recommendation": "薦 B；除非明確產品用例要求 A。"
+    },
+    {
+      "id": "Q3",
+      "question": "Windows 原生支援是否列首發驗收門？",
+      "evidence": {
+        "ledger": "pre-port-capability-ledger.json#six_release_replay_capabilities[3]",
+        "paths": [
+          "install.ps1",
+          ".github/workflows/release.yml",
+          "scripts/release/test_windows_install.ps1"
+        ],
+        "state": "原生與上游所查檔案同一；Windows 原生 E2E／發佈未實跑。"
+      },
+      "authority": {
+        "approved": "原生調和及建包。",
+        "not_approved": "降為不支援 Windows；亦未證原生 Windows 驗收已過。"
+      },
+      "options": [
+        {
+          "choice": "A",
+          "decision": "承襲上游 Windows 支援，Windows CI/E2E 綠方稱等價。"
+        },
+        {
+          "choice": "B",
+          "decision": "首發暫限已驗平台，明示 Windows 延後。"
+        }
+      ],
+      "recommendation": "薦 A；保留既有支援，未驗前不宣稱通過。"
+    }
+  ],
+  "scope_note": "origin/main 322 提交非自動移植義務；未納為決問。"
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-live-final-20261014T030514Z.log",
+  "status": "passed",
+  "started_at_utc": "2026-10-14T03:05:14.697409+00:00",
+  "reason": "verify final rustfmt-only adjustment in live test",
+  "runner_pid": 40254,
+  "exit_code": 0,
+  "finished_at_utc": "2026-10-14T03:05:24.278345+00:00",
+  "duration_seconds": 4.411426716000278
+}

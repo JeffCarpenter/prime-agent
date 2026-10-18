@@ -1,0 +1,384 @@
+schema_version: 1.3.0
+generated_at: "2026-10-10T14:45:00-07:00"
+task: "Rebase xonsh-repl onto upstream v0.10.0 & divergence audit"
+
+packages:
+  typescript:
+    root: &pkg_ts_root
+      name: "prime-agent"
+      path: "package.json"
+      role: "root_distribution"
+      modules:
+        scripts: [check-installer.mjs, check-test-policy.mjs, pack-prime-agent-release.mjs, install.xsh]
+        bin: [prime-agent]
+        files: [package.json, package-lock.json, pnpm-workspace.yaml, pnpm-lock.yaml]
+
+    coding_agent: &pkg_ts_coding_agent
+      name: "@earendil-works/pi-coding-agent"
+      path: "packages/coding-agent/package.json"
+      dir: "packages/coding-agent"
+      role: "session_engine_and_repl"
+      modules:
+        src:
+          core:
+            kernel: [bootstrap.ts, repl-manager.ts, shared.ts]
+            tools: [code-preview.ts, ipython.ts, xonsh.ts, acp-mcp.ts, ipython-cell-code.ts, index.ts]
+            prompts: [rlm.ts]
+            refinement: [refinement.ts]
+            extensions: [index.ts, types.ts]
+            files: [agent-session.ts, agent-session-services.ts, agent-session-runtime.ts, sdk.ts, system-prompt.ts, messages.ts, goals.ts, skills.ts, settings-manager.ts]
+          modes:
+            interactive:
+              components: [conversation-components.ts, ipython-cell.ts, tool-execution.ts, tool-panel.ts, tree-selector.ts, edit-summary.ts]
+              theme: [theme.ts, theme-schema.json]
+              files: [interactive-mode.ts]
+            acp: [acp-events.ts, acp-meta.ts]
+          cli: [args.ts, cli-main.ts]
+          themes: [theme.ts]
+          files: [index.ts, main.ts, config.ts]
+
+    ai: &pkg_ts_ai
+      name: "@earendil-works/pi-ai"
+      path: "packages/ai/package.json"
+      dir: "packages/ai"
+      role: "llm_providers"
+      modules:
+        src:
+          providers: [anthropic.ts, openai-completions.ts, google.ts, amazon-bedrock.ts, cloudflare.ts, mistral.ts, register-builtins.ts, transform-messages.ts]
+          mcp: [client.ts, tools.ts]
+          utils: [diagnostics.ts, event-stream.ts, headers.ts, validation.ts]
+          files: [index.ts, stream.ts, models.ts, models.generated.ts, types.ts, api-registry.ts, cache-pricing.ts, oauth.ts, env-api-keys.ts]
+
+    agent_core: &pkg_ts_agent_core
+      name: "@earendil-works/pi-agent-core"
+      path: "packages/agent/package.json"
+      dir: "packages/agent"
+      role: "agent_loop"
+      modules:
+        src:
+          files: [index.ts, agent.ts, agent-loop.ts, proxy.ts, types.ts]
+
+    tui: &pkg_ts_tui
+      name: "@earendil-works/pi-tui"
+      path: "packages/tui/package.json"
+      dir: "packages/tui"
+      role: "interactive_ui"
+      modules:
+        src:
+          components: [box.ts, clickable.ts, editor.ts, input.ts, loader.ts, markdown.ts, select-list.ts, text.ts]
+          files: [index.ts, tui.ts, terminal.ts, autocomplete.ts, editor-component.ts, keybindings.ts, keys.ts, fuzzy.ts, mouse.ts, render-cache.ts]
+
+  python:
+    runtime: &pkg_py_runtime
+      name: "prime-agent-runtime"
+      path: "prime-agent-runtime/pyproject.toml"
+      dir: "prime-agent-runtime"
+      role: "python_kernel_sidecar"
+      modules:
+        src:
+          rlm:
+            machines:
+              builder: [MACHINE.md]
+              pr-manager: [MACHINE.md]
+              review-sweep: [MACHINE.md]
+            files: [__init__.py, repl.py, repl.md, bash.py, harness.py, mcp.py, skill.py, factory.py, _winjob.py]
+
+    zsh_skill: &pkg_py_zsh
+      name: "zsh"
+      path: "packages/coding-agent/skills/zsh/pyproject.toml"
+      dir: "packages/coding-agent/skills/zsh"
+      role: "zsh_skill_package"
+      modules:
+        src:
+          zsh: [__init__.py]
+        tests: [__init__.py, test_zsh.py]
+        files: [pyproject.toml, SKILL.md]
+
+  rust:
+    pa_cli: &crate_pa_cli
+      name: "pa-cli"
+      path: "crates/pa-cli/Cargo.toml"
+      dir: "crates/pa-cli"
+      role: "composition_root_and_cli"
+      modules:
+        src:
+          daemon_discovery: [mod.rs, probe.rs, sweep.rs, census.rs]
+          update_flow: [mod.rs, coordinator.rs, plan.rs, status.rs, legacy_restart.rs, legacy_admission.rs, legacy_roster.rs]
+          files: [main.rs, lib.rs, args.rs, public_command.rs, print_runtime.rs, print_boundary.rs, print_goal.rs, print_autonomous.rs, print_session_command.rs, daemon_client.rs]
+
+    pa_core: &crate_pa_core
+      name: "pa-core"
+      path: "crates/pa-core/Cargo.toml"
+      dir: "crates/pa-core"
+      role: "session_engine_and_kernel"
+      modules:
+        src:
+          session_engine: [mod.rs, auto_refine_trigger.rs, goal_boundary.rs, ipython_state.rs, provider_adapter.rs, rlm_host.rs, semantic_edges.rs, session_commands.rs]
+          kernel:
+            bootstrap: [mod.rs, venv.rs, runtime_files.rs]
+            manager: [mod.rs, execution.rs, requests.rs, teardown.rs, startup.rs, repair.rs]
+            files: [mod.rs, cancellation.rs, live_kernels.rs, protocol.rs, provisioner.rs, shared.rs, state_snapshot.rs, orphan_journal.rs]
+          tools: [mod.rs, registry.rs, builtin.rs]
+          skills: [mod.rs, parser.rs, catalog.rs]
+          settings: [mod.rs, manager.rs, schema.rs]
+          models: [mod.rs, registry.rs, resolver.rs]
+          mcp: [mod.rs, manager.rs, connection.rs]
+          auth: [mod.rs, store.rs]
+          autonomous: [mod.rs, runner.rs]
+          refinement: [mod.rs, engine.rs]
+          cron:
+            store: [mod.rs, heartbeat.rs, jobs.rs, session_artifacts.rs]
+            files: [mod.rs, scheduler.rs]
+          platform: [mod.rs, process.rs, fs.rs, shell.rs]
+          workspace_snapshot: [mod.rs, capture.rs, verify.rs]
+          files: [lib.rs, agent_traces.rs, goals.rs, slash_command_args.rs]
+
+    pa_daemon: &crate_pa_daemon
+      name: "pa-daemon"
+      path: "crates/pa-daemon/Cargo.toml"
+      dir: "crates/pa-daemon"
+      role: "supervisor_and_workers"
+      modules:
+        src:
+          supervisor: [mod.rs, clients.rs, roster.rs, update_restart.rs, accept_loop.rs]
+          worker: [mod.rs, connection.rs, engine.rs, lifecycle.rs]
+          session_store: [mod.rs, disk.rs, memory.rs, window.rs]
+          acp: [mod.rs, events.rs, transport.rs]
+          herdr: [mod.rs, contract.rs]
+          files: [lib.rs, protocol.rs, socket.rs, rpc.rs, paths.rs, update_restore.rs]
+
+    pa_tui: &crate_pa_tui
+      name: "pa-tui"
+      path: "crates/pa-tui/Cargo.toml"
+      dir: "crates/pa-tui"
+      role: "ratatui_terminal_ui"
+      modules:
+        src:
+          chat: [mod.rs, message_view.rs, streaming.rs]
+          autocomplete: [mod.rs, dropdown.rs, provider.rs]
+          agents_view: [mod.rs, forest.rs, search.rs]
+          keybindings: [mod.rs, dispatch.rs, defaults.rs]
+          mcp_view: [mod.rs, panel.rs]
+          files: [lib.rs, app.rs, theme.rs, editor.rs, tree_selector.rs]
+
+    pa_ai: &crate_pa_ai
+      name: "pa-ai"
+      path: "crates/pa-ai/Cargo.toml"
+      dir: "crates/pa-ai"
+      role: "llm_provider_layer"
+      modules:
+        src:
+          providers: [mod.rs, anthropic.rs, openai.rs, google.rs, bedrock.rs]
+          files: [lib.rs, stream.rs, models.rs, models_generated.rs, registry.rs, cache_pricing.rs, oauth.rs, env_api_keys.rs, types.rs]
+
+    pa_agent: &crate_pa_agent
+      name: "pa-agent"
+      path: "crates/pa-agent/Cargo.toml"
+      dir: "crates/pa-agent"
+      role: "agent_loop_engine"
+      modules:
+        src:
+          files: [lib.rs, agent.rs, agent_loop.rs, abort.rs, proxy.rs, stream.rs, types.rs, validation.rs]
+
+    pa_models: &crate_pa_models
+      name: "pa-models"
+      path: "crates/pa-models/Cargo.toml"
+      dir: "crates/pa-models"
+      role: "model_catalog_and_discovery"
+      modules:
+        src:
+          files: [lib.rs, bundled.rs, cache.rs, chain.rs, compat.rs, fetch.rs, pinning.rs, prime_inference.rs, schema.rs, transports.rs]
+
+    pa_types: &crate_pa_types
+      name: "pa-types"
+      path: "crates/pa-types/Cargo.toml"
+      dir: "crates/pa-types"
+      role: "shared_wire_types"
+      modules:
+        src:
+          files: [lib.rs, session.rs, ai.rs, daemon.rs, goal.rs, skill_blocks.rs, slash_commands.rs, themes.rs, usage.rs, platform.rs, incident.rs]
+
+    pa_telemetry: &crate_pa_telemetry
+      name: "pa-telemetry"
+      path: "crates/pa-telemetry/Cargo.toml"
+      dir: "crates/pa-telemetry"
+      role: "telemetry_events_and_sinks"
+      modules:
+        src:
+          files: [lib.rs, event.rs, events.rs, sink.rs, sinks.rs, catalog.rs, client.rs, install_id.rs, platform.rs, time.rs]
+
+entities:
+  commits:
+    v0_9_8: &commit_v0_9_8
+      hash: "7d442aafa985f9342134fac16c2ef41f03fb45c1"
+      tag: "v0.9.8"
+      date: "2026-09-29T22:06:42Z"
+      role: "merge_base"
+      description: "Final stable TypeScript upstream release"
+
+    rust_port: &commit_rust_port
+      hash: "39bc99a91d102c46474c090fdc7ae7cd5037ffcf"
+      pr: "#2524"
+      parent: *commit_v0_9_8
+      date: "2026-09-29T18:00:25-07:00"
+      summary: "Port Prime Agent to Rust (#2524)"
+      diff_stats:
+        files_changed: 2797
+        insertions: 668428
+        deletions: 416209
+        deleted_ts_files: 1181
+      action: "Full monorepo transition from TypeScript packages/ to Rust crates/"
+      removed_packages:
+        - *pkg_ts_root
+        - *pkg_ts_coding_agent
+        - *pkg_ts_ai
+        - *pkg_ts_agent_core
+        - *pkg_ts_tui
+      introduced_crates:
+        - *crate_pa_cli
+        - *crate_pa_core
+        - *crate_pa_daemon
+        - *crate_pa_tui
+        - *crate_pa_ai
+        - *crate_pa_agent
+        - *crate_pa_models
+        - *crate_pa_types
+        - *crate_pa_telemetry
+
+    npm_bridge: &commit_npm_bridge
+      hash: "c174739ad3b0e020a181596da36f30533ccd74cd"
+      pr: "#3442"
+      date: "2026-10-09T13:19:17-07:00"
+      summary: "support TypeScript updates to Rust (#3442)"
+      features:
+        - "scripts/release/npm_bridge_assets/cli.cjs"
+        - "crates/pa-cli/src/update_flow/legacy_restart.rs"
+        - "docs/legacy-upgrade-contract.md"
+
+    npm_launcher: &commit_npm_launcher
+      hash: "4e599696ab4df3a3980a377038e23f99e4368297"
+      pr: "#3444"
+      date: "2026-10-09T14:02:11-07:00"
+      summary: "fix: preserve npm launcher during overlapping Rust upgrades (#3444)"
+
+    v0_10_0: &commit_v0_10_0
+      hash: "8de18adda5d6fdea3dc31843d5955d311c92cb9e"
+      tag: "v0.10.0"
+      date: "2026-10-09T21:28:57Z"
+      role: "target"
+      description: "Initial stable release of Rust architecture"
+
+    upstream_main: &commit_upstream_main
+      hash: "2ee7e623a60a747963b5e40e0624d67e52fc8ff0"
+      ref: "upstream/main"
+      description: "Upstream tracking tip (23 commits ahead of v0.10.0)"
+
+    local_head: &commit_local_head
+      hash: "e4ff354a184f22af3ba78ef0963018472f17af96"
+      branch: "xonsh-repl"
+      role: "source"
+      description: "Current fork tip (37 commits ahead of v0.9.8)"
+
+graph_topology:
+  base: *commit_v0_9_8
+  target: *commit_v0_10_0
+  source: *commit_local_head
+  upstream_main: *commit_upstream_main
+  metrics:
+    local_commits_ahead: 37
+    upstream_commits_ahead: 161
+    upstream_main_ahead_target: 23
+    overlapping_file_paths: 53
+
+architectural_mapping:
+  pairs:
+    - ts_package: *pkg_ts_coding_agent
+      rust_crate: *crate_pa_core
+      concern: "Session engine, tools, skills, settings, kernel management"
+      wire_protocol: "JSONL (header v3, message_update, tool_execution_update)"
+      repl_sidecar: *pkg_py_runtime
+
+    - ts_package: *pkg_ts_agent_core
+      rust_crate: *crate_pa_agent
+      concern: "Agent execution loop and turn coordination"
+
+    - ts_package: *pkg_ts_ai
+      rust_crate: *crate_pa_ai
+      concern: "LLM providers, streaming, token counting"
+
+    - ts_package: *pkg_ts_tui
+      rust_crate: *crate_pa_tui
+      concern: "Terminal interface (Ink -> Ratatui)"
+
+    - ts_package: *pkg_ts_root
+      rust_crate: *crate_pa_cli
+      concern: "CLI argument parsing, subcommands, composition root"
+      distribution_bridge: "scripts/release/npm_bridge_assets/cli.cjs"
+
+conflict_breakdown:
+  total_commits_replaying: 37
+  by_package:
+    pi_coding_agent:
+      package: *pkg_ts_coding_agent
+      commit_count: 28
+      upstream_status: "Deleted by *commit_rust_port"
+      rebase_conflict: "modify/delete on every commit"
+
+    prime_agent_runtime:
+      package: *pkg_py_runtime
+      commit_count: 4
+      target_paths:
+        - "prime-agent-runtime/src/rlm/repl.py"
+        - "prime-agent-runtime/test/test_repl.py"
+      upstream_status: "Retained (+15k lines diff, factory FSM)"
+      rebase_conflict: "Contextual merge conflicts in repl.py"
+
+    zsh_skill:
+      package: *pkg_py_zsh
+      commit_count: 3
+      target_paths:
+        - "packages/coding-agent/skills/zsh/**"
+      upstream_status: "Skills relocated to root skills/ by *commit_rust_port"
+      rebase_conflict: "Directory path divergence"
+
+    packaging_and_scripts:
+      commit_count: 2
+      target_paths:
+        - "scripts/install.xsh"
+        - "pkgbuild/PKGBUILD"
+      upstream_status: "Cargo/Makefile replaces pnpm build scripts"
+      rebase_conflict: "Target script alignment"
+
+reconciliation_strategies:
+  dual_stack:
+    id: "strategy-1"
+    summary: "Coexistence: restore packages/ alongside crates/ in fork"
+    pros:
+      - "Retains working TypeScript xonsh REPL"
+      - "npm run check passes on packages/"
+    cons:
+      - "Fork tree diverges further from upstream pure-Rust model"
+
+  pinned_v0_9_8_port_track:
+    id: "strategy-2"
+    summary: "Keep xonsh-repl on v0.9.8; plan native Rust kernel port"
+    pros:
+      - "Zero merge regressions on working branch"
+      - "TEST_POLICY_BASE=v0.9.8 passes 100% clean"
+      - "Clean architecture port directly into crates/pa-core"
+    cons:
+      - "Postpones v0.10.0 adoption until Rust kernel extension is coded"
+
+  runtime_only_rebase:
+    id: "strategy-3"
+    summary: "Rebase only prime-agent-runtime, skills, and packaging onto v0.10.0"
+    pros:
+      - "Rebases onto v0.10.0 without carrying dead TypeScript code"
+    cons:
+      - "Drops TypeScript-side xonsh tool registration"
+
+artifacts:
+  divergences_jsonld: ".planning/2026-10-10-rebase-xonsh-repl-v0.10.0/divergences.jsonld"
+  findings_doc: ".planning/2026-10-10-rebase-xonsh-repl-v0.10.0/findings.md"
+  task_plan: ".planning/2026-10-10-rebase-xonsh-repl-v0.10.0/task_plan.md"
+  scratchpad: ".planning/scratchpad.yaml"

@@ -1,0 +1,6 @@
+test_xonsh_mode_executes_native_shell_syntax (test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.410s
+
+OK

@@ -1,0 +1,30 @@
+題: REPL 虛擬模組與 typeguard 裝飾器
+狀: 設計草案；未施於程式
+旨:
+  - 使 @typechecked 於互動格得取源而驗參數與返值。
+  - 不落格文於磁碟；不改 typeguard；保全既有常駐命名空間。
+據:
+  編譯: prime-agent-runtime/src/rlm/repl.py:_compile_cell
+  行格: prime-agent-runtime/src/rlm/repl.py:_handle_execute
+  主模: prime-agent-runtime/src/rlm/repl.py:main
+  已然: 格名 <cell-N>，原文已藏 linecache；__main__ 無 __file__。
+  實證: 暫令 __main__.__file__ 指當格名，@typechecked 即拒誤型；事後復原。
+策:
+  虛模:
+    - 起核時，以 ModuleType 子類為 __main__；其 __dict__ 仍為共用 ns。
+    - __file__ 依當格 ContextVar 虛應 <cell-N>；無格則循既有無檔語義。
+    - 不逐格改全域模組字典，亦不更函式 __module__ 或 __name__。
+  格源:
+    - _compile_cell 仍藏原文於 linecache，編譯 co_filename 同格名。
+    - _handle_execute 於執行前設格名 ContextVar，finally 復位；子任務承其語境。
+  取源: typeguard 由 sys.modules[函式.__module__] 求源；inspect 據虛 __file__ 赴 linecache。
+界:
+  - 先保 Python 格及純 Python Xonsh 格；含原生 Xonsh 語法者，原文未必可經 ast.parse。
+  - 若欲兼容混合 Xonsh，須另議轉譯源及行號對映；勿暗許已支援。
+  - 審 __file__ 用戶賦值、跨格背景任務、快照還原及 linecache 留存之語義。
+驗:
+  - 於真核連執數格：正參可過，誤參、誤返值及 ALL_ITEMS 誤項皆拒。
+  - 驗同格多函式、後格重定義、子任務、例外及中斷後語境復位。
+  - 驗純 Python Xonsh 格、原生語法之明確界限、dill 快照還原。
+  - 驗無格時 __main__ 無偽路徑，亦無檔案落地。
+據試: prime-agent-runtime/test/test_repl.py

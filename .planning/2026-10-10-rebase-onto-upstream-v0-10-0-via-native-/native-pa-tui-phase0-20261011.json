@@ -1,0 +1,11 @@
+{
+  "command": "cargo test -p pa-tui --locked",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-pa-tui-phase0-20261011.log",
+  "started_at_utc": "2026-10-12T03:12:10.930438+00:00",
+  "status": "interrupted_without_captured_exit",
+  "exit_code": null,
+  "explanation": "Session worker interrupted; subsequent pgrep found no matching cargo or runner process; log ends at compilation warnings. Not a test result.",
+  "observed_at_utc": "2026-10-12T21:08:07.389591+00:00"
+}

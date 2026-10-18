@@ -1,0 +1,55 @@
+scope: Isolated bootstrap live-test harness only; not integration or packaging
+decision: accepted
+source: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs
+source_sha256: c9ba26fa3642361813467e6a81c629f21693465828c3e5e676d26bec8168dc1c
+test_full_id: test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax
+python: 3.11.16
+cold_rust_exit: 0
+exact_name_exit: 0
+missing_exact_name_exit: 1
+old_missing_filter_exit: 0
+rustfmt_root_exit: 0
+evidence:
+- /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-exact-dotted-cold-live.json
+- /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-exact-dotted-cold-live.log
+- /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-exact-dotted-probes.json
+limits:
+- Checkout source used by test helper; installed package layout is not verified.
+- No integration, release-profile build or Arch package verification.
+protected_inputs:
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-tui/src/code_preview/bash.rs
+  sha256: f80fd1c7d9ab311ac4d4eefc5274c701b76e82e698fbdecc6f7ca15644e8c52d
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-tui/src/tool_card/bash.rs
+  sha256: 1f6b847e77d90abbe0d1ba6c3acbd38e470b0b9dba611196623ab5c0b4ec4f3d
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-tui/src/tool_card/ipython.rs
+  sha256: c2992c2a62779ea5e714f36d611a3fe196265cca41f9df4391ab9b06b023bd1b
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-tui/src/tool_card/mod.rs
+  sha256: 0721f9c945883aa0eb5da1effe03e41bc22ddd077d8010d90cd82e90e76fc638
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/crates/pa-tui/src/tree_display.rs
+  sha256: 01884336e44c5fadfe7cf6a7612b5da824a5892b2382030259a60637264734e5
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/skills/zsh/SKILL.md
+  sha256: ba06a5b8ca01ba2a563de743863fdf04194afb3302237ee1cab8c09b8bc7b5d2
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/skills/zsh/pyproject.toml
+  sha256: 492dce7cc169755eb479237383ae07bfcbee60b7cb0cf188bfe766ff6eac88ff
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/skills/zsh/src/zsh/__init__.py
+  sha256: 95d0a69b6390b4daddf27aa65e2dc0cf659272ded6a843587cabd695fa5cb329
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/skills/zsh/tests/__init__.py
+  sha256: faecc9007b2439b27972a2f9ace51f6a37daa8908e4e5243f3ff26844993be81
+  match: true
+- path: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/skills/zsh/tests/test_zsh.py
+  sha256: c268b9e7634be6263312ca4b023f68765939ea8a131fa7e2289a55a841f4af26
+  match: true
+- path: /home/jeff/code/fork/prime-agent/pkgbuild/PKGBUILD
+  sha256: 12b563a2db83e146173848428af4a8051f33f33eb2bbd202949a759cce933bb2
+  match: true
+- path: /home/jeff/code/fork/prime-agent/pkgbuild/.SRCINFO
+  sha256: 4b3c92f33c9c9122482eff28d402938255a9c107b1f434bd12382dcdadd728fb
+  match: true

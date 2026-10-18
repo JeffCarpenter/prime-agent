@@ -1,0 +1,171 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "git": "urn:git:ontology#",
+    "hash": "git:commitHash",
+    "ref": "git:referenceName",
+    "parent": "git:parentCommit",
+    "mergeBase": "git:mergeBase",
+    "divergence": "git:divergence",
+    "aheadCount": "git:aheadCount",
+    "behindCount": "git:behindCount",
+    "overlappingFiles": "git:overlappingFiles",
+    "functionalDomains": "git:functionalDomains"
+  },
+  "@id": "urn:git:divergence:xonsh-repl-v0.10.0",
+  "@type": "git:BranchDivergenceGraph",
+  "name": "Divergence between xonsh-repl and upstream v0.10.0",
+  "dateCreated": "2026-10-10T14:13:00-07:00",
+  "git:base": {
+    "@type": "git:Commit",
+    "ref": "refs/tags/v0.9.8",
+    "hash": "7d442aafa985f9342134fac16c2ef41f03fb45c1",
+    "description": "Common ancestor and final TypeScript upstream release (v0.9.8)"
+  },
+  "git:target": {
+    "@type": "git:Commit",
+    "ref": "refs/tags/v0.10.0",
+    "hash": "8de18adda5d6fdea3dc31843d5955d311c92cb9e",
+    "description": "Latest stable upstream release (v0.10.0) — complete Rust rewrite"
+  },
+  "git:source": {
+    "@type": "git:Commit",
+    "ref": "refs/heads/xonsh-repl",
+    "hash": "e4ff354a10df76846feae6dbf4350ea0ae5cf1c8",
+    "description": "Current HEAD of xonsh-repl (fork branch extending TypeScript monorepo and runtime)"
+  },
+  "git:upstreamMain": {
+    "@type": "git:Commit",
+    "ref": "refs/remotes/upstream/main",
+    "hash": "2ee7e623a60a747963b5e40e0624d67e52fc8ff0",
+    "description": "Upstream main tracking tip (post-v0.10.0 development)"
+  },
+  "git:metrics": {
+    "localCommitsAheadOfBase": 37,
+    "upstreamCommitsAheadOfBase": 161,
+    "upstreamMainCommitsAheadOfTarget": 23,
+    "upstreamFilesDeletedInRewrite": 1181,
+    "overlappingModifiedFileCount": 53
+  },
+  "git:architecturalDivergence": {
+    "upstreamTransition": "Upstream transitioned from TypeScript monorepo (packages/) to Rust workspace (crates/) in commit 39bc99a91 (PR #2524). Root package.json and packages/* were completely removed upstream in v0.10.0.",
+    "forkState": "Fork xonsh-repl implemented native xonsh REPL in TypeScript (packages/coding-agent) and Python (prime-agent-runtime/src/rlm/repl.py), alongside zsh builtin skill, install.xsh, and Arch Linux PKGBUILD.",
+    "rebaseCollision": "A mechanical rebase of xonsh-repl onto v0.10.0 encounters modify/delete conflicts across all 28 TypeScript commits because packages/ was deleted upstream. Accepting upstream deletions drops all TypeScript xonsh REPL features."
+  },
+  "git:overlappingFiles": [
+    ".gitignore",
+    "install.ps1",
+    "package.json",
+    "package-lock.json",
+    "packages/agent/package.json",
+    "packages/ai/package.json",
+    "packages/coding-agent/examples/extensions/custom-provider-anthropic/package-lock.json",
+    "packages/coding-agent/examples/extensions/sandbox/package-lock.json",
+    "packages/coding-agent/examples/extensions/with-deps/package-lock.json",
+    "packages/coding-agent/package.json",
+    "packages/coding-agent/src/cli/args.ts",
+    "packages/coding-agent/src/core/agent-session-services.ts",
+    "packages/coding-agent/src/core/agent-session.ts",
+    "packages/coding-agent/src/core/extensions/index.ts",
+    "packages/coding-agent/src/core/extensions/types.ts",
+    "packages/coding-agent/src/core/goals.ts",
+    "packages/coding-agent/src/core/kernel/bootstrap.ts",
+    "packages/coding-agent/src/core/kernel/repl-manager.ts",
+    "packages/coding-agent/src/core/kernel/shared.ts",
+    "packages/coding-agent/src/core/messages.ts",
+    "packages/coding-agent/src/core/prompts/rlm.ts",
+    "packages/coding-agent/src/core/refinement/refinement.ts",
+    "packages/coding-agent/src/core/sdk.ts",
+    "packages/coding-agent/src/core/skills.ts",
+    "packages/coding-agent/src/core/system-prompt.ts",
+    "packages/coding-agent/src/core/tools/acp-mcp.ts",
+    "packages/coding-agent/src/core/tools/code-preview.ts",
+    "packages/coding-agent/src/core/tools/index.ts",
+    "packages/coding-agent/src/core/tools/ipython-cell-code.ts",
+    "packages/coding-agent/src/core/tools/ipython.ts",
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/main.ts",
+    "packages/coding-agent/src/modes/acp/acp-events.ts",
+    "packages/coding-agent/src/modes/acp/acp-meta.ts",
+    "packages/coding-agent/src/modes/agent-connection/types.ts",
+    "packages/coding-agent/src/modes/interactive/components/conversation-components.ts",
+    "packages/coding-agent/src/modes/interactive/components/edit-summary.ts",
+    "packages/coding-agent/src/modes/interactive/components/index.ts",
+    "packages/coding-agent/src/modes/interactive/components/injected-prompt-message.ts",
+    "packages/coding-agent/src/modes/interactive/components/ipython-cell.ts",
+    "packages/coding-agent/src/modes/interactive/components/tool-execution.ts",
+    "packages/coding-agent/src/modes/interactive/components/tool-panel.ts",
+    "packages/coding-agent/src/modes/interactive/components/tree-selector.ts",
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+    "packages/coding-agent/src/modes/interactive/theme/theme.ts",
+    "packages/coding-agent/test/agent-session-services.test.ts",
+    "packages/coding-agent/test/builtin-skills.test.ts",
+    "packages/coding-agent/test/kernel-bootstrap.test.ts",
+    "packages/coding-agent/test/suite/regressions/4428-remove-legacy-pi-mono-tools.test.ts",
+    "packages/coding-agent/test/suite/regressions/4603-worker-recovery.test.ts",
+    "packages/tui/package.json",
+    "prime-agent-runtime/src/rlm/repl.md",
+    "prime-agent-runtime/src/rlm/repl.py",
+    "prime-agent-runtime/test/test_repl.py",
+    "scripts/pack-prime-agent-release.mjs",
+    "scripts/profile-coding-agent-node.mjs",
+    "scripts/release.mjs",
+    "scripts/sync-versions.js"
+  ],
+  "git:functionalDomains": [
+    {
+      "domain": "Architecture / Monorepo Foundation",
+      "impact": "Critical",
+      "description": "Upstream v0.10.0 replaced TypeScript packages/ with Rust crates/. All TypeScript packages were removed upstream in commit 39bc99a91.",
+      "resolutionRequirement": "Requires architectural decision: dual-stack coexistence (retaining packages/ in the fork) vs porting xonsh REPL to Rust crates/pa-core vs rebasing only runtime and packaging."
+    },
+    {
+      "domain": "Kernel & REPL Management",
+      "impact": "High",
+      "description": "Integration of dual ipython/xonsh runtime against upstream v0.10.0 worker lifecycle, session lease teardown, and runtime writers",
+      "files": [
+        "packages/coding-agent/src/core/kernel/repl-manager.ts",
+        "packages/coding-agent/src/core/kernel/bootstrap.ts",
+        "packages/coding-agent/src/core/kernel/shared.ts",
+        "packages/coding-agent/src/core/agent-session.ts",
+        "packages/coding-agent/src/core/agent-session-services.ts",
+        "packages/coding-agent/src/core/sdk.ts",
+        "prime-agent-runtime/src/rlm/repl.py"
+      ]
+    },
+    {
+      "domain": "Python Runtime (prime-agent-runtime)",
+      "impact": "High",
+      "description": "Both upstream v0.10.0 and fork modified prime-agent-runtime/src/rlm/repl.py. Upstream added factory state machine and Rust daemon support; fork added xonsh shell execution and syntax handlers.",
+      "files": [
+        "prime-agent-runtime/src/rlm/repl.py",
+        "prime-agent-runtime/src/rlm/repl.md",
+        "prime-agent-runtime/test/test_repl.py"
+      ]
+    },
+    {
+      "domain": "Interactive TUI & Cell Components",
+      "impact": "Medium",
+      "description": "Xonsh cell display and execution rendering merged with upstream autocomplete streaming, Shift+Enter, and theme changes",
+      "files": [
+        "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+        "packages/coding-agent/src/modes/interactive/components/ipython-cell.ts",
+        "packages/coding-agent/src/modes/interactive/components/conversation-components.ts",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.ts"
+      ]
+    },
+    {
+      "domain": "Packaging & Build Scripts",
+      "impact": "Medium",
+      "description": "Upstream v0.10.0 packages native Rust binaries via Cargo and Python release scripts. Fork maintains pnpm workspace, Arch PKGBUILD, and install.xsh.",
+      "files": [
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "pkgbuild/PKGBUILD",
+        "scripts/install.xsh",
+        "install.ps1"
+      ]
+    }
+  ]
+}

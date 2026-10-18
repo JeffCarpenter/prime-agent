@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-core --locked --lib xonsh_kernel_mode_installs_and_probes_its_dependency -- --nocapture",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-unit-green-20261014T025608Z.log",
+  "phase": "green",
+  "status": "failed",
+  "started_at_utc": "2026-10-14T02:56:08.607405+00:00",
+  "scope_note": "--lib selects the actual unit test and avoids compiling unrelated integration targets; prior attempt interrupted, no exit captured",
+  "runner_pid": 37670,
+  "exit_code": 101,
+  "finished_at_utc": "2026-10-14T02:57:26.236048+00:00",
+  "duration_seconds": 63.04140974799975,
+  "failure_class": "build_link_failure_before_tests",
+  "failure_summary": "rust-lld undefined hidden symbols while linking pa-core lib test; no test ran, not an assertion regression"
+}

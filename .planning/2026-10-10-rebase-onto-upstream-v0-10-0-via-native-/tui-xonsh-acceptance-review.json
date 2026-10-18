@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "head": "2da0c33ed",
+    "worktree": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh",
+    "dirty_inputs_preserved": [
+      "crates/pa-tui/src/code_preview/bash.rs",
+      "crates/pa-tui/src/tool_card/bash.rs",
+      "crates/pa-tui/src/tool_card/ipython.rs",
+      "crates/pa-tui/src/tool_card/mod.rs",
+      "crates/pa-tui/src/tree_display.rs"
+    ],
+    "method": "唯讀 diff；mcpls 符號、hover、定義、引用；限讀相關函式及測例；未建未測。",
+    "decision": "父裁本輪唯名標、原碼保存、公開渲染與計行分派、錯輸出、樹摘要；預覽擇行／lexer 延議。"
+  },
+  "visible_behavior": [
+    {
+      "state": "source_observed",
+      "claim": "xonsh 工具以 code 欄入核；mode=\"xonsh\"；結果有 status/stdout/stderr/result/error/durationMs，供 cell 卡解析。",
+      "refs": [
+        "crates/pa-core/src/tools/xonsh.rs:135-145",
+        "crates/pa-core/src/tools/xonsh.rs:195-277",
+        "crates/pa-core/src/kernel/protocol.rs:65-72"
+      ]
+    },
+    {
+      "state": "source_observed",
+      "claim": "xonsh 渲染與計行皆轉 ipython 卡；摺行優先標 xonsh，惟 bashCommands 若可判優勢，先標 bash；樹列 [xonsh: code]，換行／tab 換空格、截前五十字。",
+      "refs": [
+        "crates/pa-tui/src/tool_card/mod.rs:119-131",
+        "crates/pa-tui/src/tool_card/mod.rs:326-339",
+        "crates/pa-tui/src/tool_card/ipython.rs:192-207",
+        "crates/pa-tui/src/tree_display.rs:112-156"
+      ]
+    },
+    {
+      "state": "source_observed",
+      "claim": "xonsh 卡摺行預覽仍呼 preview_ipython_code；該函式僅分 %%bash 與 Python；展開碼仍循 Python 語法高亮／bash magic；xonsh 建構子未見呼用（LSP 引用零，五污檔對照）。此為路由實證，非 shell 預覽實際失真之已測結論。",
+      "refs": [
+        "crates/pa-tui/src/tool_card/ipython.rs:192-205",
+        "crates/pa-tui/src/tool_card/ipython.rs:395-453",
+        "crates/pa-tui/src/code_preview/python.rs:468-477",
+        "crates/pa-tui/src/code_preview/bash.rs:201-232"
+      ]
+    },
+    {
+      "state": "source_observed",
+      "claim": "卡錯誤由 is_error 或 details.status=error 定 ✗；摺行可示錯名，展開 stdout/stderr/result 與 traceback；xonsh 回傳之 errorEname/error 與此形同。尚無 xonsh 實例斷言。",
+      "refs": [
+        "crates/pa-tui/src/tool_card/ipython.rs:40-79",
+        "crates/pa-tui/src/tool_card/ipython.rs:249-258",
+        "crates/pa-tui/src/tool_card/ipython/output.rs:117-169",
+        "crates/pa-tui/src/tool_card/ipython/output.rs:250-275",
+        "crates/pa-core/src/tools/xonsh.rs:231-277"
+      ]
+    },
+    {
+      "state": "source_observed",
+      "claim": "core xonsh bashCommands 僅 count、lines；TUI 解析須 first，故按現碼不觸發 bash 優勢支路。不可逕以 ipython 為 xonsh 成立之證。",
+      "refs": [
+        "crates/pa-core/src/tools/xonsh.rs:263-270",
+        "crates/pa-tui/src/tool_card/ipython_details.rs:29-49",
+        "crates/pa-tui/src/tool_card/ipython.rs:287-292"
+      ]
+    }
+  ],
+  "existing_tests": [
+    {
+      "path": "crates/pa-tui/src/code_preview/bash.rs",
+      "tests": [
+        "code_preview::bash::tests::python_preview_bash_skill_call",
+        "code_preview::bash::tests::ipython_cell_magic_preview"
+      ],
+      "covers": "Python／%%bash 預覽；非 xonsh。"
+    },
+    {
+      "path": "crates/pa-tui/src/tool_card/ipython/tests.rs",
+      "tests": [
+        "tool_card::ipython::tests::done_cell_summary_line",
+        "tool_card::ipython::tests::expanded_renders_code_and_output",
+        "tool_card::ipython::tests::error_cell_summary_line",
+        "tool_card::ipython::tests::expanded_error_cell_shows_traceback",
+        "tool_card::ipython::tests::bash_dominated_cell_renders_as_bash"
+      ],
+      "covers": "均用 name=ipython 之 cell_card；可借其測形，未驗 xonsh。"
+    },
+    {
+      "path": "crates/pa-tui/src/tool_card/mod.rs",
+      "tests": [
+        "tool_card::tests::panel_status_settles_on_error_even_while_partial"
+      ],
+      "covers": "bash 通用 panel，不是 xonsh card 路由。"
+    },
+    {
+      "path": "crates/pa-tui/src/tree_display.rs",
+      "tests": [],
+      "covers": "該檔未見測模組。"
+    }
+  ],
+  "gaps": [
+    {
+      "kind": "test_missing",
+      "claim": "無 xonsh 直測 card render/count：標、概覽與展開、計行、錯誤及輸出未獨證。"
+    },
+    {
+      "kind": "test_missing",
+      "claim": "無 xonsh preview 語言及原生命令選行測；直接 Xonsh shell 語句是否可用，尚屬待驗。"
+    },
+    {
+      "kind": "test_missing",
+      "claim": "無樹列 xonsh code 摘要測；無真 kernel→TUI 聯測，本設計不冒稱有。"
+    },
+    {
+      "kind": "unresolved_separate_gate",
+      "claim": "原 pa-tui 全套 lib 1391 過而 catalog 四敗（exit 101）；同標上游/native 各獨跑四過。全套因果未定，依用戶令禁重跑。",
+      "ref": "native-status.yaml:status.phase_4；validation-run.json:steps"
+    }
+  ],
+  "minimal_new_tests": [
+    {
+      "path": "crates/pa-tui/src/tool_card/ipython/tests.rs",
+      "name": "tool_card::ipython::tests::xonsh_card_routes_summary_expansion_and_count",
+      "assert": "name=xonsh；以 render_tool_card/count_tool_card 公開分派；Overview 唯一行「✓ xonsh」，無 python；All 保原碼（含 Xonsh shell 原字串），列 stdout；兩模式 count==render.len()。舊缺 xonsh 分派版走 generic，應敗。"
+    },
+    {
+      "path": "crates/pa-tui/src/tool_card/ipython/tests.rs",
+      "name": "tool_card::ipython::tests::xonsh_error_shows_name_and_traceback_once",
+      "assert": "以 core 回傳形 {status:error,errorEname,error:{ename,evalue,traceback},stdout,stderr}；Overview「✗ xonsh」及錯名；All 顯 stdout/stderr/traceback 且無重複；計行相等。舊 generic 版應敗。"
+    },
+    {
+      "path": "crates/pa-tui/src/tree_display.rs",
+      "name": "tree_display::tests::xonsh_call_shortens_code",
+      "assert": "name=xonsh，args.code 含換行、tab、長碼；樹列 [xonsh: ...]，空白與五十字截斷遵既有 shorten；不得洩露 JSON fallback。舊無 xonsh 分支版應敗。"
+    }
+  ],
+  "future_validation": {
+    "working_directory": "/home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh",
+    "commands": [
+      "cargo test -p pa-tui --locked --lib tool_card::ipython::tests::xonsh_card_routes_summary_expansion_and_count -- --exact",
+      "cargo test -p pa-tui --locked --lib tool_card::ipython::tests::xonsh_error_shows_name_and_traceback_once -- --exact",
+      "cargo test -p pa-tui --locked --lib tree_display::tests::xonsh_call_shortens_code -- --exact"
+    ],
+    "ran": false,
+    "full_suite": "本役不重跑；catalog 全套敗仍開，限另行因果驗證。"
+  },
+  "recommendation": {
+    "boundary": "本輪僅在新隔離線加三測：tool_card/ipython/tests.rs 二、tree_display.rs 一；如測證現污五檔已有所需行為，毋更動預覽選行與 lexer，更毋增 daemon；原污件不覆。",
+    "accept": "先於缺 xonsh 分派之版確認三測應敗（設計預期，未實跑），再於承接現污五檔版確認三測過；既有 ipython 測不退。全套 catalog 舊敗另列未決。"
+  },
+  "question": null,
+  "deferred_requires_product_decision": [
+    {
+      "path": "crates/pa-tui/src/code_preview/python.rs",
+      "proposed_name": "code_preview::python::tests::xonsh_preview_selects_shell_mutation",
+      "candidate": "echo start && git status → git status 僅候選；混碼選行語義未決，本輪不驗。"
+    },
+    {
+      "path": "crates/pa-tui/src/tool_card/ipython/tests.rs",
+      "proposed_name": "tool_card::ipython::tests::xonsh_card_uses_xonsh_preview",
+      "candidate": "語言 metadata 與 Python/Bash lexer 各異；獨立於 xonsh 名標，待產品義而後立斷言。"
+    }
+  ]
+}

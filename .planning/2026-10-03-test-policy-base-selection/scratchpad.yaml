@@ -1,0 +1,28 @@
+題: 策檢基準誤取，致鉤誣報
+境:
+  枝: xonsh-repl
+  既提: 94bc4a2d2
+  修提: 4f108832b
+  限: 僅修 scripts/check-test-policy.mjs 及其回歸測；既存 staged 污勿動
+因:
+  舊法: 優取 origin/main 之 merge-base a9b5d88b50d，非本枝所據 upstream/main e260085dd8
+  症: 六十八檔二百六十條誣報；諸檔 blob 與 upstream/main 同
+  對: TEST_POLICY_BASE=upstream/main npm run check:test-policy 原已過
+成:
+  源: scripts/check-test-policy.mjs
+  測: scripts/check-test-policy.test.mjs
+  明定: TEST_POLICY_BASE 須為 HEAD 祖；無效則報錯；HEAD 自身亦可作明定基準
+  推送: CI push 取 GITHUB_EVENT_PATH 之 before，須為 HEAD 嚴祖；不取 HEAD 自身
+  請求: CI PR 取 origin/GITHUB_BASE_REF 與 HEAD 之 merge-base；缺枝則報錯
+  本地: 於 origin/main、upstream/main 擇 HEAD 祖；取距 HEAD 最近者，同 HEAD 亦可
+  無基: 報錯請明定 TEST_POLICY_BASE；不默退 HEAD^
+驗:
+  反證: 臨時 git 倉回歸測於舊版敗；改後過；另以推送基準變異驗測能捉漏檢
+  行: node --test scripts/check-test-policy.test.mjs、npm run check:test-policy、npm run check 皆過
+  探: PR 目標、明定祖先、無效明定、無效推送 before、無遠端基準，結果如期
+  鉤: 提交前 npm run check 全過；4f108832b 僅收源檔及測檔
+餘:
+  明定 HEAD: 僅查工作樹與暫存之新違規，不能查 HEAD 既存違規；此為明定覆寫之性
+  強推: before 非 HEAD 祖則閉拒，不默許漏檢
+  旁污: pkgbuild/.SRCINFO 既存 staged，未入本提；其餘未追檔未動
+狀: 已修、已驗、已提；無待行

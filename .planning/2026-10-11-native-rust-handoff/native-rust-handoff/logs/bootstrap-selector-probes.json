@@ -1,0 +1,88 @@
+{
+  "cwd": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/prime-agent-runtime",
+  "project_python": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv/bin/python",
+  "is_prior_bootstrap_temp_venv": false,
+  "setup": [
+    "uv venv /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv",
+    "uv pip install --python /home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv/bin/python -e /home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/prime-agent-runtime xonsh"
+  ],
+  "runs": [
+    {
+      "selector": "test_xonsh_mode_executes_native_shell_syntax",
+      "argv": [
+        "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "test",
+        "-p",
+        "test_repl.py",
+        "-k",
+        "test_xonsh_mode_executes_native_shell_syntax",
+        "-v"
+      ],
+      "exit_code": 0,
+      "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-true.stdout",
+      "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-true.stderr"
+    },
+    {
+      "selector": "test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST",
+      "argv": [
+        "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "test",
+        "-p",
+        "test_repl.py",
+        "-k",
+        "test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST",
+        "-v"
+      ],
+      "exit_code": 5,
+      "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-no-match.stdout",
+      "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-no-match.stderr"
+    }
+  ],
+  "project_python_version": {
+    "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-probe-python-version.stdout",
+    "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selector-probe-python-version.stderr",
+    "exit_code": 0,
+    "version": "Python 3.12.14"
+  },
+  "historic_bootstrap_python_version": {
+    "version": "CPython 3.11.16",
+    "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-post-update-live.log",
+    "lines": [
+      33,
+      34,
+      44
+    ]
+  },
+  "python_3_11_empty_directory_probe": {
+    "interpreter": "/home/jeff/.local/bin/python3.11",
+    "version": "Python 3.11.16",
+    "version_stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-python3.11-version.stdout",
+    "version_stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-python3.11-version.stderr",
+    "cwd": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/prime-agent-runtime",
+    "argv": [
+      "/home/jeff/.local/bin/python3.11",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-empty-unittest-3.11",
+      "-p",
+      "test_repl.py",
+      "-k",
+      "test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST",
+      "-v"
+    ],
+    "exit_code": 0,
+    "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-python3.11-no-match.stdout",
+    "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-python3.11-no-match.stderr",
+    "note": "Empty directory is not the populated project test folder; shows zero-case behavior for this Python 3.11.16 interpreter but does not alone prove -k filtering on project tests."
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "agent": "bootstrap-lead",
+  "state": "done",
+  "scope": {
+    "worktree": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+    "source_head": "2da0c33edc52db1d767b08537f6db8b75778f1c6",
+    "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+    "changed_files": [
+      "crates/pa-core/src/kernel/bootstrap/mod.rs",
+      "crates/pa-core/src/kernel/bootstrap/venv/tests.rs",
+      "crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs"
+    ],
+    "sha256": {
+      "crates/pa-core/src/kernel/bootstrap/mod.rs": "c3f11858d222e71ea56a6d16ff195332df5997d9157355a454c236c79ce6bc6f",
+      "crates/pa-core/src/kernel/bootstrap/venv/tests.rs": "394c1c085b5cef1d16670950a5f148610d3cc5b0de2ea82cb5b19c34799dd750",
+      "crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs": "1ea2afe7ab3cea82837bdf483efd93c1b95bc9a7d2a2a9d62d4ea7482a9baa32"
+    },
+    "production_delta": "Only bootstrap/mod.rs adds (xonsh,xonsh,xonsh) to DEFAULT_RLM_EXTRA_PACKAGES and changes declared array size 12→13.",
+    "test_delta": "venv/tests.rs adds xonsh install/import/probe unit; new ignored live integration verifies fresh kernel venv Python imports xonsh and runs sidecar xonsh protocol test; final adjustment only formatted one assert in integration file."
+  },
+  "validation": {
+    "red": {
+      "unit": {
+        "exit_code": 101,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-red-20261014.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-red-20261014.log"
+      },
+      "live": {
+        "exit_code": 101,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-live-red-20261014.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-live-red-20261014.log",
+        "failure": "ModuleNotFoundError: No module named xonsh"
+      }
+    },
+    "green": {
+      "unit_initial": {
+        "command": "cargo test -p pa-core --locked --lib xonsh_kernel_mode_installs_and_probes_its_dependency -- --nocapture",
+        "exit_code": 101,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/native-xonsh-bootstrap-unit-green-20261014T025608Z.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/native-xonsh-bootstrap-unit-green-20261014T025608Z.log",
+        "failure": "rust-lld undefined hidden symbols during pa-core lib-test link; no test assertion executed"
+      },
+      "unit_incremental_off": {
+        "command": "CARGO_INCREMENTAL=0 cargo test -p pa-core --locked --lib xonsh_kernel_mode_installs_and_probes_its_dependency -- --nocapture",
+        "exit_code": 0,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/bootstrap-sol-unit-incremental-off-20261014T025835Z.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-unit-incremental-off-20261014T025835Z.log",
+        "result": "1 passed, 1165 filtered out"
+      },
+      "live_first": {
+        "command": "cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+        "exit_code": 0,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/bootstrap-sol-live-green-20261014T025754Z.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-live-green-20261014T025754Z.log",
+        "result": "fresh venv installs 51 Python packages including xonsh 0.24.2; sidecar xonsh unittest succeeds"
+      },
+      "live_final_after_format": {
+        "command": "cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+        "exit_code": 0,
+        "status": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/bootstrap-sol-live-final-20261014T030514Z.json",
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-live-final-20261014T030514Z.log",
+        "result": "fresh venv 1 passed, 0 failed; same bootstrapped interpreter"
+      },
+      "rustfmt_targeted": {
+        "command": "rustfmt --edition 2021 --config skip_children=true --check crates/pa-core/src/kernel/bootstrap/mod.rs crates/pa-core/src/kernel/bootstrap/venv/tests.rs crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs",
+        "exit_code": 0,
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-rustfmt-check-20261014T025835Z.log",
+        "scope": "Only three named Rust paths; --config skip_children=true"
+      },
+      "diff_check": {
+        "command": "git diff --check",
+        "exit_code": 0,
+        "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-diff-check-20261014T030514Z.log"
+      }
+    },
+    "rust_analyzer": {
+      "file": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs",
+      "diagnostics": {
+        "errors": 0,
+        "hints": 0,
+        "information": 0,
+        "warnings": 0
+      }
+    }
+  },
+  "test_mechanics": {
+    "rust_bootstrap": "pa_core::kernel::ensure_kernel_python called with fresh tempfile PRIME_AGENT_KERNEL_VENV; PRIME_AGENT_KERNEL_PYTHON removed; PI_PACKAGE_DIR points to isolated checkout",
+    "same_interpreter": "Rust test runs `python -m unittest ... -k test_xonsh_mode_executes_native_shell_syntax` via ensure_kernel_python return path; ReplProcess spawns `sys.executable -m rlm.repl` and sends JSON execute mode=xonsh; verifies xonsh expansion and shell output",
+    "limits": [
+      "Sidecar test prepends checkout prime-agent-runtime/src to PYTHONPATH; verifies chosen interpreter and source sidecar, not exclusive loading from installed runtime wheel.",
+      "Dependency download/cache available in environment; offline-first bootstrap not tested.",
+      "Incremental-enabled pa-core lib-test linker failed with undefined hidden symbols; no code failure proven, and disabling incremental yielded clean unit pass. Cause of linker failure not isolated further.",
+      "No pa-tui/full workspace, packaging, release, or adoption gate validated.",
+      "Original native/main protected inputs not edited; twelve protected hashes were checked by parent, not rerun here."
+    ]
+  },
+  "authorization": {
+    "no_commit": true,
+    "source_changes_limited_to_three_files": true,
+    "shared_planning_status_files_untouched": true
+  }
+}

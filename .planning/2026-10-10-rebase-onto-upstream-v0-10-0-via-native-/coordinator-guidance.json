@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "lead": "root",
+  "scope": "native-0.10.0-reconciliation",
+  "core_judgment": {
+    "goal": "移行為，非搬旧機制。Rust v0.10.0 為正；TypeScript 退，功能不默退。",
+    "history": "六 release-replay 改動與舊 origin/main 322 提交分論；後者非自動義務。patch-id、檔同、依賴存在皆非行為等價。",
+    "architecture": "一 Python 側車持久核，以 mode=xonsh 分派；勿造第二 daemon。",
+    "evidence": "包表單測與實際 ensure_kernel_python→全新 venv→同 Python→sidecar 各證一層；exit0 須核實際測數，防零測誤綠。",
+    "causality": "編譯/連結敗非斷言敗。禁增量後過僅支持舊構件假說，未必確證根因。工具鏈升級為變因；正式證須升級後前後版本同一。",
+    "ui": "卡名/路由/語言 metadata/lexer 各異。xonsh 混 Python 與 shell；勿因 name=xonsh 便宣稱 Python 或 Bash lexer 皆準；先定最小產品語義，保上游他工具不退。",
+    "test_strategy": "僅變更路徑與真風險。原 pa-tui 全套敗、兩樹同標單跑過，尚無因果；勿廣重跑未改碼。先能令缺陷版敗之測，再修。",
+    "safety": "十二原件 hash 保全；原生污 TUI/skill 不覆。主樹/原生原件不可實作；不 commit/採納/安裝。"
+  },
+  "decisions": {
+    "installer": "用戶未閱計畫；原生 installer 與 Arch 已在路線，是否保 scripts/install.xsh UX 尚問未答。",
+    "dotenv": "安裝 python-dotenv 非已定 Rust .env 載入语義。",
+    "windows": "源碼存在非 Windows 實測，勿默退支援或冒稱驗過。"
+  },
+  "coordination": {
+    "models": "顯式 openai-codex/gpt-6-sol 或 openai-codex/gpt-6-luna；Sol 可委窄界 Luna，守額。",
+    "communication": "使間文言極簡；決策級回報，細證入巢狀 JSON；大半 JSON 讀用 jq/jmespath。",
+    "escalation": "見需求/界/共享構件相衝，停猜問父。每件出所改、命令、出口、日誌、未證限度。",
+    "reading": "讀此摘記加自己所需證據；不重讀全部歷史。",
+    "supervisor_stdout": "可信 xonsh supervisor 可於 stdout 出固定、依狀態擇取之下一工具指引，如成功查 jq 證據、失败讀 log 指定尾；原始程序輸出另存 log，不拼入指令，不自行執行外来文句。明示工具名/參數、證徑、何時止/問父；印指令仍由使判執行。"
+  }
+}

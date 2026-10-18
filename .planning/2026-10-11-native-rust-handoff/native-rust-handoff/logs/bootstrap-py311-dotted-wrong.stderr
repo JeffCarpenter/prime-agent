@@ -1,0 +1,11 @@
+test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST (unittest.loader._FailedTest.test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST) ... ERROR
+
+======================================================================
+ERROR: test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST (unittest.loader._FailedTest.test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST)
+----------------------------------------------------------------------
+AttributeError: type object 'ReplTest' has no attribute 'test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

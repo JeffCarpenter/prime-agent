@@ -1,0 +1,24 @@
+observed_at_utc: '2026-10-14T05:04:31.140132+00:00'
+method: cargo clean --manifest-path <worktree>/Cargo.toml --target-dir <worktree>/target
+results:
+- target: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/target
+  exit_code: 101
+  output: ''
+  stderr: "error: cannot clean `/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-20261011/target`:\
+    \ missing or invalid `CACHEDIR.TAG` file\n  |\n  = note: cleaning has been aborted\
+    \ to prevent accidental deletion of unrelated files\n"
+- target: /home/jeff/code/fork/prime-agent/.worktrees/feat-native-rust-xonsh/target
+  exit_code: 0
+  output: ''
+  stderr: '     Removed 4073 files, 1.8GiB total
+
+    '
+- target: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/target
+  exit_code: 0
+  output: ''
+  stderr: '     Removed 9187 files, 6.6GiB total
+
+    '
+free_bytes_before: 739189227520
+free_bytes_after: 747692498944
+preserved_shared_target: /home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target

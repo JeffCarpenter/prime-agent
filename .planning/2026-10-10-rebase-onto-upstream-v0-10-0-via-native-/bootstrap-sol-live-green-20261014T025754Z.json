@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "command": "cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+  "workdir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "target_dir": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "log": "/home/jeff/code/fork/prime-agent/.planning/2026-10-10-rebase-onto-upstream-v0-10-0-via-native-/logs/bootstrap-sol-live-green-20261014T025754Z.log",
+  "status": "passed",
+  "started_at_utc": "2026-10-14T02:57:54.561087+00:00",
+  "source_scope": [
+    "crates/pa-core/src/kernel/bootstrap/mod.rs",
+    "crates/pa-core/src/kernel/bootstrap/venv/tests.rs",
+    "crates/pa-core/tests/kernel_bootstrap_xonsh_live.rs"
+  ],
+  "runner_pid": 38354,
+  "exit_code": 0,
+  "finished_at_utc": "2026-10-14T02:58:09.764549+00:00",
+  "duration_seconds": 6.45515106700077
+}

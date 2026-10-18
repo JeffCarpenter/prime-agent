@@ -1,0 +1,15 @@
+{
+  "argv": "CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target rustup run stable cargo test -p pa-core --locked --test kernel_bootstrap_xonsh_live -- --ignored --nocapture",
+  "cwd": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap",
+  "stdout_stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-exact-dotted-cold-live.log",
+  "status_file": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-exact-dotted-cold-live.status",
+  "exit_code": 0,
+  "python_version": "CPython 3.11.16",
+  "selected_full_id": "test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax",
+  "toolchain": {
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)"
+  },
+  "target": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-validation-target",
+  "incremental": "0"
+}

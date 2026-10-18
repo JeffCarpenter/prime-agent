@@ -1,0 +1,52 @@
+{
+  "interpreter": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv311/bin/python",
+  "version": "CPython 3.11.16",
+  "cwd": "/home/jeff/code/fork/prime-agent/.worktrees/native-rust-xonsh-bootstrap/prime-agent-runtime",
+  "is_rust_cold_bootstrap_venv": false,
+  "runs": [
+    {
+      "kind": "exact-id-present",
+      "argv": [
+        "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv311/bin/python",
+        "-m",
+        "unittest",
+        "-v",
+        "test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax"
+      ],
+      "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-dotted-true.stdout",
+      "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-dotted-true.stderr",
+      "exit_code": 0
+    },
+    {
+      "kind": "exact-id-missing",
+      "argv": [
+        "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv311/bin/python",
+        "-m",
+        "unittest",
+        "-v",
+        "test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST"
+      ],
+      "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-dotted-wrong.stdout",
+      "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-dotted-wrong.stderr",
+      "exit_code": 1
+    },
+    {
+      "kind": "old-discovery-filter-missing",
+      "argv": [
+        "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-selection-probe-venv311/bin/python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "test",
+        "-p",
+        "test_repl.py",
+        "-k",
+        "test.test_repl.ReplTest.test_xonsh_mode_executes_native_shell_syntax_DOES_NOT_EXIST"
+      ],
+      "stdout": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-filter-wrong.stdout",
+      "stderr": "/home/jeff/code/fork/prime-agent/.planning/2026-10-11-native-rust-handoff/native-rust-handoff/logs/bootstrap-py311-filter-wrong.stderr",
+      "exit_code": 0
+    }
+  ]
+}

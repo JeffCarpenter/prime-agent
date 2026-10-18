@@ -1,0 +1,125 @@
+{
+  "session": {
+    "worktree": "/home/jeff/code/fork/prime-agent",
+    "branch": "xonsh-installer-port",
+    "plan_dir": "/home/jeff/code/fork/prime-agent/.planning/2026-09-24-provider-model-discovery",
+    "compaction": "state also mirrored here in JSON per user preference"
+  },
+  "artifacts": {
+    "frozen_audit_workspace": "/tmp/prime-registry-causal-shadhtwu",
+    "public_catalog_assets": "/tmp/prime-codex-phase3-catalog",
+    "baseline_typecheck_log": "/tmp/codex-phase3-types.log",
+    "final_findings": "/home/jeff/code/fork/prime-agent/.planning/2026-09-26T013940Z-codex-live-model-discovery/findings.md"
+  },
+  "causal_verdict": {
+    "method": "frozen snapshot, identical code/tests, only PI_PACKAGE_DIR differs",
+    "missing_assets": {
+      "failed": 9,
+      "passed": 47,
+      "interpretation": "7 catalog-env failures + live-only RED + cost-shape break"
+    },
+    "full_assets": {
+      "failed": 2,
+      "passed": 54,
+      "interpretation": "live-only RED (feature) + modelOverrides cost.input assertion vs tagged rates shape"
+    },
+    "distal_cause_group_env": "packages/coding-agent/catalog/models.bundled.json absent (un-committable generated asset) -> compiled tiny fallback",
+    "real_code_item": "applyModelOverride writes {status:'known',rates}; test asserts cost.input -> update test to accessor/rates"
+  },
+  "workers": {
+    "cost-persistence": {
+      "id": "sub-16931839",
+      "status": "completed",
+      "report": "persistence-worker.md",
+      "claims": "session v4 migration, 57 green, mutation kill; Biome --write formatted 10 worktree files; 34 src/57 test lines in slice",
+      "verification": "session-manager.ts lacks v4 markers - verify actual edit location"
+    },
+    "codex-registry-implementation": {
+      "id": "sub-4a9008d0",
+      "status": "completed",
+      "report": "registry-worker.md NOT updated by this worker",
+      "verification": "model-registry.ts contains status:'unknown' marker - verify live-only merge landed"
+    },
+    "ai-cost-contract": {
+      "id": "sub-f6ef89f5",
+      "status": "completed",
+      "report": "ai-worker.md MISSING",
+      "claims": "63/63 green, mutation kills verified, strict migration deferred"
+    },
+    "released": [
+      "codex-registry read-only (sub-de262912)"
+    ]
+  },
+  "decisions": [
+    "slug-only live models: custom-model client defaults (reasoning false, text-only, 128000/16384), explicit client policy not wire claims",
+    "catalog metadata precedence; 5-min cache; no default changes; no live provider calls; no commits"
+  ],
+  "next_steps": [
+    "verify actual worker edits via git diff vs session-start numstat",
+    "reconcile cost.rates override-shape break in test",
+    "rerun tsgo --noEmit; fix all remaining type errors coordinated",
+    "focused tests: ai models-cost, model-registry, session file-operations, usage",
+    "test-first selector/summary regressions; changelog fragments; aggregate line budget; npm run check + check:test-policy"
+  ],
+  "verification": {
+    "method": "git diff --numstat compared to session-start snapshot",
+    "confirmed_worker_edits": {
+      "model-registry.ts": "30/21 -> 106/87 (registry implementation landed)",
+      "model-registry.test.ts": "34/0 -> 74/0 (new tests added)",
+      "session-manager.ts": "33/1 and file-operations.test.ts 57/2 (persistence landed)",
+      "ai models.ts": "29/6 -> 38/6; openai-completions.ts 24/17 (reported-cost guard)",
+      "usage.ts": "56/28"
+    },
+    "reports_missing": [
+      "ai-worker.md (never written)",
+      "registry-worker.md not updated by implementation worker"
+    ]
+  },
+  "typecheck": {
+    "baseline_31": "session start",
+    "after_workers": 19,
+    "after_accessor_migration": 0,
+    "log": "/tmp/codex-phase3-types-3.log"
+  },
+  "accessor_migration_edits": [
+    "examples/extensions/custom-footer.ts",
+    "examples/extensions/subagent/index.ts",
+    "test/agent-session-recursion.test.ts",
+    "test/catalog-compat.test.ts",
+    "test/context-tree.test.ts",
+    "test/model-registry.test.ts (2 payload sites + tagged override expectation)",
+    "test/suite/agent-session-compaction.test.ts",
+    "test/suite/agent-session-runtime.test.ts"
+  ],
+  "validation": {
+    "typecheck": "0 errors (baseline 31 -> 19 after workers -> 0 after accessor migration)",
+    "tests": {
+      "test/model-registry.test.ts + test/catalog-compat.test.ts (PI_PACKAGE_DIR=full assets)": "69/69 passed",
+      "test/agent-session-recursion.test.ts": "89/89 passed",
+      "test/context-tree.test.ts + suite/agent-session-compaction.test.ts": "passed",
+      "test/suite/agent-session-runtime.test.ts": "2 failed / 37 passed \u2014 PROVEN pre-existing at git-archive HEAD counterfactual (/tmp/prime-head-cf); live-network catalog dependence, not our diff"
+    }
+  },
+  "completion": {
+    "phase3": "complete",
+    "phase4": "complete",
+    "final_check": "npm run check green (biome/test-policy/tsgo/installer/push-guard/browser-smoke)",
+    "line_budget": {
+      "production_adds": 380,
+      "test_adds_incl_new_files": 308
+    },
+    "mutation_proofs": [
+      "usage unknown-contributor invariant (ai worker)",
+      "session v3 conversion (persistence worker)",
+      "context-tree unknown-cost render",
+      "sessions-table price-unknown cell"
+    ],
+    "pre_existing_failures": {
+      "file": "test/suite/agent-session-runtime.test.ts",
+      "tests": 2,
+      "proven_at": "git-archive HEAD counterfactual /tmp/prime-head-cf",
+      "cause": "live network provider-catalog dependence"
+    },
+    "commit": "none created"
+  }
+}

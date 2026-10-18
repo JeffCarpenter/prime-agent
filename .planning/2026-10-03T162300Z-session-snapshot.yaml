@@ -1,0 +1,45 @@
+# 策論劄記·十九·會話摘錄（Session Snapshot 2026-10-03 16:21 PDT）
+
+緣由:
+  自T10至T15: Anthropic、Gemini、用過模型、LSP修復盡畢
+  自T12至HEAD: Ollama發現已納冊（fdab11e2f，99測試）
+  T16已成: 快取行為7項測試，共用輔助提取（4b85e6323）
+  T17發令: 五項確證缺陷待修（Ollama共用逾時、hints過期、指紋缺headers、競態、無退避）
+  T17中斷: 會話限制觸發，dispatched于ac993a8a2818a88db
+
+大義:
+  一、凡行之有效者悉當陳列: 聚合目錄、活模型、既用模型於一覽
+  二、資費審慎，疑則明闕: 未知價格不假$0，指紋嚴格隔離
+  三、層級代理制: 調度者排序，使臣修顯缺，同檔序列化，無遞迴
+  四、代碼導航用LSP、不grep讀檔
+  五、測事律令: 增行不逾源碼增行
+
+要點:
+  已納冊:
+    - 4b85e6323: model-registry.ts 源碼+77/測事+74（added計，淨增爭議）
+    - a100ee391: used-models.ts 畸形快取修復（源碼+3/測事+3）
+    - fdab11e2f: Ollama發現完成
+
+  待修:
+    - T17五項確證: Ollama逾時降級/hints陳舊/指紋缺標頭/refresh競態/失敗無退避
+    - model-registry.ts 一行孤註（anthropic.ts#85「Stealth mode」）
+
+  用家決策待下:
+    - usedModelFor借api/baseUrl/compat（混合provider風險）
+    - 回應體無上限與吞錯診斷
+    - Anthropic live條目未複製headers/compat
+
+  已閣置:
+    - 404觸發退役: 期望案已文檔化但無決策
+    - Gemini探針: 無鑰，task 4.14結案
+    - probe-models.sh/mjs: 手動用，不入CI
+
+  遠端:
+    - backup/xonsh-repl-20261002指e285f9f4d（強推前狀態）
+    - origin/xonsh-repl現a100ee391（= 本地HEAD）
+    - xonsh-repl領先256、落後20（相對main）
+
+附註:
+  - 使臣授權: 持檔者於自檔內見任何顯缺皆可修（測事附上、行律守之）
+  - LSP修復: ~/.claude/local-plugins/ts7-lsp運行tsc --lsp（已入CLAUDE.md）
+  - 未納冊: .planning/、pkgbuild/*.zst、report/、scripts/tests/、sitrep.prompt.md
