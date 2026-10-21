@@ -71,3 +71,5 @@ test-compile-*.log
 pkgbuild/.makepkg-*
 pkgbuild/src/
 pkgbuild/pkg/
+pkgbuild/prime-agent
+log
