@@ -217,7 +217,7 @@
         "git config user.name t",
         "echo original > tracked.txt",
         "git add tracked.txt",
-        "GIT_AUTHOR_DATE='2005-04-07T22:13:13' GIT_COMMITTER_DATE='2005-04-07T22:13:13' git commit -qm init"
+        "GIT_AUTHOR_DATE='2005-04-07T22:13:13 +0000' GIT_COMMITTER_DATE='2005-04-07T22:13:13 +0000' git commit -qm init"
       ],
       "command": "git reset --hard",
       "result": {

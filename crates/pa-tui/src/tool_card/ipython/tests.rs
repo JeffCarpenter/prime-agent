@@ -403,3 +403,106 @@ fn bash_minority_cell_stays_python() {
     );
     assert_eq!(bash_dominated_stats(&card), None);
 }
+
+// These use the public card router, so a missing xonsh route cannot pass by
+// calling the ipython renderer directly.
+#[test]
+fn xonsh_card_routes_summary_expansion_and_count() {
+    let mut card = cell_card(
+        "echo xonsh_only; print('cell')",
+        json!({
+            "status": "ok",
+            "stdout": "xonsh-stdout-only\n",
+            "durationMs": 7,
+            "bashCommands": { "count": 1, "lines": 1 },
+        }),
+        false,
+        false,
+    );
+    card.name = "xonsh".into();
+    for detail in [Detail::Overview, Detail::All] {
+        let rows = super::super::render_tool_card(&card, 0, detail, &theme(), 120, true);
+        let flat: Vec<String> = rows.iter().map(text_of).collect();
+        assert!(flat[0].contains("✓ xonsh"), "got: {flat:?}");
+        assert!(!flat[0].contains("python"), "got: {flat:?}");
+        if matches!(detail, Detail::Overview) {
+            assert_eq!(flat.len(), 1, "got: {flat:?}");
+        } else {
+            assert!(
+                flat.iter()
+                    .any(|row| row.contains("echo xonsh_only; print('cell')")),
+                "got: {flat:?}"
+            );
+            assert!(
+                flat.iter().any(|row| row.contains("xonsh-stdout-only")),
+                "got: {flat:?}"
+            );
+        }
+        assert_eq!(
+            super::super::count_tool_card(&card, 0, detail, &theme(), 120, true),
+            rows.len(),
+            "got: {flat:?}"
+        );
+    }
+}
+
+#[test]
+fn xonsh_error_shows_name_and_traceback_once() {
+    let mut card = cell_card(
+        "raise RuntimeError('xonsh-fault')",
+        json!({
+            "status": "error",
+            "errorEname": "RuntimeError",
+            "error": {
+                "ename": "RuntimeError",
+                "evalue": "xonsh-fault",
+                "traceback": ["Traceback (most recent call last):", "RuntimeError: xonsh-fault"],
+            },
+            "stdout": "xonsh-out-marker\n",
+            "stderr": "xonsh-err-marker\n",
+        }),
+        true,
+        false,
+    );
+    card.name = "xonsh".into();
+    for detail in [Detail::Overview, Detail::All] {
+        let rows = super::super::render_tool_card(&card, 0, detail, &theme(), 120, true);
+        let flat: Vec<String> = rows.iter().map(text_of).collect();
+        assert!(flat[0].contains("✗ xonsh"), "got: {flat:?}");
+        assert!(flat[0].contains("RuntimeError"), "got: {flat:?}");
+        if matches!(detail, Detail::All) {
+            // The renderer labels stdout and stderr by their distinct styles.
+            for (marker, color) in [
+                ("xonsh-out-marker", ThemeColor::ToolOutput),
+                ("xonsh-err-marker", ThemeColor::Muted),
+            ] {
+                let matches: Vec<_> = rows
+                    .iter()
+                    .flat_map(|row| row.iter())
+                    .filter(|span| span.content.contains(marker))
+                    .collect();
+                assert_eq!(matches.len(), 1, "{marker}: {flat:?}");
+                assert_eq!(matches[0].style, theme().fg_style(color), "{marker}");
+            }
+            for marker in [
+                "xonsh-out-marker",
+                "xonsh-err-marker",
+                "Traceback (most recent call last):",
+                "RuntimeError: xonsh-fault",
+            ] {
+                assert_eq!(
+                    flat.iter().filter(|row| row.contains(marker)).count(),
+                    1,
+                    "{marker}: {flat:?}"
+                );
+            }
+        } else {
+            assert_eq!(flat.len(), 1, "got: {flat:?}");
+        }
+        assert_eq!(
+            super::super::count_tool_card(&card, 0, detail, &theme(), 120, true),
+            rows.len(),
+            "got: {flat:?}"
+        );
+    }
+}

@@ -125,7 +125,7 @@ pub fn render_tool_card(
     show_images: bool,
 ) -> Vec<Line> {
     match card.name.as_str() {
-        "ipython" => ipython::render(card, frame, detail, theme, width, show_images),
+        "ipython" | "xonsh" => ipython::render(card, frame, detail, theme, width, show_images),
         "bash" => bash::render(card, frame, detail, theme, width, show_images),
         _ => generic::render(card, frame, detail, theme, width, show_images),
     }
@@ -333,7 +333,7 @@ pub(crate) fn count_tool_card(
     show_images: bool,
 ) -> usize {
     match card.name.as_str() {
-        "ipython" => ipython::count(card, frame, detail, theme, width, show_images),
+        "ipython" | "xonsh" => ipython::count(card, frame, detail, theme, width, show_images),
         "bash" => bash::count(card, frame, detail, theme, width, show_images),
         _ => generic::count(card, frame, detail, theme, width, show_images),
     }

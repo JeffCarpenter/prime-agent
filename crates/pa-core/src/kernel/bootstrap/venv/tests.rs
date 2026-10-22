@@ -72,6 +72,38 @@ fn dependency_names_parse() {
     );
 }
 
+/// Xonsh execution cannot work in a freshly bootstrapped kernel without this extra.
+/// The install args and readiness probe must agree on the same import.
+#[test]
+fn xonsh_kernel_mode_installs_and_probes_its_dependency() {
+    assert!(
+        default_rlm_extra_uv_args().contains(&"xonsh"),
+        "a new kernel venv must install xonsh for xonsh execution mode"
+    );
+    assert!(
+        super::super::default_rlm_extra_import_names().contains(&"xonsh"),
+        "readiness must verify that xonsh is importable"
+    );
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let python = dir.path().join("python");
+        std::fs::write(
+            &python,
+            "#!/bin/sh\ncase \"$2\" in *\"import xonsh\"*) exit 1;; esac\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let missing = missing_rlm_extra_import_labels(python.to_str().unwrap());
+        assert!(
+            missing.contains(&"xonsh"),
+            "a broken xonsh import must fail the kernel readiness probe: {missing:?}"
+        );
+    }
+}
+
 fn skill(import_name: &str, path: &str, hash: &str) -> BootstrapPythonSkill {
     BootstrapPythonSkill {
         import_name: import_name.to_string(),

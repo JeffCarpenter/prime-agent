@@ -194,11 +194,15 @@ fn collapsed_line(
     let is_bash_cell = parse_ipython_bash_cell(code).is_some();
     let language_label = if dominant.is_some() {
         "bash".to_string()
+    } else if card.name == "xonsh" {
+        "xonsh".to_string()
     } else {
         match (is_bash_cell, &preview.language) {
             (true, CodePreviewLanguage::Python) => "bash \u{00b7} python".to_string(),
             (true | false, CodePreviewLanguage::Bash) => "bash".to_string(),
             (false, CodePreviewLanguage::Python) => "python".to_string(),
+            (false, CodePreviewLanguage::Xonsh) => "xonsh".to_string(),
+            (true, CodePreviewLanguage::Xonsh) => "bash \u{00b7} xonsh".to_string(),
         }
     };
 

@@ -142,6 +142,7 @@ fn format_tool_call(theme: &Theme, name: &str, arguments: &Value) -> Line {
         "edit" => format!("[edit: {}]", shorten_path(&arg("path"))),
         "bash" => format!("[bash: {}]", shorten(&arg("command"))),
         "ipython" => format!("[ipython: {}]", shorten(&arg("code"))),
+        "xonsh" => format!("[xonsh: {}]", shorten(&arg("code"))),
         _ => {
             let serialized = serde_json::to_string(arguments).unwrap_or_default();
             let truncated: String = serialized.chars().take(40).collect();
@@ -386,4 +387,25 @@ pub fn searchable_text(node: &TreeNodeData) -> String {
         _ => {}
     }
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::{ColorMode, Theme};
+    use serde_json::json;
+
+    #[test]
+    fn xonsh_call_shortens_code() {
+        let theme = Theme::builtin("prime", ColorMode::TrueColor);
+        let code = format!("Ω\tλ\n{}終", "猫".repeat(48));
+        let row = format_tool_call(&theme, "xonsh", &json!({ "code": code }));
+        let text: String = row.iter().map(|span| span.content.as_str()).collect();
+        assert_eq!(text, format!("[xonsh: Ω λ {}...]", "猫".repeat(46)));
+        assert!(!text.contains("\n") && !text.contains("\t"));
+        assert!(
+            !text.contains("\"code\""),
+            "must not use JSON fallback: {text}"
+        );
+    }
 }

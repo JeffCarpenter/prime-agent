@@ -251,6 +251,15 @@ mod tests {
         let id = pa_telemetry::install_id(&agent_dir).unwrap();
         let after = telemetry_status_text(&settings, &agent_dir);
         assert!(after.contains(&format!("Installation id: {id}")));
-        assert!(after.contains("Endpoint: nowhere (development build)"));
+        let expected_endpoint = if cfg!(debug_assertions) {
+            "nowhere (development build)"
+        } else {
+            pa_telemetry::ANALYTICS_ENDPOINT
+        };
+        assert!(
+            after.contains(&format!("Endpoint: {expected_endpoint}")),
+            "actual after: {after:?}, debug_assertions: {}",
+            cfg!(debug_assertions)
+        );
     }
 }

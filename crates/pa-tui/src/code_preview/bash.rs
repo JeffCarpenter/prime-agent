@@ -201,6 +201,7 @@ pub(crate) fn re(pattern: &str) -> Rx {
 pub enum CodePreviewLanguage {
     Bash,
     Python,
+    Xonsh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,6 +221,13 @@ impl CodePreview {
     pub(crate) fn python(text: impl Into<String>) -> Self {
         CodePreview {
             language: CodePreviewLanguage::Python,
+            text: text.into(),
+        }
+    }
+
+    pub(crate) fn xonsh(text: impl Into<String>) -> Self {
+        CodePreview {
+            language: CodePreviewLanguage::Xonsh,
             text: text.into(),
         }
     }

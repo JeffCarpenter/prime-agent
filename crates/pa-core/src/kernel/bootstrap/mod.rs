@@ -40,7 +40,7 @@ pub struct KernelPythonSkill {
 
 /// The default extra packages pre-installed in the kernel venv and promised to
 /// the model in the system prompt.
-pub const DEFAULT_RLM_EXTRA_PACKAGES: [(&str, &str, &str); 12] = [
+pub const DEFAULT_RLM_EXTRA_PACKAGES: [(&str, &str, &str); 13] = [
     // (uvArg, importName, promptLabel)
     ("requests", "requests", "requests"),
     ("httpx", "httpx", "httpx"),
@@ -54,6 +54,7 @@ pub const DEFAULT_RLM_EXTRA_PACKAGES: [(&str, &str, &str); 12] = [
     ("lxml", "lxml", "lxml"),
     ("pydantic", "pydantic", "pydantic"),
     ("tyro", "tyro", "tyro"),
+    ("xonsh", "xonsh", "xonsh"),
 ];
 
 #[must_use]
