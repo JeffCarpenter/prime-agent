@@ -362,10 +362,21 @@ fn auth_gated_bundled_skills() -> BTreeSet<String> {
         .collect()
 }
 
+/// Conditionally-available bundled skills: the websearch skill rides with its
+/// credential (an unset `bundledSkills.websearch` resolves with the stored or
+/// ambient Serper key), so keyless installs exclude it — it must never be
+/// documented as static core-tool surface; the dynamic skills inventory
+/// renders it only on installs where it resolves enabled.
+fn settings_gated_bundled_skills() -> BTreeSet<String> {
+    ["websearch".to_string()].into_iter().collect()
+}
+
 /// (import name, public functions) for every bundled Python skill that is
-/// always available (auth-gated integrations excluded).
+/// always available (auth-gated integrations and the conditionally-available
+/// websearch skill excluded).
 fn bundled_python_skills() -> Vec<(String, Vec<String>)> {
     let gated = auth_gated_bundled_skills();
+    let settings_gated = settings_gated_bundled_skills();
     sorted_bundled_skills()
         .into_iter()
         .filter(|skill| {
@@ -374,6 +385,7 @@ fn bundled_python_skills() -> Vec<(String, Vec<String>)> {
                 .as_ref()
                 .is_none_or(|python| !gated.contains(&python.import_name))
         })
+        .filter(|skill| !settings_gated.contains(&skill.name))
         .filter_map(|skill| {
             let python = skill.python?;
             let mut functions = python_skill_functions(&python.package_path)
