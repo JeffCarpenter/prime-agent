@@ -9,7 +9,7 @@ _release_dir() {
     printf '%s/target/release-package/prime-agent-%s-linux-x64' "$srcdir/$pkgname" "$version"
 }
 pkgname=prime-agent
-pkgver=0.10.0.r2.g2da0c33
+pkgver=0.10.0.r118.g62b0a0c
 pkgrel=1
 pkgdesc='Self-improving coding and research agent with a persistent Python kernel'
 arch=('x86_64')
@@ -18,7 +18,7 @@ license=('MIT')
 depends=('python>=3.11' 'uv' 'xonsh' 'python-dill' 'python-httpx2' 'python-mcp' 'python-tyro')
 makedepends=('cargo' 'git' 'make' 'python' 'binutils')
 optdepends=('python-httpx: websearch skill' 'python-pillow: attach-image skill')
-source=("$pkgname::git+file://$_repo_root#branch=stable")
+source=("$pkgname::git+file://$_repo_root#branch=pkgbuild")
 sha256sums=('SKIP')
 
 pkgver() {
@@ -27,18 +27,6 @@ pkgver() {
       git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
       printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
     )
-}
-
-prepare() {
-    local source_commit
-    cd "$srcdir/$pkgname" || return
-
-    source_commit=$(git rev-parse HEAD) || return
-    if [[ "$source_commit" != "$_source_commit" ]]; then
-        printf '==> ERROR: source commit mismatch: expected %s, got %s\n' \
-            "$_source_commit" "$source_commit" >&2
-        return 1
-    fi
 }
 
 build() {
