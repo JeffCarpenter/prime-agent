@@ -13,7 +13,18 @@ Build natively in a Debian or Ubuntu environment with debhelper 13, a C
 compiler/linker (build-essential), Python 3, and packaged Cargo and rustc
 1.88 or newer. The locked dependency set requires that Rust version.
 dpkg-checkbuilddeps checks installed Debian packages; a rustup toolchain
-alone does not satisfy the cargo/rustc Build-Depends declarations.
+uses the explicit pkg.prime-agent.rustup build profile instead:
+
+    DEB_BUILD_PROFILES=pkg.prime-agent.rustup make package-deb
+
+This profile uses Cargo and rustc from PATH (or CARGO/RUSTC overrides).
+Only the packaged Rust dependencies are omitted; all other Debian build
+dependencies are still checked. Cargo enforces the locked dependencies'
+rust-version requirements during compilation. No -d dependency-check
+bypass is needed. To check dependencies separately for this profile:
+
+    dpkg-checkbuilddeps -B -Ppkg.prime-agent.rustup
+
 Ubuntu versioned cargo-1.89 and rustc-1.89 packages are also supported.
 Select them with CARGO=cargo-1.89 RUSTC=rustc-1.89 when invoking the build.
 
@@ -49,6 +60,9 @@ For a release source archive, run make package-deb CATALOG_ASSETS_DIR=.
 Run the build as an unprivileged user. The package build runs a --version
 smoke test unless DEB_BUILD_OPTIONS contains nocheck. Run make check
 separately for the repository's full compilation, lint, and test gates.
+The profile's dependency-resolution regression checks run with:
+
+    python3 scripts/test_debian_builddeps.py
 
 Only debian/cargo-target, debian/catalog-assets, and debhelper's generated
 files are removed by the package clean step. Developer target/ artifacts,

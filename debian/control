@@ -4,8 +4,8 @@ Priority: optional
 Maintainer: Jeff C <pub@jeffc.ca>
 Build-Depends:
  debhelper-compat (= 13),
- cargo (>= 1.88) | cargo-1.89,
- rustc (>= 1.88) | rustc-1.89,
+ cargo (>= 1.88) <!pkg.prime-agent.rustup> | cargo-1.89 <!pkg.prime-agent.rustup>,
+ rustc (>= 1.88) <!pkg.prime-agent.rustup> | rustc-1.89 <!pkg.prime-agent.rustup>,
  python3,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
