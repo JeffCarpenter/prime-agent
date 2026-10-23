@@ -98,7 +98,14 @@ The installed executable, bundled Python runtime sources, skills, and catalogs.
 .SH NOTES
 The Python kernel environment is provisioned by
 .B uv
-on first use. Model access and runtime provisioning may require network access.
+on first use. Install uv separately using the upstream installation method;
+Prime Agent searches PATH and ~/.local/bin/uv.
+If uv is missing, it prints installation guidance without running an installer.
+Alternatively, set
+.B PRIME_AGENT_KERNEL_PYTHON
+to the interpreter in a prepared Python environment containing the current
+runtime and its required packages.
+Model access and runtime provisioning may require network access.
 .SH EXAMPLES
 Start an interactive session:
 .PP

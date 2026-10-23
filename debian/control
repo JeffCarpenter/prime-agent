@@ -17,8 +17,8 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  ca-certificates,
- uv,
 Description: coding agent harness with a persistent Python control environment
  Prime Agent provides a terminal interface and session engine for coding
  agents, with a persistent Python runtime and bundled skills.
- The Python kernel environment is provisioned by uv on first use.
+ The Python kernel environment is provisioned on first use using a
+ separately installed uv executable, or a prepared Python environment.

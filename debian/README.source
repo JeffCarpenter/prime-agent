@@ -31,8 +31,12 @@ Select them with CARGO=cargo-1.89 RUSTC=rustc-1.89 when invoking the build.
 Like the formula, this definition uses cargo build --release --locked.
 Cargo may download locked dependencies. This is downstream packaging, not
 an offline Debian archive submission with individually packaged Rust crates.
-The runtime depends on a Debian package providing uv; make that package
-available for the target distribution before installing Prime Agent.
+The default runtime bootstrap requires a separately installed uv executable.
+Prime Agent finds uv on PATH or at ~/.local/bin/uv; it does not require a
+Debian package providing uv. If uv is absent, the application prints the
+upstream installer command as guidance; it does not run that command.
+Alternatively, PRIME_AGENT_KERNEL_PYTHON can select the interpreter in a
+prepared environment containing the current runtime and required packages.
 
 Release source archives already contain models.bundled.json and
 mcp-services.bundled.json at their root. From an ordinary working checkout,
@@ -91,14 +95,12 @@ Lintian
 Check the generated changes file with warnings treated as failures:
 
     lintian --fail-on error,warning --show-overrides \
-        ../prime-agent_0.10.1-1_amd64.changes
+        ../prime-agent_0.10.1-2_amd64.changes
 
 Adjust the version and architecture for the build being checked.
-debian/prime-agent.lintian-overrides documents two downstream exceptions:
+debian/prime-agent.lintian-overrides documents the downstream YAML exception:
 the libyaml signature comes from the locked libyaml-rs Rust dependency,
-which cannot use the system C libyaml through a linker change; and this
-downstream package has no Debian archive ITP bug to close. Re-review the
-YAML exception when that dependency changes, and remove the ITP exception
-before a Debian archive upload. Runtime Markdown files beside the binary
-can also produce informational documentation-location notices; they are
-consumed as runtime resources and retain the release layout.
+which cannot use the system C libyaml through a linker change. Re-review
+this exception when that dependency changes. Runtime Markdown files beside
+the binary can also produce informational documentation-location notices;
+they are consumed as runtime resources and retain the release layout.

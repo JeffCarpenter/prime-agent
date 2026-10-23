@@ -1,3 +1,11 @@
+prime-agent (0.10.1-2) UNRELEASED; urgency=medium
+
+  * Accept upstream-installed uv without requiring a Debian uv package.
+  * Document uv discovery and prepared Python environment support.
+  * Remove the first-upload Lintian exception after the initial revision.
+
+ -- Jeff C <pub@jeffc.ca>  Fri, 23 Oct 2026 19:24:16 +0000
+
 prime-agent (0.10.1-1) UNRELEASED; urgency=medium
 
   * Extract Debian packaging from the Homebrew source-build formula.
