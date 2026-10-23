@@ -4,11 +4,18 @@
 __pycache__/
 steer-queue-runs/
 
-# local gate logs (driver downloads)
+# Local runtime and gate logs
+log/
 clippy-*.log
 fmt-*.log
 tests-*.log
 test-compile-*.log
+
+# Debian package archives and manifests copied into the checkout
+/*.deb
+/*.ddeb
+/*.buildinfo
+/*.changes
 
 # Debian package build output
 /debian/.debhelper/
@@ -17,5 +24,6 @@ test-compile-*.log
 /debian/debhelper-build-stamp
 /debian/files
 /debian/prime-agent/
+/debian/prime-agent-dbgsym/
 /debian/*.debhelper.log
 /debian/*.substvars
