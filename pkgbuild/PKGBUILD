@@ -3,18 +3,22 @@
 # verify the selected revision; do not package the parent working tree.
 _repo_root=$(realpath -e ..)
 _source_commit=$(git -C "$_repo_root" rev-parse refs/heads/stable)
-_shared_target="$_repo_root/.worktrees/native-rust-validation-target"
+_release_dir() {
+    local version
+    version=$(sed -n 's/^version *= *"\([^" ]*\)".*/\1/p' "$srcdir/$pkgname/Cargo.toml" | head -1) || return
+    printf '%s/target/release-package/prime-agent-%s-linux-x64' "$srcdir/$pkgname" "$version"
+}
 pkgname=prime-agent
-pkgver=0.10.0.r2.g2da0c33
+pkgver=0.10.1.r8.g7ad97cf
 pkgrel=1
 pkgdesc='Self-improving coding and research agent with a persistent Python kernel'
 arch=('x86_64')
 url='https://github.com/PrimeIntellect-ai/prime-agent'
 license=('MIT')
 depends=('python>=3.11' 'uv' 'xonsh' 'python-dill' 'python-httpx2' 'python-mcp' 'python-tyro')
-makedepends=('cargo' 'git' 'rsync')
+makedepends=('cargo' 'git' 'make' 'python' 'binutils')
 optdepends=('python-httpx: websearch skill' 'python-pillow: attach-image skill')
-source=("$pkgname::git+file://$_repo_root#branch=stable")
+source=("$pkgname::git+file://$_repo_root#branch=pkgbuild")
 sha256sums=('SKIP')
 
 pkgver() {
@@ -25,47 +29,26 @@ pkgver() {
     )
 }
 
-prepare() {
-    local source_commit
-    cd "$srcdir/$pkgname" || return
-
-    source_commit=$(git rev-parse HEAD) || return
-    if [[ "$source_commit" != "$_source_commit" ]]; then
-        printf '==> ERROR: source commit mismatch: expected %s, got %s\n' \
-            "$_source_commit" "$source_commit" >&2
-        return 1
-    fi
-}
-
 build() {
-    cargo build --manifest-path "$srcdir/$pkgname/Cargo.toml" \
-        --target-dir "$_shared_target" --release -p pa-cli --locked
+    cd "$srcdir/$pkgname" || return
+    make package CATALOG_ASSETS_MODE=network
 }
 
 check() {
-    "$_shared_target/release/prime-agent" --version
+    local release_dir
+    release_dir=$(_release_dir) || return
+    "$release_dir/prime-agent" --version
 }
 
 package() {
     local install_dir="$pkgdir/usr/lib/$pkgname"
+    local release_dir
+    release_dir=$(_release_dir) || return
 
     install -d "$install_dir"
-    install -Dm755 "$_shared_target/release/prime-agent" "$install_dir/prime-agent"
-    install -Dm644 "$srcdir/$pkgname/README.md" "$install_dir/README.md"
-    install -Dm644 "$srcdir/$pkgname/LICENSE" "$install_dir/LICENSE"
-    printf '{\n  "name": "prime-agent",\n  "version": "%s",\n  "description": "Prime Agent: the RLM coding agent (Rust build)",\n  "bin": {"prime-agent": "prime-agent"},\n  "piConfig": {"name": "prime-agent", "configDir": ".prime/agent"}\n}\n' \
-        "$pkgver" > "$install_dir/package.json"
-    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
-        --exclude='/**/.venv/' --exclude='/**/__pycache__/' \
-        --exclude='/**/.pytest_cache/' --exclude='/**/.ruff_cache/' \
-        --exclude='/**/.mypy_cache/' --exclude='/**/*.pyc' \
-        --exclude='prime-agent-runtime/test/' --exclude='prime-agent-runtime/src/rlm/_winjob.py' \
-        "$srcdir/$pkgname/prime-agent-runtime" "$install_dir/"
+    cp -a "$release_dir/." "$install_dir/"
+    cp -a "$srcdir/$pkgname/docs" "$install_dir/"
     ln -s prime-agent-runtime/src/rlm "$install_dir/rlm"
-    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
-        "$srcdir/$pkgname/skills" "$install_dir/"
-    rsync -a --exclude='/.git/' --exclude='/**/.git/' \
-        "$srcdir/$pkgname/docs" "$install_dir/"
     install -Dm644 "$srcdir/$pkgname/LICENSE" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -d "$pkgdir/usr/bin"
