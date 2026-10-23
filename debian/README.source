@@ -38,12 +38,17 @@ assets and fails if either is missing or invalid; it does not fetch catalogs.
 Build architecture-dependent binaries without signing:
 
     dpkg-checkbuilddeps -B
-    CATALOG_ASSETS_DIR=target/catalog-assets dpkg-buildpackage -B --no-sign
+    make package-deb
 
-For a release source archive, omit CATALOG_ASSETS_DIR. Run the build as an
-unprivileged user. The package build runs a --version smoke test unless
-DEB_BUILD_OPTIONS contains nocheck. Run make check separately for the
-repository's full compilation, lint, and test gates.
+The Makefile target passes CATALOG_ASSETS_DIR (default target/catalog-assets)
+to dpkg-buildpackage -B --no-sign. To use a different prepared snapshot:
+
+    make package-deb CATALOG_ASSETS_DIR=/path/to/catalog-assets
+
+For a release source archive, run make package-deb CATALOG_ASSETS_DIR=.
+Run the build as an unprivileged user. The package build runs a --version
+smoke test unless DEB_BUILD_OPTIONS contains nocheck. Run make check
+separately for the repository's full compilation, lint, and test gates.
 
 Only debian/cargo-target, debian/catalog-assets, and debhelper's generated
 files are removed by the package clean step. Developer target/ artifacts,
