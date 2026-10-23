@@ -1,0 +1,65 @@
+Debian packaging for Prime Agent
+===============================
+
+This downstream package definition is extracted from
+packaging/homebrew/Formula/prime-agent.rb. It uses the checkout's upstream
+version (currently 0.10.1), rather than the formula's future 1.0.0 release.
+Update debian/changelog with each upstream release.
+
+Build inputs
+------------
+
+Build natively in a Debian or Ubuntu environment with debhelper 13, a C
+compiler/linker (build-essential), Python 3, and packaged Cargo and rustc
+1.88 or newer. The locked dependency set requires that Rust version.
+dpkg-checkbuilddeps checks installed Debian packages; a rustup toolchain
+alone does not satisfy the cargo/rustc Build-Depends declarations.
+Ubuntu versioned cargo-1.89 and rustc-1.89 packages are also supported.
+Select them with CARGO=cargo-1.89 RUSTC=rustc-1.89 when invoking the build.
+
+Like the formula, this definition uses cargo build --release --locked.
+Cargo may download locked dependencies. This is downstream packaging, not
+an offline Debian archive submission with individually packaged Rust crates.
+The runtime depends on a Debian package providing uv; make that package
+available for the target distribution before installing Prime Agent.
+
+Release source archives already contain models.bundled.json and
+mcp-services.bundled.json at their root. From an ordinary working checkout,
+prepare a catalog snapshot explicitly, using the existing release tool:
+
+    python3 scripts/release/bundle_catalog.py generate --network \
+        --out target/catalog-assets
+
+A local catalog checkout can be used instead of the network by replacing
+--network with --catalog-dir /path/to/prime-agent-catalog. Synthetic
+--fixture snapshots are for packaging tests only. The build validates both
+assets and fails if either is missing or invalid; it does not fetch catalogs.
+
+Build architecture-dependent binaries without signing:
+
+    dpkg-checkbuilddeps -B
+    CATALOG_ASSETS_DIR=target/catalog-assets dpkg-buildpackage -B --no-sign
+
+For a release source archive, omit CATALOG_ASSETS_DIR. Run the build as an
+unprivileged user. The package build runs a --version smoke test unless
+DEB_BUILD_OPTIONS contains nocheck. Run make check separately for the
+repository's full compilation, lint, and test gates.
+
+Only debian/cargo-target, debian/catalog-assets, and debhelper's generated
+files are removed by the package clean step. Developer target/ artifacts,
+catalog inputs, and local source changes are preserved.
+
+Payload
+-------
+
+/usr/bin/prime-agent links to /usr/lib/prime-agent/prime-agent. The same
+directory holds prime-agent-runtime (pyproject.toml and src/), skills/,
+both bundled catalogs, LICENSE, and README.md. Keeping the sidecars beside
+the real executable preserves the formula's resource lookup behavior.
+Runtime tests and its development lockfile are omitted, matching the
+release payload policy; Python caches and virtual environments are excluded.
+Debhelper derives ELF library dependencies and handles debug symbols.
+
+Binary builds need no upstream orig tarball. Source builds use 3.0 (quilt)
+and require a matching prime-agent_<version>.orig.tar.gz in the parent
+directory, with downstream changes represented as Debian patches.

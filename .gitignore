@@ -10,3 +10,12 @@ fmt-*.log
 tests-*.log
 test-compile-*.log
 
+# Debian package build output
+/debian/.debhelper/
+/debian/cargo-target/
+/debian/catalog-assets/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/prime-agent/
+/debian/*.debhelper.log
+/debian/*.substvars

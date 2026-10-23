@@ -1,0 +1,8 @@
+debian/cargo-target/release/prime-agent usr/lib/prime-agent
+prime-agent-runtime/pyproject.toml usr/lib/prime-agent/prime-agent-runtime
+prime-agent-runtime/src usr/lib/prime-agent/prime-agent-runtime
+skills usr/lib/prime-agent
+debian/catalog-assets/models.bundled.json usr/lib/prime-agent
+debian/catalog-assets/mcp-services.bundled.json usr/lib/prime-agent
+LICENSE usr/lib/prime-agent
+README.md usr/lib/prime-agent

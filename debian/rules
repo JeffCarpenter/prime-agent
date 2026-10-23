@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/pkg-info.mk
+
+# Keep package builds and their clean step separate from developer artifacts.
+export CARGO_TARGET_DIR = $(CURDIR)/debian/cargo-target
+CARGO ?= cargo
+
+# Release source tarballs carry these files at their root. A checkout must
+# supply a generated snapshot explicitly; never ship synthetic fixtures by default.
+CATALOG_ASSETS_DIR ?= .
+
+%:
+	dh $@ --buildsystem=none
+
+override_dh_auto_build:
+	python3 scripts/release/bundle_catalog.py verify --out "$(CATALOG_ASSETS_DIR)"
+	mkdir -p debian/catalog-assets
+	cp "$(CATALOG_ASSETS_DIR)/models.bundled.json" "$(CATALOG_ASSETS_DIR)/mcp-services.bundled.json" debian/catalog-assets/
+	$(CARGO) build --release --locked -p pa-cli --bin prime-agent
+
+# Match the formula's smoke test; the workspace suite remains a separate gate.
+override_dh_auto_test:
+	reported_version="$$(debian/cargo-target/release/prime-agent --version)" && test "$$reported_version" = "$(DEB_VERSION_UPSTREAM)"
+
+# Exclude local Python environments and caches from sidecars and skills.
+override_dh_install:
+	dh_install -X__pycache__ -X.pyc -X.venv -X.git -X.pytest_cache -X.ruff_cache -X.mypy_cache
