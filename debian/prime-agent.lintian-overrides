@@ -1,0 +1,10 @@
+# This downstream Cargo build statically includes yaml_serde's libyaml-rs,
+# a Rust translation of libyaml, not the system C library's ABI. Lintian
+# matches its shared parser error string. Keep this exception scoped to
+# this dependency; re-review it when the YAML dependency changes.
+prime-agent: embedded-library libyaml [usr/lib/prime-agent/prime-agent]
+
+# This is an UNRELEASED downstream package, not a Debian archive upload.
+# There is no Debian ITP bug to close. Remove this exception for an upload
+# to Debian, where a real ITP reference must be provided.
+prime-agent: initial-upload-closes-no-bugs

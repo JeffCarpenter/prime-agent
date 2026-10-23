@@ -1,0 +1,125 @@
+.TH PRIME-AGENT 1 "October 2026" "Prime Agent" "User Commands"
+.SH NAME
+prime-agent \- coding agent harness with a persistent Python control environment
+.SH SYNOPSIS
+.B prime-agent
+.RI [ options ] " [@files...] [message...]"
+.br
+.B prime-agent
+.I command
+.RI [ args... ]
+.SH DESCRIPTION
+.B prime-agent
+runs coding agents through a terminal interface, with persistent sessions,
+a Python control environment, and bundled skills.
+Without a command or a noninteractive mode, it opens the interactive interface.
+.PP
+Use
+.B prime-agent --help
+for the complete option and command list, and
+.BI "prime-agent help " command
+for command-specific help.
+.SH OPTIONS
+.TP
+.BR -p ", " --print
+Print a response and exit.
+.TP
+.BI --mode " text|json|rpc|acp|daemon"
+Select an output mode. The default is text.
+.TP
+.BI --cwd " directory"
+Use the specified working directory.
+.TP
+.B --offline
+Disable startup network operations.
+.TP
+.BI --provider " name"
+Select a model provider.
+.TP
+.BI --model " id"
+Select a model.
+.TP
+.BR -c ", " --continue
+Continue the previous session.
+.TP
+.BR -r ", " --resume " [path|id]"
+Open the agents view, or resume the specified saved session.
+.TP
+.BI --session-dir " directory"
+Use the specified session directory.
+.TP
+.B --no-session
+Do not save the session.
+.TP
+.BI --skill " path"
+Load a skill. This option may be repeated.
+.TP
+.BR -v ", " --version
+Show the version and exit.
+.TP
+.BR -h ", " --help
+Show command-line help.
+.SH COMMANDS
+.B agents
+searches and opens sessions;
+.B attach
+attaches the interactive interface to an agent;
+.B stop
+stops an agent; and
+.B send
+sends a message to an agent.
+.PP
+.B model
+inspects available models;
+.B session
+manages saved sessions;
+.B mcp
+manages user MCP servers; and
+.B package
+manages capability packages.
+.PP
+.B prompt
+prints the assembled system prompt with its layer breakdown.
+.B status
+shows background service status.
+.B doctor
+inspects and safely cleans up background services.
+.PP
+Run
+.B prime-agent --help
+to list additional commands.
+.SH FILES
+.TP
+.I ~/.prime/agent/sessions/
+Saved session data.
+.TP
+.I /usr/lib/prime-agent/
+The installed executable, bundled Python runtime sources, skills, and catalogs.
+.SH NOTES
+The Python kernel environment is provisioned by
+.B uv
+on first use. Model access and runtime provisioning may require network access.
+.SH EXAMPLES
+Start an interactive session:
+.PP
+.nf
+prime-agent
+.fi
+.PP
+Print a response without opening the interactive interface:
+.PP
+.nf
+prime-agent --print "Summarize this repository"
+.fi
+.PP
+Continue the previous session:
+.PP
+.nf
+prime-agent --continue
+.fi
+.SH SEE ALSO
+.B prime-agent --help
+.br
+.BI "prime-agent help " command
+.PP
+Project homepage: https://github.com/PrimeIntellect-ai/prime-agent

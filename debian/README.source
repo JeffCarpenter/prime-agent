@@ -78,7 +78,27 @@ the real executable preserves the formula's resource lookup behavior.
 Runtime tests and its development lockfile are omitted, matching the
 release payload policy; Python caches and virtual environments are excluded.
 Debhelper derives ELF library dependencies and handles debug symbols.
+The command-line manual is installed as
+/usr/share/man/man1/prime-agent.1.gz.
 
 Binary builds need no upstream orig tarball. Source builds use 3.0 (quilt)
 and require a matching prime-agent_<version>.orig.tar.gz in the parent
 directory, with downstream changes represented as Debian patches.
+
+Lintian
+-------
+
+Check the generated changes file with warnings treated as failures:
+
+    lintian --fail-on error,warning --show-overrides \
+        ../prime-agent_0.10.1-1_amd64.changes
+
+Adjust the version and architecture for the build being checked.
+debian/prime-agent.lintian-overrides documents two downstream exceptions:
+the libyaml signature comes from the locked libyaml-rs Rust dependency,
+which cannot use the system C libyaml through a linker change; and this
+downstream package has no Debian archive ITP bug to close. Re-review the
+YAML exception when that dependency changes, and remove the ITP exception
+before a Debian archive upload. Runtime Markdown files beside the binary
+can also produce informational documentation-location notices; they are
+consumed as runtime resources and retain the release layout.
