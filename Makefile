@@ -159,9 +159,13 @@ package:
 	python3 scripts/package_release.py $(RELEASE_PACKAGE_FLAGS) $(CATALOG_ASSETS_FLAG)
 
 # Build unsigned Debian binary packages from a prepared catalog snapshot.
+# Defaults to the rustup build profile (pkg.prime-agent.rustup); pass
+# DEB_BUILD_PROFILES="" to check packaged Cargo and rustc dependencies.
 # Run `make catalog-assets` first, or supply CATALOG_ASSETS_DIR explicitly.
+DEB_BUILD_PROFILES ?= pkg.prime-agent.rustup
+
 package-deb:
-	CATALOG_ASSETS_DIR="$(CATALOG_ASSETS_DIR)" dpkg-buildpackage -B --no-sign
+	DEB_BUILD_PROFILES="$(DEB_BUILD_PROFILES)" CATALOG_ASSETS_DIR="$(CATALOG_ASSETS_DIR)" dpkg-buildpackage -B --no-sign
 
 # Bundled-catalog gates (scripts/release/test_catalog_assets.py): the
 # offline fixture passes the full packer validation, the packer hard-fails

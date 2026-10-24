@@ -13,9 +13,14 @@ Build natively in a Debian or Ubuntu environment with debhelper 13, a C
 compiler/linker (build-essential), Python 3, and packaged Cargo and rustc
 1.88 or newer. The locked dependency set requires that Rust version.
 dpkg-checkbuilddeps checks installed Debian packages; a rustup toolchain
-uses the explicit pkg.prime-agent.rustup build profile instead:
+uses the pkg.prime-agent.rustup build profile instead. `make package-deb`
+defaults to this profile:
 
-    DEB_BUILD_PROFILES=pkg.prime-agent.rustup make package-deb
+    make package-deb
+
+To check packaged Rust dependencies instead, clear the profile:
+
+    DEB_BUILD_PROFILES="" make package-deb
 
 This profile uses Cargo and rustc from PATH (or CARGO/RUSTC overrides).
 Only the packaged Rust dependencies are omitted; all other Debian build
@@ -52,10 +57,11 @@ assets and fails if either is missing or invalid; it does not fetch catalogs.
 
 Build architecture-dependent binaries without signing:
 
-    dpkg-checkbuilddeps -B
+    dpkg-checkbuilddeps -B -Ppkg.prime-agent.rustup
     make package-deb
 
-The Makefile target passes CATALOG_ASSETS_DIR (default target/catalog-assets)
+The Makefile target defaults DEB_BUILD_PROFILES to pkg.prime-agent.rustup
+and passes CATALOG_ASSETS_DIR (default target/catalog-assets)
 to dpkg-buildpackage -B --no-sign. To use a different prepared snapshot:
 
     make package-deb CATALOG_ASSETS_DIR=/path/to/catalog-assets
