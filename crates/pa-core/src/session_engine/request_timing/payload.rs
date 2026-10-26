@@ -22,6 +22,16 @@ pub(crate) mod tests;
 #[cfg(all(test, unix))]
 pub(crate) static WRITER_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+#[cfg(all(test, unix))]
+type WriterTestGate = (
+    PathBuf,
+    std::sync::mpsc::Sender<()>,
+    std::sync::mpsc::Receiver<()>,
+);
+
+#[cfg(all(test, unix))]
+static WRITER_TEST_GATE: std::sync::Mutex<Option<WriterTestGate>> = std::sync::Mutex::new(None);
+
 /// One file per request, so long-context payloads never grow without
 /// bound in an always-on daemon's diagnostics dir.
 pub(crate) const REQUEST_PAYLOAD_CAPTURE_KEEP: usize = 64;
@@ -229,6 +239,20 @@ impl RequestPayloadCapture {
 fn drain_writer(queued: &Arc<AtomicUsize>, retained: &Arc<AtomicU64>, jobs: &Receiver<CaptureJob>) {
     while let Ok(job) = jobs.recv() {
         queued.fetch_sub(1, Ordering::Relaxed);
+        #[cfg(all(test, unix))]
+        {
+            let mut armed = WRITER_TEST_GATE.lock().expect("writer gate lock");
+            let gate = armed
+                .as_ref()
+                .is_some_and(|(dir, _, _)| *dir == job.dir)
+                .then(|| armed.take())
+                .flatten();
+            drop(armed);
+            if let Some((_, ready, release)) = gate {
+                let _ = ready.send(());
+                let _ = release.recv();
+            }
+        }
         let result = write_capture(&job.root, &job.dir, job.keep, &job);
         retained.fetch_sub(job.estimate, Ordering::Relaxed);
         if let Err(error) = result {

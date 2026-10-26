@@ -567,13 +567,22 @@ fn concurrent_producers_drop_at_the_reserve_when_the_queue_is_full() {
     let dir_path = dir.path().join("request-payloads");
     // The ring keeps every body: the count assertions need no eviction.
     let capture = RequestPayloadCapture::at(&dir_path, 4 * REQUEST_PAYLOAD_CAPTURE_KEEP);
-    // The stall body: serialized for far longer than the whole storm
-    // window, so no slot frees mid storm.
-    let stall = json!({
-        "marker": "stall",
-        "messages": (0..100_000_u32).map(|seq| json!({ "seq": seq })).collect::<Vec<_>>()
-    });
-    capture.record(&stall, &agent_model(), Some("sess-timing"), 1);
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    *super::WRITER_TEST_GATE.lock().unwrap() = Some((dir_path.clone(), ready_tx, release_rx));
+    capture.record(
+        &json!({ "marker": "stall" }),
+        &agent_model(),
+        Some("sess-timing"),
+        1,
+    );
+    if ready_rx
+        .recv_timeout(std::time::Duration::from_secs(30))
+        .is_err()
+    {
+        super::WRITER_TEST_GATE.lock().unwrap().take();
+        panic!("writer did not take the stall body");
+    }
     let fills = fill_until_saturated(&capture, "fill");
     // The storm: many concurrent producers racing the full queue; none
     // of their bodies exists anywhere afterwards.
@@ -605,10 +614,11 @@ fn concurrent_producers_drop_at_the_reserve_when_the_queue_is_full() {
                 .map(|writer| writer.queued.load(Ordering::Relaxed))
         })
         .expect("the writer is armed");
-    assert!(
-        queued_after <= REQUEST_PAYLOAD_CAPTURE_KEEP,
-        "the reserve counter stays within the capacity: {queued_after}"
+    assert_eq!(
+        queued_after, REQUEST_PAYLOAD_CAPTURE_KEEP,
+        "the gate keeps the queue full throughout the storm"
     );
+    drop(release_tx);
     // A fresh handoff still reserves after the storm — a leaked
     // reservation would report saturation forever.
     wait_for_drained_queue();
