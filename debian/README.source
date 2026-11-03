@@ -3,7 +3,7 @@ Debian packaging for Prime Agent
 
 This downstream package definition is extracted from
 packaging/homebrew/Formula/prime-agent.rb. It uses the checkout's upstream
-version (currently 0.10.1), rather than the formula's future 1.0.0 release.
+version (currently 0.10.2), rather than the formula's future 1.0.0 release.
 Update debian/changelog with each upstream release.
 
 Build inputs
@@ -45,7 +45,8 @@ prepared environment containing the current runtime and required packages.
 
 Release source archives already contain models.bundled.json and
 mcp-services.bundled.json at their root. From an ordinary working checkout,
-prepare a catalog snapshot explicitly, using the existing release tool:
+make package-deb fetches a live catalog snapshot automatically. To prepare
+a snapshot separately, use the existing release tool:
 
     python3 scripts/release/bundle_catalog.py generate --network \
         --out target/catalog-assets
@@ -53,7 +54,8 @@ prepare a catalog snapshot explicitly, using the existing release tool:
 A local catalog checkout can be used instead of the network by replacing
 --network with --catalog-dir /path/to/prime-agent-catalog. Synthetic
 --fixture snapshots are for packaging tests only. The build validates both
-assets and fails if either is missing or invalid; it does not fetch catalogs.
+assets and fails if either is missing or invalid. debian/rules itself does
+not fetch catalogs.
 
 Build architecture-dependent binaries without signing:
 
@@ -62,7 +64,8 @@ Build architecture-dependent binaries without signing:
 
 The Makefile target defaults DEB_BUILD_PROFILES to pkg.prime-agent.rustup
 and passes CATALOG_ASSETS_DIR (default target/catalog-assets)
-to dpkg-buildpackage -B --no-sign. To use a different prepared snapshot:
+to dpkg-buildpackage -B --no-sign. To use a prepared snapshot without fetching,
+set CATALOG_ASSETS_DIR on the command line or in the environment:
 
     make package-deb CATALOG_ASSETS_DIR=/path/to/catalog-assets
 
@@ -101,7 +104,7 @@ Lintian
 Check the generated changes file with warnings treated as failures:
 
     lintian --fail-on error,warning --show-overrides \
-        ../prime-agent_0.10.1-2_amd64.changes
+        ../prime-agent_0.10.2-1_amd64.changes
 
 Adjust the version and architecture for the build being checked.
 debian/prime-agent.lintian-overrides documents the downstream YAML exception:

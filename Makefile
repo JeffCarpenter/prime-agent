@@ -82,7 +82,7 @@ RUNTIME_FLAG = $(if $(RUNTIME_DIR),--runtime-dir $(RUNTIME_DIR),)
 # resolve-ref`). The local dry-runs default to the offline fixture snapshot
 # (it passes the full packer gates); CATALOG_ASSETS_MODE=network switches
 # them to the live fetch of the catalog's main.
-CATALOG_ASSETS_DIR = target/catalog-assets
+CATALOG_ASSETS_DIR ?= target/catalog-assets
 CATALOG_ASSETS_MODE ?= fixture
 CATALOG_ASSETS_FLAG = --catalog-assets $(CATALOG_ASSETS_DIR)
 
@@ -158,11 +158,15 @@ package:
 	python3 scripts/release/bundle_catalog.py generate --$(CATALOG_ASSETS_MODE) --out $(CATALOG_ASSETS_DIR)
 	python3 scripts/package_release.py $(RELEASE_PACKAGE_FLAGS) $(CATALOG_ASSETS_FLAG)
 
-# Build unsigned Debian binary packages from a prepared catalog snapshot.
+# Build unsigned Debian binary packages with a live catalog snapshot by default.
 # Defaults to the rustup build profile (pkg.prime-agent.rustup); pass
 # DEB_BUILD_PROFILES="" to check packaged Cargo and rustc dependencies.
-# Run `make catalog-assets` first, or supply CATALOG_ASSETS_DIR explicitly.
+# Supply CATALOG_ASSETS_DIR explicitly to use a prepared snapshot without fetching.
 DEB_BUILD_PROFILES ?= pkg.prime-agent.rustup
+
+ifeq ($(origin CATALOG_ASSETS_DIR),file)
+package-deb: catalog-assets
+endif
 
 package-deb:
 	DEB_BUILD_PROFILES="$(DEB_BUILD_PROFILES)" CATALOG_ASSETS_DIR="$(CATALOG_ASSETS_DIR)" dpkg-buildpackage -B --no-sign
